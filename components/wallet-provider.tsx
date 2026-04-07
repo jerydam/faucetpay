@@ -1,8 +1,7 @@
 "use client"
+
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react"
 import { BrowserProvider, type JsonRpcSigner } from "ethers"
-import { useDisconnect, useSwitchChain, useChainId } from 'wagmi'
-import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { toast } from "sonner"
 
 interface WalletContextType {
@@ -15,7 +14,6 @@ interface WalletContextType {
   connect: () => Promise<void>
   disconnect: () => Promise<void>
   ensureCorrectNetwork: (requiredChainId: number) => Promise<boolean>
-  switchChain: (newChainId: number) => Promise<void>
   refreshProvider: () => Promise<void>
 }
 
@@ -29,134 +27,107 @@ export const WalletContext = createContext<WalletContextType>({
   connect: async () => {},
   disconnect: async () => {},
   ensureCorrectNetwork: async () => false,
-  switchChain: async () => {},
   refreshProvider: async () => {},
 })
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [provider, setProvider] = useState<BrowserProvider | null>(null)
   const [signer, setSigner] = useState<JsonRpcSigner | null>(null)
-  const [liveChainId, setLiveChainId] = useState<number | null>(null)
+  const [address, setAddress] = useState<string | null>(null)
+  const [chainId, setChainId] = useState<number | null>(null)
+  const [isConnecting, setIsConnecting] = useState(false)
 
-  const { ready, authenticated, login, logout } = usePrivy()
-  const { wallets } = useWallets()
-  const { disconnect: wagmiDisconnect } = useDisconnect()
-  const { switchChain: wagmiSwitchChain } = useSwitchChain()
-  const wagmiChainId = useChainId()
-
-  // In a MiniPay-only world, we just grab the single connected wallet.
-  const activeWallet = wallets[0] || null
-  const address = activeWallet?.address || null
-  
-  const isConnected = ready && authenticated && !!address && !!signer
-  const isConnecting = !ready || (authenticated && wallets.length > 0 && !address)
+  const isConnected = !!address && !!signer
 
   const setupProvider = useCallback(async () => {
-    if (!activeWallet) {
-      setProvider(null)
-      setSigner(null)
-      setLiveChainId(null)
-      return
-    }
+    const eth = window.ethereum
+    if (!eth) return
 
     try {
-      const ethereumProvider = await activeWallet.getEthereumProvider()
-      const ethersProvider = new BrowserProvider(ethereumProvider)
+      const ethersProvider = new BrowserProvider(eth)
       const network = await ethersProvider.getNetwork()
-      const detectedChainId = Number(network.chainId)
+      const accounts = await ethersProvider.listAccounts()
+
+      if (accounts.length === 0) return
+
       const ethersSigner = await ethersProvider.getSigner()
 
       setProvider(ethersProvider)
       setSigner(ethersSigner)
-      setLiveChainId(detectedChainId)
-    } catch (error) {
-      console.error('❌ [WalletProvider] Error setting up wallet:', error)
-      setProvider(null)
-      setSigner(null)
-      setLiveChainId(null)
+      setAddress(await ethersSigner.getAddress())
+      setChainId(Number(network.chainId))
+    } catch (err) {
+      console.error("[WalletProvider] setupProvider failed:", err)
     }
-  }, [activeWallet])
+  }, [])
 
   const refreshProvider = useCallback(async () => {
     await setupProvider()
   }, [setupProvider])
 
-  // Setup on mount / wallet change
+  // Auto-connect if MiniPay is already injected and has accounts
   useEffect(() => {
-    if (authenticated && wallets.length > 0) {
+    if (typeof window === "undefined") return
+    if (window.ethereum?.isMiniPay) {
       setupProvider()
     }
-  }, [authenticated, wallets.length, activeWallet?.address, setupProvider])
+  }, [setupProvider])
 
-  // Listeners for account/chain changes
+  // Listen for account/chain changes
   useEffect(() => {
-    if (!activeWallet) return
-    let rawProvider: any = null
+    const eth = window.ethereum
+    if (!eth) return
 
-    const handleChainChange = async () => {
-      await setupProvider()
-    }
-
-    const attach = async () => {
-      try {
-        rawProvider = await activeWallet.getEthereumProvider()
-        rawProvider.on?.('chainChanged', handleChainChange)
-        rawProvider.on?.('accountsChanged', refreshProvider)
-      } catch (e) {
-        console.error('[WalletProvider] Could not attach chain listener', e)
+    const handleAccountsChanged = (accounts: string[]) => {
+      if (accounts.length === 0) {
+        setProvider(null)
+        setSigner(null)
+        setAddress(null)
+        setChainId(null)
+      } else {
+        setupProvider()
       }
     }
-    attach()
-    
-    return () => {
-      rawProvider?.removeListener?.('chainChanged', handleChainChange)
-      rawProvider?.removeListener?.('accountsChanged', refreshProvider)
+
+    const handleChainChanged = () => {
+      setupProvider()
     }
-  }, [activeWallet?.address, setupProvider, refreshProvider])
+
+    eth.on?.("accountsChanged", handleAccountsChanged)
+    eth.on?.("chainChanged", handleChainChanged)
+
+    return () => {
+      eth.removeListener?.("accountsChanged", handleAccountsChanged)
+      eth.removeListener?.("chainChanged", handleChainChanged)
+    }
+  }, [setupProvider])
 
   const connect = async () => {
-    try { await login() } catch { toast.error("Failed to connect wallet") }
+    if (typeof window === "undefined" || !window.ethereum) {
+      toast.error("MiniPay not detected. Please open this app inside MiniPay.")
+      return
+    }
+
+    setIsConnecting(true)
+    try {
+      await window.ethereum.request({ method: "eth_requestAccounts" })
+      await setupProvider()
+    } catch (err: any) {
+      if (err?.code === 4001) {
+        toast.error("Connection rejected.")
+      } else {
+        toast.error("Failed to connect wallet.")
+      }
+    } finally {
+      setIsConnecting(false)
+    }
   }
 
   const disconnect = async () => {
-    wagmiDisconnect()
     setProvider(null)
     setSigner(null)
-    setLiveChainId(null)
-    await logout()
-  }
-
-  const switchChain = async (newChainId: number) => {
-    if (!activeWallet) throw new Error("No wallet connected")
-      
-    const hexChainId = `0x${newChainId.toString(16)}`
-    
-    try {
-      const rawProvider = await activeWallet.getEthereumProvider()
-
-      try {
-        await rawProvider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: hexChainId }],
-        })
-      } catch (switchErr: any) {
-        // Fallback to Wagmi if direct RPC request fails
-        if (switchErr.code === 4902 || switchErr.message?.includes("Unrecognized chain ID")) {
-          await wagmiSwitchChain({ chainId: newChainId })
-        } else {
-          throw switchErr
-        }
-      }
-
-      await setupProvider()
-    } catch (error: any) {
-      if (error?.code === 4001 || error?.message?.includes("rejected")) {
-        toast.error("Network switch cancelled")
-      } else {
-        toast.error("Failed to switch network.")
-      }
-      throw error
-    }
+    setAddress(null)
+    setChainId(null)
   }
 
   const ensureCorrectNetwork = async (requiredChainId: number): Promise<boolean> => {
@@ -164,10 +135,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       await connect()
       return false
     }
-    const currentChain = liveChainId ?? wagmiChainId
-    if (currentChain !== requiredChainId) {
-      await switchChain(requiredChainId)
-      return true
+    if (chainId !== requiredChainId) {
+      try {
+        await window.ethereum?.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: `0x${requiredChainId.toString(16)}` }],
+        })
+        await setupProvider()
+        return true
+      } catch (err: any) {
+        toast.error("Failed to switch network.")
+        throw err
+      }
     }
     return true
   }
@@ -178,13 +157,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         provider,
         signer,
         address,
-        chainId: liveChainId ?? wagmiChainId ?? null,
+        chainId,
         isConnected,
         isConnecting,
         connect,
         disconnect,
         ensureCorrectNetwork,
-        switchChain,
         refreshProvider,
       }}
     >

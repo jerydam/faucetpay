@@ -1,0 +1,275 @@
+{
+  "version": "0.1.0",
+  "name": "faucet_drops",
+  "instructions": [
+    {
+      "name": "initializeFaucet",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "backendSigner", "isMut": false, "isSigner": false },
+        { "name": "feeVault", "isMut": false, "isSigner": false },
+        { "name": "tokenMint", "isMut": false, "isSigner": false },
+        { "name": "faucet", "isMut": true, "isSigner": false },
+        { "name": "tokenVault", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "rent", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "name", "type": "string" },
+        { "name": "claimAmount", "type": "u64" },
+        { "name": "startTime", "type": "i64" },
+        { "name": "endTime", "type": "i64" },
+        { "name": "faucetType", "type": "u8" },
+        { "name": "bumps", "type": { "defined": "FaucetBumps" } }
+      ]
+    },
+    {
+      "name": "fundFaucet",
+      "accounts": [
+        { "name": "funder", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": true, "isSigner": false },
+        { "name": "funderTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenVault", "isMut": true, "isSigner": false },
+        { "name": "backendWallet", "isMut": true, "isSigner": false },
+        { "name": "platformFeeAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "claim",
+      "accounts": [
+        { "name": "backend", "isMut": true, "isSigner": true },
+        { "name": "recipient", "isMut": true, "isSigner": false },
+        { "name": "faucet", "isMut": true, "isSigner": false },
+        { "name": "tokenVault", "isMut": true, "isSigner": false },
+        { "name": "recipientTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "claimStatus", "isMut": true, "isSigner": false },
+        { "name": "whitelistEntry", "isMut": false, "isSigner": false, "isOptional": true },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": true, "isSigner": false },
+        { "name": "tokenVault", "isMut": true, "isSigner": false },
+        { "name": "adminTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "addToWhitelist",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": true, "isSigner": false },
+        { "name": "user", "isMut": false, "isSigner": false },
+        { "name": "whitelistEntry", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "customAmount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "addAdmin",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": false, "isSigner": false },
+        { "name": "adminRecord", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "adminPubkey", "type": "publicKey" }
+      ]
+    },
+    {
+      "name": "removeAdmin",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": false, "isSigner": false },
+        { "name": "adminRecord", "isMut": true, "isSigner": false }
+      ],
+      "args": [
+        { "name": "adminPubkey", "type": "publicKey" }
+      ]
+    },
+    {
+      "name": "resetSingleClaim",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": false, "isSigner": false },
+        { "name": "claimStatus", "isMut": true, "isSigner": false }
+      ],
+      "args": [
+        { "name": "userPubkey", "type": "publicKey" }
+      ]
+    },
+    {
+      "name": "removeFromWhitelist",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": true, "isSigner": false },
+        { "name": "user", "isMut": false, "isSigner": false },
+        { "name": "whitelistEntry", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "updateFaucetConfig",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": true, "isSigner": false }
+      ],
+      "args": [
+        { "name": "newAmount", "type": "u64" },
+        { "name": "newStartTime", "type": "i64" },
+        { "name": "newEndTime", "type": "i64" },
+        { "name": "newBackendSigner", "type": { "option": "publicKey" } }
+      ]
+    },
+    {
+      "name": "setPaused",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": true, "isSigner": false }
+      ],
+      "args": [
+        { "name": "paused", "type": "bool" }
+      ]
+    },
+    {
+      "name": "updateName",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": true, "isSigner": false }
+      ],
+      "args": [
+        { "name": "newName", "type": "string" }
+      ]
+    },
+    {
+      "name": "transferAuthority",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "faucet", "isMut": true, "isSigner": false }
+      ],
+      "args": [
+        { "name": "newAuthority", "type": "publicKey" }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "FaucetState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "authority", "type": "publicKey" },
+          { "name": "tokenMint", "type": "publicKey" },
+          { "name": "tokenVault", "type": "publicKey" },
+          { "name": "backendSigner", "type": "publicKey" },
+          { "name": "feeVault", "type": "publicKey" },
+          { "name": "name", "type": "string" },
+          { "name": "claimAmount", "type": "u64" },
+          { "name": "startTime", "type": "i64" },
+          { "name": "endTime", "type": "i64" },
+          { "name": "faucetType", "type": "u8" },
+          { "name": "paused", "type": "bool" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "ClaimStatus",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "claimer", "type": "publicKey" },
+          { "name": "amount", "type": "u64" },
+          { "name": "claimTime", "type": "i64" },
+          { "name": "claimed", "type": "bool" }
+        ]
+      }
+    },
+    {
+      "name": "WhitelistEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "isWhitelisted", "type": "bool" },
+          { "name": "customAmount", "type": "u64" }
+        ]
+      }
+    },
+    {
+      "name": "AdminRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "admin", "type": "publicKey" }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "FaucetBumps",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "faucet", "type": "u8" }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "FaucetCreated",
+      "fields": [
+        { "name": "faucet", "type": "publicKey", "index": false },
+        { "name": "authority", "type": "publicKey", "index": false },
+        { "name": "name", "type": "string", "index": false },
+        { "name": "mint", "type": "publicKey", "index": false }
+      ]
+    },
+    {
+      "name": "Claimed",
+      "fields": [
+        { "name": "faucet", "type": "publicKey", "index": false },
+        { "name": "user", "type": "publicKey", "index": false },
+        { "name": "amount", "type": "u64", "index": false }
+      ]
+    },
+    {
+      "name": "Funded",
+      "fields": [
+        { "name": "faucet", "type": "publicKey", "index": false },
+        { "name": "amount", "type": "u64", "index": false },
+        { "name": "funder", "type": "publicKey", "index": false }
+      ]
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "NameTooLong", "msg": "Faucet name too long" },
+    { "code": 6001, "name": "InvalidTimeRange", "msg": "End time must be after start time" },
+    { "code": 6002, "name": "Paused", "msg": "Faucet is paused" },
+    { "code": 6003, "name": "NotStarted", "msg": "Claim period has not started" },
+    { "code": 6004, "name": "Ended", "msg": "Claim period has ended" },
+    { "code": 6005, "name": "NotWhitelisted", "msg": "User is not whitelisted" },
+    { "code": 6006, "name": "UnauthorizedBackend", "msg": "Unauthorized backend signer" },
+    { "code": 6007, "name": "InvalidAmount", "msg": "Invalid claim amount" }
+  ]
+}

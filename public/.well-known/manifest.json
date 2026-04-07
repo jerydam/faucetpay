@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjgxMjkzMCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDk4OTVFMzg1OTEzODlmZmE4N0I3QjU2MURFNTFhNGQ3RGU1MjFlY2UifQ",
+    "payload": "eyJkb21haW4iOiJhcHAuZmF1Y2V0ZHJvcHMuaW8ifQ",
+    "signature": "NTANO0BaYV/zXRFPf65xgAtUr1wMVgQWWuJqG9AKobM/wyte3eKjsGCDIVIZ+C9X40N8OP6Jlm/jHtxljB4XEhs="
+  },
+  "frame": {
+    "version": "1",
+    "name": "FaucetDrops",
+    "iconUrl": "https://app.FaucetDrops.io/icon.png",
+    "homeUrl": "https://app.FaucetDrops.io",
+    "imageUrl": "https://app.FaucetDrops.io/image.png",
+    "buttonTitle": "Start dripping",
+    "splashImageUrl": "https://app.FaucetDrops.io/splash.png",
+    "splashBackgroundColor": "#020817",
+    "webhookUrl": "https://app.FaucetDrops.io/api/webhook"
+  }
+}

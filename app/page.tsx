@@ -61,7 +61,7 @@ const CAMPAIGNS = [
     title: "Quests",
     desc: "Engage users with interactive missions.",
     points: "20+ Quests",
-    path: "/quest",
+    path: "https://app.faucetdrops.io/quest",
     bgImage: "/quest-bg.png",
     cta: "Launch Quest",
   },

@@ -34,7 +34,6 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const hasSyncedRef = useRef(false)
 
-  // Fetch or create minimal profile when wallet connects
   useEffect(() => {
     if (!isConnected || !address) {
       setDbUsername(null)
@@ -48,22 +47,35 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
 
     const fetchOrSyncProfile = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/users/${address.toLowerCase()}`)
+        // 1. Try to fetch existing profile by wallet address
+        const response = await fetch(
+          `${API_BASE_URL}/api/profile/${address.toLowerCase()}`
+        )
 
         if (response.ok) {
           const data = await response.json()
-          const profile = data.profile || data
+          const profile = data.profile
 
-          if (profile?.username && profile.username !== "New User") {
+          // ✅ Profile exists and has a real username — use it
+          if (profile?.username && !profile.username.startsWith("user_")) {
             if (isMounted) {
               setDbUsername(profile.username)
-              setDbAvatarUrl(profile.avatar_url || profile.avatarUrl || "")
+              setDbAvatarUrl(profile.avatar_url || "")
             }
             return
           }
+
+          // Profile exists but has a fallback username — still show it
+          if (profile?.username) {
+            if (isMounted) {
+              setDbUsername(profile.username)
+              setDbAvatarUrl(profile.avatar_url || "")
+            }
+            // Don't return — fall through to sync only if never synced
+          }
         }
 
-        // Create minimal profile if none exists
+        // 2. No profile found — create a minimal one (only once)
         if (!hasSyncedRef.current) {
           hasSyncedRef.current = true
           const fallbackUsername = `user_${address.slice(-6)}`
@@ -82,7 +94,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
           const syncData = await syncRes.json()
           if (syncData.success && syncData.profile && isMounted) {
             setDbUsername(syncData.profile.username)
-            setDbAvatarUrl(syncData.profile.avatar_url)
+            setDbAvatarUrl(syncData.profile.avatar_url || "")
           }
         }
       } catch (err) {
@@ -93,29 +105,33 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
     }
 
     fetchOrSyncProfile()
-
     return () => { isMounted = false }
   }, [address, isConnected])
 
-  // Listen for profile updates from ProfileSettingsModal
+  // Listen for updates from ProfileSettingsModal
   useEffect(() => {
     const handleProfileUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent
-      if (customEvent.detail?.username) setDbUsername(customEvent.detail.username)
-      if (customEvent.detail?.avatarUrl) setDbAvatarUrl(customEvent.detail.avatarUrl)
+      const e = event as CustomEvent
+      if (e.detail?.username) setDbUsername(e.detail.username)
+      if (e.detail?.avatarUrl !== undefined) setDbAvatarUrl(e.detail.avatarUrl)
     }
-
     window.addEventListener("profileUpdated", handleProfileUpdate)
     return () => window.removeEventListener("profileUpdated", handleProfileUpdate)
   }, [])
 
+  // ── Display values ────────────────────────────────────────────────────
   const displayName = dbUsername || "Anonymous"
   const displayAvatar = dbAvatarUrl || ""
-  const dashboardLink = dbUsername
-    ? `/dashboard/${dbUsername}`
-    : `/dashboard/${dbUsername || ""}`
 
-  // Loading state
+  // ✅ Only link to /dashboard/<username> when we have a real username
+  // Falls back to wallet address slug if username is the auto-generated fallback
+  const hasRealUsername = dbUsername && !dbUsername.startsWith("user_")
+  const dashboardLink = hasRealUsername
+    ? `/dashboard/${dbUsername}`
+    : address
+    ? `/dashboard/${address}`
+    : "/dashboard"
+
   if (isConnecting) {
     return (
       <Button size="sm" disabled variant="outline" className={cn("px-6", className)}>
@@ -124,9 +140,9 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
     )
   }
 
-  // Not connected → Show "Get Started" only in MiniPay
   if (!isConnected) {
-    const isMiniPay = typeof window !== "undefined" && !!window.ethereum?.isMiniPay
+    const isMiniPay =
+      typeof window !== "undefined" && !!window.ethereum?.isMiniPay
 
     return (
       <Button
@@ -144,10 +160,8 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
     )
   }
 
-  // Connected → Show dropdown with profile edit
   return (
     <>
-      {/* Modal lives outside the DropdownMenu entirely */}
       <ProfileSettingsModal
         open={profileModalOpen}
         onOpenChange={setProfileModalOpen}
@@ -181,6 +195,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
         <DropdownMenuContent align="end" className="w-64" sideOffset={8}>
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
+              {/* ✅ Show username prominently, wallet address as secondary */}
               <p className="font-medium truncate">{displayName}</p>
               {address && (
                 <p className="text-xs text-muted-foreground font-mono">
@@ -194,13 +209,15 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
 
           <DropdownMenuGroup>
             <DropdownMenuItem asChild>
-              <Link href={dashboardLink} className="flex items-center gap-2 cursor-pointer">
+              <Link
+                href={dashboardLink}
+                className="flex items-center gap-2 cursor-pointer"
+              >
                 <LayoutDashboard className="h-4 w-4" />
                 <span>Dashboard</span>
               </Link>
             </DropdownMenuItem>
 
-            {/* Plain DropdownMenuItem that sets state — no asChild, no modal inside */}
             <DropdownMenuItem
               onClick={() => setProfileModalOpen(true)}
               className="flex items-center gap-2 cursor-pointer"
@@ -213,7 +230,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
               <DropdownMenuItem
                 onClick={() => {
                   navigator.clipboard.writeText(address)
-                  toast.success("Wallet address copied!")
+                  toast.success("Address copied!")
                 }}
                 className="flex items-center gap-2 cursor-pointer"
               >

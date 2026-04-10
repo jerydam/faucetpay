@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useWallet } from "@/components/wallet-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,11 +13,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LayoutDashboard, LogOut, Copy, ChevronDown, Edit2 } from "lucide-react"
+import { LayoutDashboard, LogOut, Copy, ChevronDown } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { ProfileSettingsModal } from "@/components/profile-settings-modal" // ← Import your modal
 
 const API_BASE_URL = "https://faucetdrop-backend.onrender.com"
 
@@ -33,7 +32,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
   const [loading, setLoading] = useState(false)
   const hasSyncedRef = useRef(false)
 
-  // Fetch or create minimal profile when wallet connects
+  // Fetch or create profile when wallet connects
   useEffect(() => {
     if (!isConnected || !address) {
       setDbUsername(null)
@@ -51,7 +50,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
 
         if (response.ok) {
           const data = await response.json()
-          const profile = data.profile || data
+          const profile = data.profile || (data.username ? data : null)
 
           if (profile?.username && profile.username !== "New User") {
             if (isMounted) {
@@ -62,10 +61,10 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
           }
         }
 
-        // Create minimal profile if none exists
+        // No profile yet — create one
         if (!hasSyncedRef.current) {
           hasSyncedRef.current = true
-          const fallbackUsername = `user_${address.slice(-6)}`
+          const fallbackUsername = `user_${address.slice(-4)}`
 
           const syncRes = await fetch(`${API_BASE_URL}/api/profile/sync`, {
             method: "POST",
@@ -82,6 +81,15 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
           if (syncData.success && syncData.profile && isMounted) {
             setDbUsername(syncData.profile.username)
             setDbAvatarUrl(syncData.profile.avatar_url)
+
+            window.dispatchEvent(
+              new CustomEvent("profileUpdated", {
+                detail: {
+                  username: syncData.profile.username,
+                  avatarUrl: syncData.profile.avatar_url,
+                },
+              })
+            )
           }
         }
       } catch (err) {
@@ -92,90 +100,94 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
     }
 
     fetchOrSyncProfile()
-
     return () => { isMounted = false }
   }, [address, isConnected])
 
-  // Listen for profile updates from ProfileSettingsModal
+  // Listen for manual profile saves
   useEffect(() => {
-    const handleProfileUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent
-      if (customEvent.detail?.username) setDbUsername(customEvent.detail.username)
-      if (customEvent.detail?.avatarUrl) setDbAvatarUrl(customEvent.detail.avatarUrl)
+    const handleProfileUpdate = (event: CustomEvent) => {
+      const { username, avatarUrl } = event.detail
+      if (username) setDbUsername(username)
+      if (avatarUrl) setDbAvatarUrl(avatarUrl)
     }
-
-    window.addEventListener("profileUpdated", handleProfileUpdate)
-    return () => window.removeEventListener("profileUpdated", handleProfileUpdate)
+    window.addEventListener("profileUpdated" as any, handleProfileUpdate)
+    return () => window.removeEventListener("profileUpdated" as any, handleProfileUpdate)
   }, [])
 
   const displayName = dbUsername || "Anonymous"
   const displayAvatar = dbAvatarUrl || ""
-  const dashboardLink = dbUsername 
-    ? `/dashboard/${dbUsername}` 
+  const dashboardLink = dbUsername
+    ? `/dashboard/${dbUsername}`
     : `/dashboard/${address?.toLowerCase() || ""}`
 
-  // Loading state
   if (isConnecting) {
     return (
-      <Button size="sm" disabled variant="outline" className={cn("px-6", className)}>
+      <Button
+        size="sm"
+        disabled
+        variant="outline"
+        className={cn("text-xs font-bold uppercase tracking-widest px-6 opacity-50 border-border", className)}
+      >
         Connecting...
       </Button>
     )
   }
 
-  // Not connected → Show "Get Started" only in MiniPay
   if (!isConnected) {
     const isMiniPay = typeof window !== "undefined" && !!window.ethereum?.isMiniPay
+
+    if (!isMiniPay) {
+      return (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled
+          className={cn("text-xs font-bold uppercase tracking-widest px-6 opacity-60 border-border", className)}
+        >
+          Open in MiniPay
+        </Button>
+      )
+    }
 
     return (
       <Button
         onClick={connect}
         size="sm"
         variant="default"
-        className={cn(
-          "text-xs font-bold uppercase tracking-widest px-6 shadow-md hover:scale-105 transition-all",
-          className
-        )}
-        disabled={!isMiniPay}
+        className={cn("text-xs font-bold uppercase tracking-widest px-6 shadow-md hover:scale-105 transition-all", className)}
       >
-        {isMiniPay ? "Get Started" : "Open in MiniPay"}
+        Get Started
       </Button>
     )
   }
 
-  // Connected → Show dropdown with profile edit
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
           size="sm"
-          className={cn(
-            "flex items-center gap-2 p-1 sm:pr-4 border-primary/20 hover:bg-primary/5 rounded-full h-9",
-            className
-          )}
+          className={cn("flex items-center gap-2 p-1 sm:pr-3 border-primary/20 hover:bg-primary/5 transition-all rounded-full h-9", className)}
         >
           <Avatar className="h-7 w-7 border border-background shadow-sm">
             <AvatarImage src={displayAvatar} className="object-cover" />
-            <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-              {loading ? "…" : displayName.charAt(0).toUpperCase()}
+            <AvatarFallback className="bg-primary/10 text-primary text-[10px]">
+              {loading ? <span className="animate-pulse">...</span> : displayName.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-
-          <span className="hidden sm:block text-sm font-medium truncate max-w-[120px]">
-            {loading ? "Loading..." : displayName}
+          <span className="hidden sm:block text-xs sm:text-sm font-medium max-w-[100px] truncate">
+            {loading ? "..." : displayName}
           </span>
-
-          <ChevronDown className="hidden sm:block h-3 w-3 opacity-60" />
+          <ChevronDown className="hidden sm:block h-3 w-3 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-64" sideOffset={8}>
+      <DropdownMenuContent align="end" className="w-56 z-[200]" sideOffset={8}>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="font-medium truncate">{displayName}</p>
+            <p className="text-sm font-medium leading-none truncate">{displayName}</p>
             {address && (
-              <p className="text-xs text-muted-foreground font-mono">
+              <p className="text-xs leading-none text-muted-foreground font-mono">
                 {address.slice(0, 6)}...{address.slice(-4)}
               </p>
             )}
@@ -186,23 +198,15 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
 
         <DropdownMenuGroup>
           <DropdownMenuItem asChild>
-            <Link href={dashboardLink} className="flex items-center gap-2 cursor-pointer">
+            <Link href={dashboardLink} className="cursor-pointer flex items-center gap-2">
               <LayoutDashboard className="h-4 w-4" />
-              <span>Dashboard</span>
+              <span>{dbUsername ? "Profile" : "Dashboard"}</span>
             </Link>
           </DropdownMenuItem>
-
-          <DropdownMenuItem asChild>
-            <ProfileSettingsModal />   {/* ← This opens the full profile modal */}
-          </DropdownMenuItem>
-
           {address && (
             <DropdownMenuItem
-              onClick={() => {
-                navigator.clipboard.writeText(address)
-                toast.success("Wallet address copied!")
-              }}
-              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => { navigator.clipboard.writeText(address); toast.success("Address copied!") }}
+              className="cursor-pointer flex items-center gap-2"
             >
               <Copy className="h-4 w-4" />
               <span>Copy Address</span>
@@ -211,10 +215,9 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
         </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
-
         <DropdownMenuItem
           onClick={disconnect}
-          className="text-red-600 focus:text-red-600 cursor-pointer flex items-center gap-2"
+          className="cursor-pointer flex items-center gap-2 text-red-600 focus:text-red-600 focus:bg-red-50"
         >
           <LogOut className="h-4 w-4" />
           <span>Disconnect</span>

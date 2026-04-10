@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useWallet } from "@/components/wallet-provider"
 import { usePrivy } from "@privy-io/react-auth"
 import { useSolanaWallet } from "@/hooks/use-solana"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Save, Upload, Check, Edit2, RefreshCw, CheckCircle2, Link as LinkIcon, Wallet, AlertTriangle } from "lucide-react"
+import { Loader2, Save, Upload, Check, RefreshCw, CheckCircle2, Link as LinkIcon, Wallet, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 
 const API_BASE_URL = "https://faucetdrop-backend.onrender.com"
@@ -45,7 +45,13 @@ const GENERATED_SEEDS = [
   "Jasper", "Milo", "Otis", "Arlo", "Ezra", "Silas", "Jude", "Rowan"
 ]
 
-export function ProfileSettingsModal() {
+interface ProfileSettingsModalProps {
+  // When provided, the modal is controlled externally (no trigger button rendered)
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externalOnOpenChange }: ProfileSettingsModalProps) {
   const { address, isConnected, signer } = useWallet()
 
   const {
@@ -71,7 +77,16 @@ export function ProfileSettingsModal() {
   } = useSolanaWallet()
 
   const router = useRouter()
-  const [isOpen, setIsOpen] = useState(false)
+
+  // Internal open state — used only when the modal is NOT controlled externally
+  const [internalOpen, setInternalOpen] = useState(false)
+
+  // Whether we're in controlled (external) mode
+  const isControlled = externalOpen !== undefined && externalOnOpenChange !== undefined
+
+  const isOpen = isControlled ? externalOpen : internalOpen
+  const setIsOpen = isControlled ? externalOnOpenChange : setInternalOpen
+
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -90,14 +105,10 @@ export function ProfileSettingsModal() {
   const isMiniPay = typeof navigator !== "undefined" &&
     /MiniPay|Opera Mini/i.test(navigator.userAgent)
 
-  // ── For MiniPay users: derive a best-effort "google" email from their
-  //    Privy embedded wallet or any linked email account so the backend
-  //    receives a valid email without requiring a real Google OAuth link.
   const miniPayEmail: string = isMiniPay
     ? (
         user?.google?.email ||
         user?.email?.address ||
-        // Privy sometimes surfaces the MiniPay account's email via linkedAccounts
         (user?.linkedAccounts?.find(
           (a: any) => a.type === "email" || a.type === "google_oauth"
         ) as any)?.email ||
@@ -108,8 +119,6 @@ export function ProfileSettingsModal() {
       )
     : ""
 
-  // Resolved email: for normal users require Google/email; for MiniPay
-  // fall back to the derived miniPayEmail so save is never blocked.
   const resolvedEmail: string =
     user?.google?.email ||
     user?.email?.address ||
@@ -216,7 +225,6 @@ export function ProfileSettingsModal() {
   }
 
   // ── Save Profile ──────────────────────────────────────────────────────
-  // No required socials — any combination is accepted.
   const handleSave = async () => {
     if (!isConnected || !address || !signer) return toast.error("Wallet error")
 
@@ -237,8 +245,6 @@ export function ProfileSettingsModal() {
         username: formData.username,
         bio: formData.bio,
         avatar_url: formData.avatar_url,
-        // For MiniPay users, resolvedEmail fills the email field even if
-        // they haven't explicitly linked Google — keeping the backend happy.
         email: resolvedEmail,
         twitter_handle: user?.twitter?.username || "",
         discord_handle: user?.discord?.username || "",
@@ -264,7 +270,12 @@ export function ProfileSettingsModal() {
 
       toast.success("Profile saved successfully!")
       setIsOpen(false)
-      window.dispatchEvent(new Event("profileUpdated"))
+      window.dispatchEvent(new CustomEvent("profileUpdated", {
+        detail: {
+          username: formData.username,
+          avatarUrl: formData.avatar_url,
+        }
+      }))
 
       if (formData.username && formData.username.toLowerCase() !== "anonymous") {
         router.push(`/dashboard/${formData.username}`)
@@ -341,8 +352,6 @@ export function ProfileSettingsModal() {
         const msg = (error?.message ?? "").toLowerCase()
         const code = (error?.code ?? "").toString().toLowerCase()
 
-        // Privy throws these when the popup closes — even on success.
-        // The `user` object updates reactively, so silently ignore them.
         const isPopupDismissed =
           msg.includes("closed") ||
           msg.includes("cancelled") ||
@@ -365,7 +374,6 @@ export function ProfileSettingsModal() {
           toast.error(`Failed to connect ${label}. Please try again.`)
         }
       } finally {
-        // Small delay so Privy has time to update `user` before re-enabling
         setTimeout(() => {
           setIsConnecting(false)
           isLinkingRef.current = false
@@ -445,12 +453,6 @@ export function ProfileSettingsModal() {
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-background shadow-sm hover:bg-muted">
-          <Edit2 className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
-
       <DialogContent className="w-[95%] sm:max-w-[620px] max-h-[92vh] rounded-lg flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
@@ -659,8 +661,6 @@ export function ProfileSettingsModal() {
                 )}
 
                 <div className="grid gap-3">
-                  {/* Google / Email — for MiniPay users, show their derived email as already linked
-                      and disable the button so they aren't confused by a failing OAuth popup.    */}
                   {isMiniPay ? (
                     <PrivySocialRow
                       label="Email (Google)"

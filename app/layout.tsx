@@ -9,7 +9,7 @@ import { Toaster } from "sonner"
 import { NetworkProvider } from "@/hooks/use-network"
 import { WalletProvider } from "@/components/wallet-provider"
 import { Footer } from "@/components/footer"
-import { Providers } from "@/components/PrivyProvider"
+
 import { SubscriptionModalProvider } from "@/components/subscribe"
 import sdk from "@farcaster/miniapp-sdk"
 
@@ -81,7 +81,6 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {/* SINGLE PROVIDER WRAPPER - handles Privy, Wagmi, and QueryClient */}
-          <Providers>
             <NetworkProvider>
               <WalletProvider>
               <SubscriptionModalProvider>
@@ -95,7 +94,6 @@ export default function RootLayout({
               </SubscriptionModalProvider>
             </WalletProvider>
             </NetworkProvider>
-          </Providers>
         </ThemeProvider>
       </body>
     </html>

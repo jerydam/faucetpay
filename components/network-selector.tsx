@@ -1,9 +1,8 @@
 "use client"
 
 import { useNetwork, type Network } from "@/hooks/use-network"
-import { useWallet } from "@/components/wallet-provider" 
-import { usePrivy } from '@privy-io/react-auth'
-import { Network as NetworkIcon, Wifi, WifiOff, AlertTriangle, Loader2 } from "lucide-react"
+import { useWallet } from "@/components/wallet-provider"
+import { Network as NetworkIcon } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -45,7 +44,7 @@ function NetworkImage({ network, size = 'md', className = '' }: NetworkImageProp
 
   if (imageError || !network?.logoUrl) {
     return (
-      <div 
+      <div
         className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white ${className}`}
         style={{ backgroundColor: network?.color || '#6B7280' }}
       >
@@ -59,7 +58,7 @@ function NetworkImage({ network, size = 'md', className = '' }: NetworkImageProp
   return (
     <div className={`${sizeClasses[size]} ${className} relative`}>
       {imageLoading && (
-        <div 
+        <div
           className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white absolute inset-0 animate-pulse`}
           style={{ backgroundColor: network?.color || '#6B7280' }}
         >
@@ -83,96 +82,37 @@ interface NetworkSelectorProps {
   showName?: boolean
   displayMode?: 'name' | 'logo' | 'both'
   compact?: boolean
-  showStatus?: boolean
   showLogos?: boolean
   className?: string
 }
 
-export function NetworkSelector({ 
-  showName = true, 
+export function NetworkSelector({
+  showName = true,
   displayMode = 'both',
   compact = false,
-  showStatus = true,
   showLogos = true,
   className = ""
 }: NetworkSelectorProps) {
-  const { networks, isConnecting } = useNetwork() 
-  const { chainId, isConnected, address } = useWallet() 
-  const { authenticated } = usePrivy()
-  
-  const isWalletAvailable = typeof window !== "undefined" && window.ethereum
-  const hasWalletConnected = authenticated && isConnected && !!address
-  
-  const currentNetwork = networks.find((net) => net.chainId === chainId)
+  const { networks } = useNetwork()
 
-  const getConnectionStatus = () => {
-    if (isConnecting) return 'connecting' 
-    if (!isWalletAvailable) return 'no-wallet'
-    if (!hasWalletConnected) return 'disconnected'
-    if (!chainId) return 'disconnected'
-    if (currentNetwork && currentNetwork.chainId === chainId) return 'connected'
-    if (chainId !== currentNetwork?.chainId) return 'wrong-network'
-    return 'unknown-network'
-  }
-
-  const connectionStatus = getConnectionStatus()
-
-  const displayText = () => {
-    switch (connectionStatus) {
-      case 'connecting': 
-        return "Connecting..."
-      case 'no-wallet':
-        return "No Wallet Detected"
-      case 'disconnected':
-        return "Not Connected"
-      case 'connected':
-        return currentNetwork?.name || "Celo"
-      case 'wrong-network':
-        return `Wrong Network`
-      case 'unknown-network':
-        return `Unknown Chain`
-      default:
-        return "Celo Network"
-    }
-  }
-
-  const getStatusIndicator = () => {
-    switch (connectionStatus) {
-      case 'connecting': 
-        return { icon: Loader2, color: 'text-blue-500 animate-spin' }
-      case 'connected':
-        return { icon: Wifi, color: 'text-green-500' }
-      case 'wrong-network':
-        return { icon: AlertTriangle, color: 'text-orange-500' }
-      case 'no-wallet':
-      case 'disconnected':
-        return { icon: WifiOff, color: 'text-red-500' }
-      case 'unknown-network':
-        return { icon: AlertTriangle, color: 'text-yellow-500' }
-      default:
-        return { icon: NetworkIcon, color: 'text-gray-500' }
-    }
-  }
-
-  const { icon: StatusIcon, color: statusColor } = getStatusIndicator()
+  // Always show Celo — find by chainId (Celo mainnet = 42220), fallback to first network
+  const celoNetwork = networks.find((net) => net.chainId === 42220) ?? networks[0]
 
   return (
-    <Button 
-      variant="outline" 
+    <Button
+      variant="outline"
       className={`flex items-center gap-2 cursor-default hover:bg-background ${className}`}
       type="button"
       tabIndex={-1}
     >
-      {showLogos && currentNetwork && connectionStatus === 'connected' ? (
-        <NetworkImage network={currentNetwork} size={compact ? "xs" : "sm"} />
-      ) : showStatus ? (
-        <StatusIcon className={`h-4 w-4 ${statusColor}`} />
+      {showLogos && celoNetwork ? (
+        <NetworkImage network={celoNetwork} size={compact ? "xs" : "sm"} />
       ) : (
         <NetworkIcon className="h-4 w-4" />
       )}
-      
+
       {displayMode !== 'logo' && showName && (
-        <span className={compact ? "text-sm" : ""}>{displayText()}</span>
+        <span className={compact ? "text-sm" : ""}>{celoNetwork?.name ?? "Celo"}</span>
       )}
     </Button>
   )
@@ -180,11 +120,10 @@ export function NetworkSelector({
 
 export function CompactNetworkSelector({ className }: { className?: string }) {
   return (
-    <NetworkSelector 
-      displayMode="logo" 
-      compact={true} 
+    <NetworkSelector
+      displayMode="logo"
+      compact={true}
       showName={false}
-      showStatus={true}
       showLogos={true}
       className={className}
     />
@@ -193,10 +132,9 @@ export function CompactNetworkSelector({ className }: { className?: string }) {
 
 export function LogoOnlyNetworkSelector({ className }: { className?: string }) {
   return (
-    <NetworkSelector 
-      displayMode="logo" 
+    <NetworkSelector
+      displayMode="logo"
       showName={false}
-      showStatus={true}
       showLogos={true}
       className={className}
     />
@@ -205,10 +143,9 @@ export function LogoOnlyNetworkSelector({ className }: { className?: string }) {
 
 export function NetworkStatusSelector({ className }: { className?: string }) {
   return (
-    <NetworkSelector 
-      displayMode="both" 
+    <NetworkSelector
+      displayMode="both"
       showName={true}
-      showStatus={true}
       showLogos={true}
       compact={false}
       className={className}
@@ -217,25 +154,18 @@ export function NetworkStatusSelector({ className }: { className?: string }) {
 }
 
 export function MobileNetworkSelector({ className }: { className?: string }) {
-  const { networks, network } = useNetwork()
-  const { isConnected, address } = useWallet() 
-  const { authenticated } = usePrivy()
+  const { networks } = useNetwork()
 
-  const hasWalletConnected = authenticated && isConnected && !!address
-  
-  // Filter to only show the currently active network (or the first configured network if disconnected)
-  const displayNetworks = hasWalletConnected && network ? [network] : networks.slice(0, 1)
-  
+  // Always show Celo
+  const celoNetwork = networks.find((net) => net.chainId === 42220) ?? networks[0]
+  const displayNetworks = celoNetwork ? [celoNetwork] : networks.slice(0, 1)
+
   return (
     <div className={`grid grid-cols-1 gap-3 p-4 ${className}`}>
       {displayNetworks.map((net) => (
         <div
           key={net.chainId}
-          className={`p-3 rounded-lg border-2 transition-all ${
-            network?.chainId === net.chainId
-              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-              : 'border-gray-200 dark:border-gray-700'
-          } ${!hasWalletConnected ? 'opacity-50' : ''}`}
+          className="p-3 rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20 transition-all"
         >
           <div className="flex items-center space-x-3">
             <NetworkImage network={net} size="sm" />
@@ -256,15 +186,16 @@ export function MobileNetworkSelector({ className }: { className?: string }) {
 }
 
 export function NetworkBreadcrumb({ className }: { className?: string }) {
-  const { network } = useNetwork()
-  
-  if (!network) return null
-  
+  const { networks } = useNetwork()
+  const celoNetwork = networks.find((net) => net.chainId === 42220) ?? networks[0]
+
+  if (!celoNetwork) return null
+
   return (
     <div className={`flex items-center space-x-2 text-sm text-gray-500 ${className}`}>
-      <NetworkImage network={network} size="xs" />
-      <span className="font-medium">{network.name}</span>
-      {network.isTestnet && (
+      <NetworkImage network={celoNetwork} size="xs" />
+      <span className="font-medium">{celoNetwork.name}</span>
+      {celoNetwork.isTestnet && (
         <span className="text-xs bg-orange-100 text-orange-600 px-1 rounded">
           Testnet
         </span>
@@ -274,42 +205,35 @@ export function NetworkBreadcrumb({ className }: { className?: string }) {
 }
 
 export function NetworkStatusIndicator({ className }: { className?: string }) {
-  const { network } = useNetwork()
-  const { chainId, isConnected } = useWallet() 
+  const { networks } = useNetwork()
+  const { isConnected } = useWallet()
 
-  if (!isConnected || !network || !chainId) {
-    return (
-      <div className={`flex items-center space-x-2 text-red-600 ${className}`}>
-        <div className="w-4 h-4 bg-red-400 rounded-full" />
-        <span className="text-sm">No network connected</span>
-      </div>
-    )
-  }
-  
-  const isCorrectNetwork = network.chainId === chainId
-  
+  const celoNetwork = networks.find((net) => net.chainId === 42220) ?? networks[0]
+
+  if (!celoNetwork) return null
+
   return (
-    <div className={`flex items-center space-x-2 ${isCorrectNetwork ? 'text-green-600' : 'text-amber-600'} ${className}`}>
-      <NetworkImage network={network} size="xs" />
+    <div className={`flex items-center space-x-2 ${isConnected ? 'text-green-600' : 'text-red-600'} ${className}`}>
+      <NetworkImage network={celoNetwork} size="xs" />
       <span className="text-sm">
-        {isCorrectNetwork 
-          ? `Connected to ${network.name}` 
-          : `Wrong network (expected ${network.name})`
+        {isConnected
+          ? `Connected to ${celoNetwork.name}`
+          : `Not connected`
         }
       </span>
     </div>
   )
 }
 
-export function NetworkCard({ network: net, isActive }: { 
-  network: Network; 
-  isActive?: boolean 
+export function NetworkCard({ network: net, isActive }: {
+  network: Network;
+  isActive?: boolean
 }) {
   return (
-    <div 
+    <div
       className={`p-4 border-2 rounded-lg transition-all ${
-        isActive 
-          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+        isActive
+          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
           : 'border-gray-200'
       }`}
     >
@@ -342,10 +266,11 @@ export function NetworkCard({ network: net, isActive }: {
 }
 
 export function NetworkGrid() {
-  const { networks, network } = useNetwork()
-  
-  // Only render the active/configured network to avoid confusion
-  const displayNetworks = network ? [network] : networks.slice(0, 1)
+  const { networks } = useNetwork()
+
+  // Only render Celo
+  const celoNetwork = networks.find((net) => net.chainId === 42220) ?? networks[0]
+  const displayNetworks = celoNetwork ? [celoNetwork] : networks.slice(0, 1)
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -353,7 +278,7 @@ export function NetworkGrid() {
         <NetworkCard
           key={net.chainId}
           network={net}
-          isActive={network?.chainId === net.chainId}
+          isActive={true}
         />
       ))}
     </div>
@@ -361,23 +286,18 @@ export function NetworkGrid() {
 }
 
 export function HorizontalNetworkSelector({ className }: { className?: string }) {
-  const { networks, network } = useNetwork()
-  const { isConnected, address } = useWallet() 
-  const { authenticated } = usePrivy()
+  const { networks } = useNetwork()
 
-  const hasWalletConnected = authenticated && isConnected && !!address
-  const displayNetworks = network ? [network] : networks.slice(0, 1)
-  
+  // Always show Celo
+  const celoNetwork = networks.find((net) => net.chainId === 42220) ?? networks[0]
+  const displayNetworks = celoNetwork ? [celoNetwork] : networks.slice(0, 1)
+
   return (
     <div className={`flex items-center space-x-2 overflow-x-auto ${className}`}>
       {displayNetworks.map((net) => (
         <div
           key={net.chainId}
-          className={`flex-shrink-0 p-2 rounded-lg border-2 transition-all ${
-            network?.chainId === net.chainId
-              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-              : 'border-gray-200 dark:border-gray-700'
-          } ${!hasWalletConnected ? 'opacity-50' : ''}`}
+          className="flex-shrink-0 p-2 rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20 transition-all"
           title={net.name}
         >
           <NetworkImage network={net} size="sm" />
@@ -389,25 +309,23 @@ export function HorizontalNetworkSelector({ className }: { className?: string })
 
 export function MiniNetworkIndicator({ className = "" }: { className?: string }) {
   const { networks } = useNetwork()
-  const { chainId, isConnected } = useWallet()
-  
-  const currentNetwork = networks.find((net) => net.chainId === chainId)
 
-  if (!isConnected) return null
+  // Always show Celo
+  const celoNetwork = networks.find((net) => net.chainId === 42220) ?? networks[0]
 
   return (
-    <div 
+    <div
       className={cn(
         "flex items-center justify-center border border-border rounded-full bg-background h-9 w-9 shrink-0",
         className
       )}
-      title={currentNetwork?.name || "Connected"}
+      title={celoNetwork?.name ?? "Celo"}
     >
-      {currentNetwork ? (
-        <NetworkImage network={currentNetwork} size="sm" />
+      {celoNetwork ? (
+        <NetworkImage network={celoNetwork} size="sm" />
       ) : (
-        <div className="w-5 h-5 rounded-full bg-muted animate-pulse flex items-center justify-center">
-           <NetworkIcon size={12} className="text-muted-foreground" />
+        <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center">
+          <NetworkIcon size={12} className="text-muted-foreground" />
         </div>
       )}
     </div>

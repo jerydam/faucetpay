@@ -19,7 +19,7 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { ProfileSettingsModal } from "@/components/profile-settings-modal"
 
-const API_BASE_URL = "https://faucetdrop-backend.onrender.com"
+const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app"
 
 interface WalletConnectButtonProps {
   className?: string

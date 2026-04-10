@@ -1547,7 +1547,7 @@ export async function getFaucetDetails(
 }
 export const getUserFaucets = async (userAddress: string) => {
   try {
-    const response = await fetch(`https://faucetdrop-backend.onrender.com/user-faucets/${userAddress}`);
+    const response = await fetch(`https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/user-faucets/${userAddress}`);
     
     if (!response.ok) {
         if(response.status === 404) return []; 
@@ -1565,7 +1565,7 @@ export const getUserFaucets = async (userAddress: string) => {
 async function getDeletedFaucets(chainId: number): Promise<Set<string>> {
     try {
         // Adjust endpoint if necessary (e.g. /deleted-faucets or similar)
-        const response = await fetch(`https://faucetdrop-backend.onrender.com/deleted-faucets?chainId=${chainId}`);
+        const response = await fetch(`https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/deleted-faucets?chainId=${chainId}`);
         
         if (!response.ok) {
             console.warn("Failed to fetch deleted faucets list");
@@ -2099,7 +2099,7 @@ export async function retrieveSecretCode(faucetAddress: string): Promise<string>
     }
 
     // Fallback to backend if not found in localStorage
-    const response = await fetch("https://faucetdrop-backend.onrender.com/retrieve-secret-code", {
+    const response = await fetch("https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/retrieve-secret-code", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2162,7 +2162,7 @@ function decodeRevertError(data: string): string {
 
 async function deleteFaucetMetadata(faucetAddress: string, userAddress: string, chainId: number): Promise<void> {
     try {
-        const response = await fetch("https://faucetdrop-backend.onrender.com/delete-faucet-metadata", { // Replace with your actual backend URL
+        const response = await fetch("https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/delete-faucet-metadata", { // Replace with your actual backend URL
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -6,7 +6,7 @@ import { toast } from "sonner"
 
 // Replace with your actual bot username (without the @)
 const BOT_USERNAME = "FaucetDropsAuth_bot" 
-const API_BASE_URL = "https://faucetdrop-backend.onrender.com"
+const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app"
 
 export function TelegramTaskSetup() {
   const [chatId, setChatId] = useState("")

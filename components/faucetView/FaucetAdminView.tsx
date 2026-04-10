@@ -496,7 +496,7 @@ useEffect(() => {
         BigInt(chainId), BigInt(Number(selectedNetwork.chainId)), faucetType || undefined
       );
       try {
-        await fetch("https://faucetdrop-backend.onrender.com/delete-faucet-metadata", {
+        await fetch("https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/delete-faucet-metadata", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ faucetAddress, userAddress: address, chainId: Number(chainId) }),
@@ -616,7 +616,7 @@ const getEventColor = (type: string) => {
     // 1. Save X post template independently
     if (isTemplateChanged) {
       const response = await fetch(
-        "https://faucetdrop-backend.onrender.com/faucet-x-template",
+        "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/faucet-x-template",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -648,7 +648,7 @@ const getEventColor = (type: string) => {
 
       if (formattedTasks.length > 0) {
         const taskResponse = await fetch(
-          "https://faucetdrop-backend.onrender.com/add-faucet-tasks",
+          "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/add-faucet-tasks",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -691,7 +691,7 @@ const getEventColor = (type: string) => {
 
       // Sync parameters to backend
       await fetch(
-        "https://faucetdrop-backend.onrender.com/set-claim-parameters",
+        "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/set-claim-parameters",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -711,7 +711,7 @@ const getEventColor = (type: string) => {
       if (faucetType === "dropcode") {
         try {
           const codeResponse = await fetch(
-            "https://faucetdrop-backend.onrender.com/generate-new-drop-code",
+            "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/generate-new-drop-code",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -842,7 +842,7 @@ const getEventColor = (type: string) => {
     if (!isOwnerOrAdmin) { toast.error("Only owner or admins can generate a new drop code"); return; }
     try {
       setIsGeneratingNewCode(true);
-      const response = await fetch("https://faucetdrop-backend.onrender.com/generate-new-drop-code", {
+      const response = await fetch("https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/generate-new-drop-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ faucetAddress, userAddress: address, chainId: Number(chainId) }),

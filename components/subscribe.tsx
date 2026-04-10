@@ -11,7 +11,7 @@ import {
     Infinity, BarChart3, Layers, Users, Globe, X
 } from "lucide-react"
 
-const API_BASE_URL = "https://faucetdrop-backend.onrender.com"
+const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app"
 const COMPANY_WALLET = "0x97841b00B8Ad031FB30495eCeF2B2DbB6FCaCE30"
 
 const STABLECOINS: Record<number, { address: string; decimals: number; symbol: string }> = {

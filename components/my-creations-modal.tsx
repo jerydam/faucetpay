@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Library, Droplets, ScrollText, BrainCircuit, ExternalLink, Loader2 } from "lucide-react"
 
 // Backend URL
-const API_BASE_URL = "https://faucetdrop-backend.onrender.com"
+const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app"
 
 interface CreationItem {
   id: string

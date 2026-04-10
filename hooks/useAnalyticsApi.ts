@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
-const API_BASE_URL ='https://faucetdrop-backend.onrender.com'
+const API_BASE_URL ='https://identical-vivi-faucetdrops-41e9c56b.koyeb.app'
 
 interface AnalyticsResponse<T = any> {
   success: boolean

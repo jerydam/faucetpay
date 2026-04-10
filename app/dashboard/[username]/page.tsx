@@ -100,7 +100,7 @@ interface UserProfileData {
 }
 
 export default function DashboardPage() {
-    const backendUrl = "https://faucetdrop-backend.onrender.com"; 
+    const backendUrl = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app"; 
     const params = useParams();
     const router = useRouter();
     const { toast } = useToast();

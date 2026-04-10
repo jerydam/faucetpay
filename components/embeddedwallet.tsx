@@ -305,7 +305,7 @@ export function EmbeddedWalletControlProduction() {
             // 2. Fetch balances from backend safely
             let backendData: BackendResponse | null = null;
             try {
-                const response = await fetch(`https://faucetdrop-backend.onrender.com/api/wallet/balances/${chainId}/${address}`);
+                const response = await fetch(`https://identical-vivi-faucetdrops-41e9c56b.koyeb.app/api/wallet/balances/${chainId}/${address}`);
                 if (response.ok) {
                     backendData = await response.json();
                 }

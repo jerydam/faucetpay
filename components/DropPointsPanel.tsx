@@ -64,7 +64,7 @@ const CHAIN_CONFIG: Record<
 
 const CHAIN_IDS = Object.keys(CHAIN_CONFIG).map(Number);
 
-const API_BASE_URL = "https://faucetdrop-backend.onrender.com";
+const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
 
 // ─── ABI ──────────────────────────────────────────────────────────────────────
 

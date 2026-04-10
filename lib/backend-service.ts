@@ -2,7 +2,7 @@ import { BrowserProvider } from 'ethers';
 import { appendDivviReferralData, reportTransactionToDivvi } from './divvi-integration';
 import { FAUCET_ABI_CUSTOM } from './abis';
 
-const API_URL = "https://faucetdrop-backend.onrender.com";
+const API_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
 const ENABLE_DIVVI_REFERRAL = true;
 const DEBUG_MODE = process.env.NODE_ENV === 'development';
 

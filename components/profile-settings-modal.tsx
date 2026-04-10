@@ -1,8 +1,9 @@
 "use client"
-import { useState, useEffect, useCallback, useRef } from "react" 
-import { useWallet } from "@/components/wallet-provider" 
-import { usePrivy } from "@privy-io/react-auth" 
-import { useSolanaWallet } from "@/hooks/use-solana" // ← new hook
+
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useWallet } from "@/components/wallet-provider"
+import { usePrivy } from "@privy-io/react-auth"
+import { useSolanaWallet } from "@/hooks/use-solana"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Save, Upload, Check, Edit2, RefreshCw, CheckCircle2, Link as LinkIcon, Wallet } from "lucide-react"
+import { Loader2, Save, Upload, Check, Edit2, RefreshCw, CheckCircle2, Link as LinkIcon, Wallet, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 
 const API_BASE_URL = "https://faucetdrop-backend.onrender.com"
@@ -61,12 +62,11 @@ export function ProfileSettingsModal() {
     unlinkFarcaster,
   } = usePrivy()
 
-  // ── Solana wallet resolution (external > embedded > none) ──────────────
   const {
     solanaAddress,
     activeSolanaAccount,
     hasExternalSolana,
-    isEmbeddedUser,   // ← true when user has no external EVM wallet at all
+    isEmbeddedUser,
     linkWallet,
   } = useSolanaWallet()
 
@@ -80,26 +80,29 @@ export function ProfileSettingsModal() {
   const hasPrefilledRef = useRef(false)
 
   const [formData, setFormData] = useState<UserProfile>({
-  wallet_address: "",
-  username: "",
-  bio: "",
-  avatar_url: "",
-})
+    wallet_address: "",
+    username: "",
+    bio: "",
+    avatar_url: "",
+  })
 
-  // ── EVM wallet details ─────────────────────────────────────────────────
+  // ── MiniPay Detection ─────────────────────────────────────────────────
+  const isMiniPay = typeof navigator !== "undefined" && 
+    /MiniPay|Opera Mini/i.test(navigator.userAgent)
+
+  // ── EVM wallet details ────────────────────────────────────────────────
   const linkedWallets = user?.linkedAccounts.filter((acc) => acc.type === "wallet") || []
   const linkedEvmWallets = linkedWallets.filter((w: any) => w.chainType === "ethereum")
 
-  const activeEvmWallet =
-    linkedEvmWallets.find(
-      (w: any) => w.address?.toLowerCase() === address?.toLowerCase()
-    ) ?? { address, walletClientType: "external", chainType: "ethereum" }
+  const activeEvmWallet = linkedEvmWallets.find(
+    (w: any) => w.address?.toLowerCase() === address?.toLowerCase()
+  ) ?? { address, walletClientType: "external", chainType: "ethereum" }
 
   const hasExternalEvm = linkedEvmWallets.some(
     (w: any) => w.walletClientType !== "privy"
   ) || activeEvmWallet.walletClientType !== "privy"
 
-  // ── Avatar / username fallbacks ────────────────────────────────────────
+  // ── Avatar / username fallbacks ───────────────────────────────────────
   const getFallbackAvatar = useCallback(() => {
     if (!user) return ""
     const google = user.google as any
@@ -109,95 +112,64 @@ export function ProfileSettingsModal() {
 
   const getFallbackUsername = useCallback(() => {
     if (!user) return ""
-    if (user.twitter?.username)  return user.twitter.username
-    if (user.discord?.username)  return user.discord.username
-    if (user.google?.name)       return (user.google.name as string).replace(/\s+/g, "")
-    if (user.email?.address)     return user.email.address.split("@")[0]
+    if (user.twitter?.username) return user.twitter.username
+    if (user.discord?.username) return user.discord.username
+    if (user.google?.name) return (user.google.name as string).replace(/\s+/g, "")
+    if (user.email?.address) return user.email.address.split("@")[0]
     return ""
   }, [user])
 
-  // ── Data fetching ──────────────────────────────────────────────────────
+  // ── Data fetching ─────────────────────────────────────────────────────
   const fetchProfile = useCallback(async (signal?: AbortSignal) => {
-  if (!address) return
-  setFormData({ wallet_address: address, username: "", bio: "", avatar_url: "" })
-  setLoading(true)
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/profile/${address}`, { signal })
-    if (signal?.aborted) return  // discard if cancelled
-    const data = await res.json()
-    setFormData({
-      wallet_address: address,
-      username:   data.profile?.username   || getFallbackUsername(),
-      bio:        data.profile?.bio        || "",
-      avatar_url: data.profile?.avatar_url || getFallbackAvatar(),
-    })
-  } catch (err: any) {
-    if (err.name === "AbortError") return  // ignore cancelled requests
-    console.error("Failed to fetch profile")
-  } finally {
-    if (!signal?.aborted) setLoading(false)
-  }
-}, [address, getFallbackUsername, getFallbackAvatar])
+    if (!address) return
+    setFormData({ wallet_address: address, username: "", bio: "", avatar_url: "" })
+    setLoading(true)
 
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/profile/${address}`, { signal })
+      if (signal?.aborted) return
+      const data = await res.json()
+
+      setFormData({
+        wallet_address: address,
+        username: data.profile?.username || getFallbackUsername(),
+        bio: data.profile?.bio || "",
+        avatar_url: data.profile?.avatar_url || getFallbackAvatar(),
+      })
+    } catch (err: any) {
+      if (err.name === "AbortError") return
+      console.error("Failed to fetch profile")
+    } finally {
+      if (!signal?.aborted) setLoading(false)
+    }
+  }, [address, getFallbackUsername, getFallbackAvatar])
+
+  // Fetch profile when modal opens or address changes
   useEffect(() => {
-  if (isOpen && address) {
-    // Reset prefill guard so new wallet gets its own fallback prefill
-    hasPrefilledRef.current = false
-    fetchProfile()
-    setUsernameError(null)
-  }
-}, [isOpen, address, fetchProfile])
+    if (isOpen && address) {
+      hasPrefilledRef.current = false
+      setUsernameError(null)
+      fetchProfile()
+    }
+  }, [isOpen, address, fetchProfile])
 
-useEffect(() => {
-  if (!isOpen || !address) return
-
-  hasPrefilledRef.current = false
-  setUsernameError(null)
-
-  const controller = new AbortController()
-  fetchProfile(controller.signal)
-  return () => controller.abort()  // cancel if modal closes mid-fetch
-}, [isOpen, address, fetchProfile])
-
-useEffect(() => {
-  if (!address) {
-    setFormData({ wallet_address: "", username: "", bio: "", avatar_url: "" })
-    setUsernameError(null)
-    hasPrefilledRef.current = false
-    return
-  }
-
-  setFormData({ wallet_address: address, username: "", bio: "", avatar_url: "" })
-  setUsernameError(null)
-  hasPrefilledRef.current = false
-
-  if (!isOpen) return
-
-  const controller = new AbortController()
-  fetchProfile(controller.signal)
-  return () => controller.abort()  // cancel if address changes again before fetch completes
-}, [address, isOpen, fetchProfile])  // ✅ fetchProfile now in deps
-
-  useEffect(() => {
-    if (!isOpen) hasPrefilledRef.current = false
-  }, [isOpen])
-
+  // Prefill fallback data from social accounts
   useEffect(() => {
     if (isOpen && user && !hasPrefilledRef.current) {
       hasPrefilledRef.current = true
       setFormData(prev => ({
         ...prev,
-        username:   prev.username   || getFallbackUsername(),
+        username: prev.username || getFallbackUsername(),
         avatar_url: prev.avatar_url || getFallbackAvatar(),
       }))
     }
   }, [user, isOpen, getFallbackUsername, getFallbackAvatar])
 
-  // ── Form handlers ──────────────────────────────────────────────────────
+  // ── Username availability check ───────────────────────────────────────
   const checkUsernameUniqueness = async (value: string) => {
     if (!value?.trim() || !address) return true
     try {
-      const res  = await fetch(`${API_BASE_URL}/api/profile/check-availability`, {
+      const res = await fetch(`${API_BASE_URL}/api/profile/check-availability`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -207,42 +179,54 @@ useEffect(() => {
         })
       })
       const data = await res.json()
-      if (!data.available) { setUsernameError(data.message); return false }
+      if (!data.available) {
+        setUsernameError(data.message)
+        return false
+      }
       setUsernameError(null)
       return true
-    } catch { return true }
+    } catch {
+      return true
+    }
   }
 
+  // ── Save Profile ──────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!isConnected || !address || !signer) return toast.error("Wallet error")
-    if (!user?.google?.email)         return toast.error("Please connect your Google (Email) account.")
-    if (!user?.twitter?.username)     return toast.error("Please connect your X (Twitter) account.")
+    if (!user?.google?.email && !user?.email?.address) {
+      return toast.error("Please connect your email or Google account.")
+    }
+    if (!user?.twitter?.username) {
+      return toast.error("Please connect your X (Twitter) account to continue.")
+    }
 
     setSaving(true)
     const validUsername = await checkUsernameUniqueness(formData.username || "")
-    if (!validUsername) { setSaving(false); return toast.error("Please fix errors before saving.") }
+    if (!validUsername) {
+      setSaving(false)
+      return toast.error("Please fix username error before saving.")
+    }
 
     try {
-      const nonce     = Math.floor(Math.random() * 1000000).toString()
-      const message   = `Update Profile\nWallet: ${address}\nNonce: ${nonce}`
+      const nonce = Math.floor(Math.random() * 1000000).toString()
+      const message = `Update Profile\nWallet: ${address}\nNonce: ${nonce}`
       const signature = await signer.signMessage(message)
 
       const payload = {
         wallet_address: address,
-        username:   formData.username,
-        bio:        formData.bio,
+        username: formData.username,
+        bio: formData.bio,
         avatar_url: formData.avatar_url,
-        email:            user?.google?.email         || "",
-        twitter_handle:   user?.twitter?.username     || "",
-        discord_handle:   user?.discord?.username     || "",
-        telegram_handle:  user?.telegram?.username    || "",
-        farcaster_handle: user?.farcaster?.username   || "",
-        twitter_id:       user?.twitter?.subject      || "",
-        discord_id:       user?.discord?.subject      || "",
+        email: user?.google?.email || user?.email?.address || "",
+        twitter_handle: user?.twitter?.username || "",
+        discord_handle: user?.discord?.username || "",
+        telegram_handle: user?.telegram?.username || "",
+        farcaster_handle: user?.farcaster?.username || "",
+        twitter_id: user?.twitter?.subject || "",
+        discord_id: user?.discord?.subject || "",
         telegram_user_id: user?.telegram?.telegramUserId || "",
-        farcaster_id:     user?.farcaster?.fid ? String(user.farcaster.fid) : "",
-        // Include resolved Solana address so the backend stores it
-        solana_address:   solanaAddress               || "",
+        farcaster_id: user?.farcaster?.fid ? String(user.farcaster.fid) : "",
+        solana_address: solanaAddress || "",
         signature,
         message,
         nonce,
@@ -253,34 +237,45 @@ useEffect(() => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       })
+
       if (!res.ok) throw new Error("Update failed")
 
       toast.success("Profile saved successfully!")
       setIsOpen(false)
       window.dispatchEvent(new Event("profileUpdated"))
+
       if (formData.username && formData.username.toLowerCase() !== "anonymous") {
         router.push(`/dashboard/${formData.username}`)
       }
-    } catch {
+    } catch (err) {
       toast.error("Could not save profile")
     } finally {
       setSaving(false)
     }
   }
 
+  // ── File Upload ───────────────────────────────────────────────────────
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
     setUploading(true)
     try {
       const uploadData = new FormData()
       uploadData.append("file", file)
-      const response = await fetch(`${API_BASE_URL}/upload-image`, { method: "POST", body: uploadData })
-      const data     = await response.json()
+
+      const response = await fetch(`${API_BASE_URL}/upload-image`, {
+        method: "POST",
+        body: uploadData
+      })
+      const data = await response.json()
+
       if (data.success) {
         setFormData(prev => ({ ...prev, avatar_url: data.imageUrl }))
-        toast.success("Image uploaded — ready to save.")
-      } else throw new Error(data.message)
+        toast.success("Image uploaded successfully!")
+      } else {
+        throw new Error(data.message)
+      }
     } catch (error: any) {
       toast.error(`Upload failed: ${error.message}`)
     } finally {
@@ -289,18 +284,23 @@ useEffect(() => {
   }
 
   const handleShuffle = () => setSeedOffset(prev => (prev + 8) % GENERATED_SEEDS.length)
-  const currentSeeds  = GENERATED_SEEDS.slice(seedOffset, seedOffset + 8)
+  const currentSeeds = GENERATED_SEEDS.slice(seedOffset, seedOffset + 8)
 
-  // ── Reusable social row ────────────────────────────────────────────────
+  // ── MiniPay-aware Social Row ───────────────────────────────────────────
   const PrivySocialRow = ({
-    label, handle, onConnect, onDisconnect
+    label,
+    handle,
+    onConnect,
+    onDisconnect,
+    isRecommended = false
   }: {
     label: string
     handle?: string | null
     onConnect: () => Promise<any> | void
     onDisconnect?: () => Promise<any> | void
+    isRecommended?: boolean
   }) => {
-    const [isConnecting,    setIsConnecting]    = useState(false)
+    const [isConnecting, setIsConnecting] = useState(false)
     const [isDisconnecting, setIsDisconnecting] = useState(false)
     const isLinkingRef = useRef(false)
 
@@ -308,33 +308,51 @@ useEffect(() => {
       if (isLinkingRef.current) return
       isLinkingRef.current = true
       setIsConnecting(true)
-      try { await onConnect() }
-      catch (error: any) {
+
+      try {
+        await onConnect()
+      } catch (error: any) {
         const msg = (error?.message ?? "").toLowerCase()
-        if (!msg.includes("closed") && !msg.includes("cancelled") && !msg.includes("popup"))
-          toast.error(`Failed to connect ${label}. Please try again.`)
+
+        if (isMiniPay && label.toLowerCase().includes("google")) {
+          toast.error("Google login is unstable in MiniPay. Please use Email, Twitter, or Telegram instead.", {
+            duration: 5000,
+          })
+        } else if (!msg.includes("closed") && !msg.includes("cancelled") && !msg.includes("popup")) {
+          toast.error(`Failed to connect ${label}`)
+        }
+      } finally {
+        setIsConnecting(false)
+        isLinkingRef.current = false
       }
-      finally { setIsConnecting(false); isLinkingRef.current = false }
     }
 
     const handleDisconnect = async () => {
       if (!onDisconnect) return
       setIsDisconnecting(true)
-      try { await onDisconnect() }
-      catch (error: any) {
+      try {
+        await onDisconnect()
+      } catch (error: any) {
         const msg = (error?.message ?? "").toLowerCase()
-        if (msg.includes("cannot remove") || msg.includes("only linked account") || msg.includes("at least one"))
-          toast.error("You must keep at least one account linked to your wallet.")
-        else
-          toast.error(`Failed to disconnect ${label}. Please try again.`)
+        if (msg.includes("cannot remove") || msg.includes("only linked account")) {
+          toast.error("You must keep at least one account linked.")
+        } else {
+          toast.error(`Failed to disconnect ${label}`)
+        }
+      } finally {
+        setIsDisconnecting(false)
       }
-      finally { setIsDisconnecting(false) }
     }
 
     return (
       <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50 hover:bg-card/80 transition-colors">
         <div className="flex flex-col">
-          <span className="text-sm font-semibold text-foreground">{label}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">{label}</span>
+            {isRecommended && isMiniPay && (
+              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-600">Recommended</Badge>
+            )}
+          </div>
           <span className="text-xs text-muted-foreground flex items-center gap-1">
             {handle ? (
               <span className="text-green-600 flex items-center font-medium">
@@ -343,16 +361,29 @@ useEffect(() => {
             ) : "Not linked"}
           </span>
         </div>
+
         {handle ? (
-          <Button size="sm" variant="ghost" type="button" onClick={handleDisconnect} disabled={isDisconnecting}
-            className="text-red-500 hover:text-red-600 hover:bg-red-50">
+          <Button
+            size="sm"
+            variant="ghost"
+            type="button"
+            onClick={handleDisconnect}
+            disabled={isDisconnecting}
+            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+          >
             {isDisconnecting && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
             {isDisconnecting ? "Removing…" : "Disconnect"}
           </Button>
         ) : (
-          <Button size="sm" variant="outline" type="button" onClick={handleConnect} disabled={isConnecting}>
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={handleConnect}
+            disabled={isConnecting}
+          >
             {isConnecting && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-            {isConnecting ? "Opening…" : "Connect"}
+            {isConnecting ? "Connecting…" : "Connect"}
           </Button>
         )}
       </div>
@@ -368,253 +399,277 @@ useEffect(() => {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="w-[95%] sm:max-w-[600px] max-h-[90vh] rounded-lg flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-0 shrink-0">
-          <DialogTitle>Edit Profile</DialogTitle>
+      <DialogContent className="w-[95%] sm:max-w-[620px] max-h-[92vh] rounded-lg flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            Edit Profile
+            {isMiniPay && (
+              <Badge variant="secondary" className="text-xs">MiniPay Mode</Badge>
+            )}
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-2">
+        <div className="flex-1 overflow-y-auto px-6 py-6">
           {loading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
-            <div className="flex flex-col gap-6 py-4">
+            <div className="flex flex-col gap-8">
 
-            {/* ── Avatar ──────────────────────────────────────────────── */}
-            <div className="flex flex-col items-center gap-4 w-full">
-              <Avatar className="h-24 w-24 border-2 border-primary/20">
-                <AvatarImage src={formData.avatar_url} className="object-cover" />
-                <AvatarFallback className="text-2xl font-bold">{formData.username?.[0] || "?"}</AvatarFallback>
-              </Avatar>
+              {/* Avatar Section */}
+              <div className="flex flex-col items-center gap-4">
+                <Avatar className="h-24 w-24 border-2 border-primary/20">
+                  <AvatarImage src={formData.avatar_url} className="object-cover" />
+                  <AvatarFallback className="text-3xl font-bold">
+                    {formData.username?.[0]?.toUpperCase() || "?"}
+                  </AvatarFallback>
+                </Avatar>
 
-              <Tabs defaultValue="generate" className="w-full max-w-sm">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="upload">Upload Custom</TabsTrigger>
-                  <TabsTrigger value="generate">Choose Avatar</TabsTrigger>
-                </TabsList>
+                <Tabs defaultValue="generate" className="w-full max-w-sm">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="upload">Upload Photo</TabsTrigger>
+                    <TabsTrigger value="generate">Generate Avatar</TabsTrigger>
+                  </TabsList>
 
-                <TabsContent value="upload" className="pt-4">
-                  <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 hover:bg-accent/50 transition-colors cursor-pointer relative bg-muted/20">
-                    <input type="file" accept="image/*" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" disabled={uploading} />
-                    {uploading
-                      ? <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                      : <Upload className="h-8 w-8 text-muted-foreground mb-2" />}
-                    <p className="text-xs sm:text-sm text-muted-foreground text-center">
-                      {uploading ? "Uploading…" : "Tap to upload image (max 5 MB)"}
-                    </p>
+                  <TabsContent value="upload" className="pt-4">
+                    <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 hover:bg-accent/50 transition-colors cursor-pointer relative bg-muted/30">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        disabled={uploading}
+                      />
+                      {uploading ? (
+                        <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Upload className="h-10 w-10 text-muted-foreground mb-3" />
+                      )}
+                      <p className="text-sm text-muted-foreground text-center">
+                        {uploading ? "Uploading image..." : "Click to upload custom avatar (max 5MB)"}
+                      </p>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="generate" className="pt-4">
+                    <div className="grid grid-cols-4 gap-3">
+                      {currentSeeds.map((seed, idx) => {
+                        const url = `https://api.dicebear.com/9.x/notionists/svg?seed=${seed}`
+                        const isSelected = formData.avatar_url === url
+                        return (
+                          <div
+                            key={`${seed}-${idx}`}
+                            onClick={() => setFormData(prev => ({ ...prev, avatar_url: url }))}
+                            className={`relative aspect-square rounded-full cursor-pointer overflow-hidden border-2 transition-all hover:scale-105 ${isSelected ? "border-primary ring-2 ring-primary/30" : "border-transparent bg-muted"}`}
+                          >
+                            <img src={url} alt={seed} className="w-full h-full" />
+                            {isSelected && (
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <Check className="h-6 w-6 text-white" />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleShuffle}
+                      className="w-full mt-4 text-muted-foreground hover:text-primary gap-2"
+                    >
+                      <RefreshCw className="h-4 w-4" /> Shuffle Avatars
+                    </Button>
+                  </TabsContent>
+                </Tabs>
+              </div>
+
+              {/* Form Fields */}
+              <div className="grid gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
+                  <Label className="sm:text-right pt-2">Username</Label>
+                  <div className="col-span-3">
+                    <Input
+                      value={formData.username || ""}
+                      onChange={(e) => {
+                        setFormData({ ...formData, username: e.target.value })
+                        setUsernameError(null)
+                      }}
+                      onBlur={() => checkUsernameUniqueness(formData.username || "")}
+                      className={usernameError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                      placeholder="yourusername"
+                    />
+                    {usernameError && <p className="text-xs text-red-500 mt-1">{usernameError}</p>}
+                    {usernameError === null && formData.username && (
+                      <p className="text-xs text-green-600 mt-1 flex items-center">
+                        <CheckCircle2 className="h-3 w-3 mr-1" /> Username available
+                      </p>
+                    )}
                   </div>
-                </TabsContent>
+                </div>
 
-                <TabsContent value="generate" className="pt-4">
-                  <div className="grid grid-cols-4 gap-3">
-                    {currentSeeds.map((seed, idx) => {
-                      const url        = `https://api.dicebear.com/9.x/notionists/svg?seed=${seed}`
-                      const isSelected = formData.avatar_url === url
-                      return (
-                        <div key={`${seed}-${idx}`}
-                          onClick={() => setFormData(prev => ({ ...prev, avatar_url: url }))}
-                          className={`relative aspect-square rounded-full cursor-pointer overflow-hidden border-2 transition-all hover:scale-105 ${isSelected ? "border-primary ring-2 ring-primary/20" : "border-transparent bg-muted"}`}>
-                          <img src={url} alt={seed} className="w-full h-full" />
-                          {isSelected && (
-                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                              <Check className="h-5 w-5 text-white" />
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={handleShuffle} className="w-full mt-4 text-muted-foreground hover:text-primary gap-2">
-                    <RefreshCw className="h-3 w-3" /> Shuffle Avatars
-                  </Button>
-                </TabsContent>
-              </Tabs>
-            </div>
-
-            {/* ── Manual inputs ────────────────────────────────────────── */}
-            <div className="grid gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
-                <Label className="sm:text-right pt-2">Username</Label>
-                <div className="col-span-3">
-                  <Input
-                    value={formData.username || ""}
-                    onChange={(e) => { setFormData({ ...formData, username: e.target.value }); setUsernameError(null) }}
-                    onBlur={() => checkUsernameUniqueness(formData.username || "")}
-                    className={usernameError ? "border-red-500" : ""}
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
+                  <Label className="sm:text-right pt-2">Bio</Label>
+                  <Textarea
+                    value={formData.bio || ""}
+                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                    className="col-span-3 resize-y min-h-[80px]"
+                    placeholder="Tell the community about yourself..."
                   />
-                  {usernameError && <p className="text-xs text-red-500 mt-1">{usernameError}</p>}
-                  {usernameError === null && formData.username && (
-                    <p className="text-xs text-green-600 mt-1 flex items-center">
-                      <CheckCircle2 className="h-3 w-3 mr-1" /> Available
+                </div>
+              </div>
+
+              {/* Linked Wallets */}
+              <div className="border-t pt-6">
+                <h4 className="mb-3 text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                  <Wallet className="h-4 w-4" /> Linked Wallets
+                </h4>
+
+                {isMiniPay && (
+                  <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg flex gap-2 text-sm">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-amber-700 dark:text-amber-400 text-xs">
+                      MiniPay users: Your embedded wallet works across networks. You can still link external wallets if needed.
                     </p>
+                  </div>
+                )}
+
+                <div className="grid gap-3">
+                  {activeEvmWallet?.address && (
+                    <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold">EVM Wallet (Celo)</span>
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {activeEvmWallet.address.slice(0, 6)}...{activeEvmWallet.address.slice(-4)}
+                        </span>
+                      </div>
+                      <Badge variant="secondary" className="capitalize">
+                        {activeEvmWallet.walletClientType === "privy" ? "Embedded" : "External"}
+                      </Badge>
+                    </div>
+                  )}
+
+                  {!isEmbeddedUser && !hasExternalEvm && (
+                    <div className="flex items-center justify-between p-3 border border-dashed rounded-lg bg-card/50 hover:bg-card/80">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold">External EVM Wallet</span>
+                        <span className="text-xs text-muted-foreground">MetaMask, Coinbase, etc.</span>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => linkWallet()}>
+                        Link Wallet
+                      </Button>
+                    </div>
+                  )}
+
+                  {solanaAddress && (
+                    <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold">Solana Wallet</span>
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {solanaAddress.slice(0, 6)}...{solanaAddress.slice(-4)}
+                        </span>
+                      </div>
+                      <Badge variant={hasExternalSolana ? "default" : "secondary"}>
+                        {hasExternalSolana ? "External" : "Embedded"}
+                      </Badge>
+                    </div>
+                  )}
+
+                  {!isEmbeddedUser && !hasExternalSolana && (
+                    <div className="flex items-center justify-between p-3 border border-dashed rounded-lg bg-card/50 hover:bg-card/80">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold">External Solana Wallet</span>
+                        <span className="text-xs text-muted-foreground">Phantom, Solflare, etc.</span>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => linkWallet()}>
+                        {solanaAddress ? "Override" : "Link Wallet"}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
-                <Label className="sm:text-right pt-2">Bio</Label>
-                <Textarea
-                  value={formData.bio}
-                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                  className="col-span-3"
-                  placeholder="Tell us about yourself…"
-                />
-              </div>
-            </div>
+              {/* Social Connections */}
+              <div className="border-t pt-6">
+                <h4 className="mb-4 text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                  <LinkIcon className="h-4 w-4" /> Verified Connections
+                </h4>
 
-            {/* ── Linked Wallets ───────────────────────────────────────── */}
-            <div className="border-t pt-6">
-              <h4 className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                <Wallet className="h-3 w-3" /> Linked Wallets
-              </h4>
+                {isMiniPay && (
+                  <p className="text-xs text-amber-600 mb-4">
+                    💡 In MiniPay: <strong>Telegram</strong> and <strong>Twitter</strong> work best.
+                  </p>
+                )}
 
-              {/*
-                NOTE: For embedded users we intentionally suppress ALL "link external
-                wallet" prompts. Their embedded wallets cover both EVM and Solana and
-                that's all they need.
-              */}
-              {!isEmbeddedUser && (
-                <p className="text-xs text-muted-foreground mb-4">
-                  Link your EVM and Solana wallets so your profile, points, and tasks
-                  carry over when you switch networks.
+                <div className="grid gap-3">
+                  <PrivySocialRow
+                    label="Email (Google)"
+                    handle={user?.google?.email || user?.email?.address}
+                    onConnect={linkGoogle}
+                    onDisconnect={() => unlinkGoogle(user?.google?.subject!)}
+                  />
+
+                  <PrivySocialRow
+                    label="X (Twitter)"
+                    handle={user?.twitter?.username}
+                    onConnect={linkTwitter}
+                    onDisconnect={() => unlinkTwitter(user?.twitter?.subject!)}
+                    isRecommended={isMiniPay}
+                  />
+
+                  <PrivySocialRow
+                    label="Telegram"
+                    handle={user?.telegram?.username}
+                    onConnect={linkTelegram}
+                    onDisconnect={() => unlinkTelegram(user?.telegram?.telegramUserId!)}
+                    isRecommended={isMiniPay}
+                  />
+
+                  <PrivySocialRow
+                    label="Discord"
+                    handle={user?.discord?.username}
+                    onConnect={linkDiscord}
+                    onDisconnect={() => unlinkDiscord(user?.discord?.subject!)}
+                  />
+
+                  <PrivySocialRow
+                    label="Farcaster"
+                    handle={user?.farcaster?.username}
+                    onConnect={linkFarcaster}
+                    onDisconnect={() => unlinkFarcaster(user?.farcaster?.fid!)}
+                  />
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-4">
+                  * Linked accounts will be saved when you click "Save Profile"
                 </p>
-              )}
-              {isEmbeddedUser && (
-                <p className="text-xs text-muted-foreground mb-4">
-                  Your embedded wallets automatically cover all supported networks.
-                </p>
-              )}
-
-              <div className="grid gap-3">
-
-                {/* ─ EVM wallet row ──────────────────────────────────── */}
-                {activeEvmWallet?.address && (
-                  <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold">EVM Wallet</span>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {(activeEvmWallet as any).address.slice(0, 6)}…{(activeEvmWallet as any).address.slice(-4)}
-                      </span>
-                    </div>
-                    <Badge variant="secondary" className="capitalize">
-                      {(activeEvmWallet as any).walletClientType === "privy" ? "Embedded" : "External"}
-                    </Badge>
-                  </div>
-                )}
-
-                {/*
-                  "Link External EVM" prompt — hidden for embedded-only users.
-                  External users who haven't linked a second EVM wallet see it.
-                */}
-                {!isEmbeddedUser && !hasExternalEvm && (
-                  <div className="flex items-center justify-between p-3 border border-dashed rounded-lg bg-card/50 hover:bg-card/80 transition-colors">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold">External EVM Wallet</span>
-                      <span className="text-xs text-muted-foreground max-w-[180px]">Link MetaMask, Coinbase, etc.</span>
-                    </div>
-                    <Button size="sm" variant="outline" type="button" onClick={() => linkWallet()}>
-                      Link Wallet
-                    </Button>
-                  </div>
-                )}
-
-                {/* ─ Solana wallet row ───────────────────────────────── */}
-                {solanaAddress && (
-                  <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold">Solana Wallet</span>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {solanaAddress.slice(0, 6)}…{solanaAddress.slice(-4)}
-                      </span>
-                    </div>
-                    <Badge variant={hasExternalSolana ? "default" : "secondary"} className="capitalize">
-                      {hasExternalSolana ? "External" : "Embedded"}
-                    </Badge>
-                  </div>
-                )}
-
-                {/*
-                  "Link External Solana" prompt:
-                  • Hidden for embedded users entirely.
-                  • Hidden for external users who already have an external Solana wallet.
-                  • Shown for external users who only have an embedded (auto-generated)
-                    Solana wallet — they can upgrade to Phantom/Solflare here.
-                */}
-                {!isEmbeddedUser && !hasExternalSolana && (
-                  <div className="flex items-center justify-between p-3 border border-dashed rounded-lg bg-card/50 hover:bg-card/80 transition-colors">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold">External Solana Wallet</span>
-                      <span className="text-xs text-muted-foreground max-w-[180px]">
-                        Link Phantom, Solflare, etc.
-                        {solanaAddress && (
-                          <span className="block text-amber-600 mt-0.5">
-                            Override your auto-generated wallet
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <Button size="sm" variant="outline" type="button" onClick={() => linkWallet()}>
-                      {solanaAddress ? "Override" : "Link Wallet"}
-                    </Button>
-                  </div>
-                )}
-
               </div>
-            </div>
 
-            {/* ── Verified connections ─────────────────────────────────── */}
-            <div className="border-t pt-6">
-              <h4 className="mb-4 text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                <LinkIcon className="h-3 w-3" /> Verified Connections
-              </h4>
-              <div className="grid gap-3">
-                <PrivySocialRow
-                  label="Email (Google)"
-                  handle={user?.google?.email}
-                  onConnect={linkGoogle}
-                  onDisconnect={() => unlinkGoogle(user?.google?.subject!)}
-                />
-                <PrivySocialRow
-                  label="X (Twitter)"
-                  handle={user?.twitter?.username}
-                  onConnect={linkTwitter}
-                  onDisconnect={() => unlinkTwitter(user?.twitter?.subject!)}
-                />
-                <PrivySocialRow
-                  label="Discord"
-                  handle={user?.discord?.username}
-                  onConnect={linkDiscord}
-                  onDisconnect={() => unlinkDiscord(user?.discord?.subject!)}
-                />
-                <PrivySocialRow
-                  label="Telegram"
-                  handle={user?.telegram?.username}
-                  onConnect={linkTelegram}
-                  onDisconnect={() => unlinkTelegram(user?.telegram?.telegramUserId!)}
-                />
-                <PrivySocialRow
-                  label="Farcaster"
-                  handle={user?.farcaster?.username}
-                  onConnect={linkFarcaster}
-                  onDisconnect={() => unlinkFarcaster(user?.farcaster?.fid!)}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground mt-3">
-                * Click "Save Profile" below to sync linked accounts to your public profile.
-              </p>
             </div>
-
-          </div>
-        )}
+          )}
         </div>
 
-        <div className="shrink-0 px-6 pt-2 pb-6 border-t bg-background">
-    <Button onClick={handleSave} disabled={saving || loading || !!usernameError} className="w-full">
-      {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-      {saving ? "Saving…" : "Save Profile"}
-    </Button>
-  </div>
+        {/* Footer */}
+        <div className="shrink-0 px-6 py-6 border-t bg-background">
+          <Button
+            onClick={handleSave}
+            disabled={saving || loading || !!usernameError}
+            className="w-full h-12 text-base"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Saving Profile...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-5 w-5" />
+                Save Profile
+              </>
+            )}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )

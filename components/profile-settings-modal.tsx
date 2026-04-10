@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useWallet } from "@/components/wallet-provider"
 import { usePrivy } from "@privy-io/react-auth"
-import { useSolanaWallet } from "@/hooks/use-solana"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -13,77 +12,54 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Save, Upload, Check, RefreshCw, CheckCircle2, Link as LinkIcon, Wallet, AlertTriangle } from "lucide-react"
+import {
+  Loader2, Save, Upload, Check, RefreshCw,
+  CheckCircle2, Wallet, AlertTriangle
+} from "lucide-react"
 import { toast } from "sonner"
 
 const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app"
 
 interface UserProfile {
-  wallet_address: string;
-  username: string | null;
-  bio?: string;
-  avatar_url?: string;
-  twitter_handle?: string;
-  is_quest_subscribed?: boolean;
-  quest_subscription_expires_at?: string;
+  wallet_address: string
+  username: string | null
+  bio?: string
+  avatar_url?: string
+  email?: string
+  phone?: string
 }
 
 const GENERATED_SEEDS = [
-  "Jerry","John", "Aneka", "Zack", "Molly", "Bear", "Crypto", "Whale", "Pepe",
-  "Satoshi", "Vitalik", "Gwei", "HODL", "WAGMI", "Doge", "Shiba", "Solana",
-  "Ether", "Bitcoin", "Chain", "Block", "DeFi", "NFT", "Alpha", "Beta",
-  "Neon", "Cyber", "Pixel", "Glitch", "Retro", "Vapor", "Synth", "Wave",
-  "Pulse", "Echo", "Flux", "Spark", "Glow", "Shine", "Shadow", "Light",
-  "Dark", "Void", "Zenith", "Apex", "Nova", "Nebula", "Galaxy", "Comet",
-  "Zeus", "Hera", "Odin", "Thor", "Loki", "Freya", "Ra", "Anubis",
-  "Apollo", "Athena", "Ares", "Hades", "Poseidon", "Atlas", "Titan",
-  "Phoenix", "Dragon", "Griffin", "Hydra", "Medusa", "Pegasus", "Sphinx",
-  "Wolf", "Eagle", "Hawk", "Lion", "Tiger", "Shark", "Dolphin", "Panda",
-  "Fox", "Owl", "Raven", "Crow", "Snake", "Cobra", "Viper", "Toad",
-  "River", "Sky", "Ocean", "Forest", "Mountain", "Rain", "Storm", "Snow",
-  "Leo", "Zoe", "Max", "Ruby", "Kai", "Luna", "Finn", "Cleo",
-  "Jasper", "Milo", "Otis", "Arlo", "Ezra", "Silas", "Jude", "Rowan"
+  "Jerry","John","Aneka","Zack","Molly","Bear","Crypto","Whale","Pepe",
+  "Satoshi","Vitalik","Gwei","HODL","WAGMI","Doge","Shiba","Solana",
+  "Ether","Bitcoin","Chain","Block","DeFi","NFT","Alpha","Beta",
+  "Neon","Cyber","Pixel","Glitch","Retro","Vapor","Synth","Wave",
+  "Pulse","Echo","Flux","Spark","Glow","Shine","Shadow","Light",
 ]
 
 interface ProfileSettingsModalProps {
-  // When provided, the modal is controlled externally (no trigger button rendered)
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }
 
-export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externalOnOpenChange }: ProfileSettingsModalProps) {
+export function ProfileSettingsModal({
+  open: externalOpen,
+  onOpenChange: externalOnOpenChange,
+}: ProfileSettingsModalProps) {
   const { address, isConnected, signer } = useWallet()
-
   const {
     user,
-    linkTwitter,
-    linkDiscord,
+    linkEmail,
+    linkPhone,
     linkGoogle,
-    linkTelegram,
-    linkFarcaster,
-    unlinkTwitter,
-    unlinkDiscord,
+    unlinkEmail,
+    unlinkPhone,
     unlinkGoogle,
-    unlinkTelegram,
-    unlinkFarcaster,
   } = usePrivy()
 
-  const {
-    solanaAddress,
-    activeSolanaAccount,
-    hasExternalSolana,
-    isEmbeddedUser,
-    linkWallet,
-  } = useSolanaWallet()
-
   const router = useRouter()
-
-  // Internal open state — used only when the modal is NOT controlled externally
   const [internalOpen, setInternalOpen] = useState(false)
-
-  // Whether we're in controlled (external) mode
   const isControlled = externalOpen !== undefined && externalOnOpenChange !== undefined
-
   const isOpen = isControlled ? externalOpen : internalOpen
   const setIsOpen = isControlled ? externalOnOpenChange : setInternalOpen
 
@@ -99,86 +75,104 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
     username: "",
     bio: "",
     avatar_url: "",
+    email: "",
+    phone: "",
   })
 
-  // ── MiniPay Detection ─────────────────────────────────────────────────
+  // ── MiniPay detection ─────────────────────────────────────────────────
   const isMiniPay = typeof navigator !== "undefined" &&
     /MiniPay|Opera Mini/i.test(navigator.userAgent)
 
-  const miniPayEmail: string = isMiniPay
-    ? (
-        user?.google?.email ||
-        user?.email?.address ||
-        (user?.linkedAccounts?.find(
-          (a: any) => a.type === "email" || a.type === "google_oauth"
-        ) as any)?.email ||
-        (user?.linkedAccounts?.find(
-          (a: any) => a.type === "email" || a.type === "google_oauth"
-        ) as any)?.address ||
-        ""
-      )
-    : ""
+  // ── Resolve ALL possible identification values from Privy ─────────────
+  // Email: could come from Google OAuth, email OTP, or embedded wallet email
+  const resolvedEmail: string = (() => {
+    if (user?.google?.email) return user.google.email
+    if (user?.email?.address) return user.email.address
 
-  const resolvedEmail: string =
-    user?.google?.email ||
-    user?.email?.address ||
-    miniPayEmail
+    // Walk every linked account for any email-like field
+    for (const acc of user?.linkedAccounts ?? []) {
+      const a = acc as any
+      if (a.type === "google_oauth" && a.email) return a.email
+      if (a.type === "email" && a.address) return a.address
+      // MiniPay sometimes surfaces email under these fields
+      if (a.email) return a.email
+      if (a.emailAddress) return a.emailAddress
+    }
+    return ""
+  })()
 
-  // ── EVM wallet details ────────────────────────────────────────────────
-  const linkedWallets = user?.linkedAccounts.filter((acc) => acc.type === "wallet") || []
-  const linkedEvmWallets = linkedWallets.filter((w: any) => w.chainType === "ethereum")
+  // Phone: Privy stores it under a "phone" linked account
+  const resolvedPhone: string = (() => {
+    for (const acc of user?.linkedAccounts ?? []) {
+      const a = acc as any
+      if (a.type === "phone" && (a.phoneNumber || a.number)) {
+        return a.phoneNumber || a.number
+      }
+    }
+    return ""
+  })()
 
+  // Which Privy subject IDs do we have so we can unlink cleanly?
+  const googleSubject = user?.google?.subject ?? null
+  const emailAddress  = user?.email?.address ?? null
+  const phoneNumber   = resolvedPhone || null
+
+  // ── EVM wallet ────────────────────────────────────────────────────────
+  const linkedWallets = user?.linkedAccounts.filter(
+    (acc) => acc.type === "wallet"
+  ) ?? []
+  const linkedEvmWallets = linkedWallets.filter(
+    (w: any) => w.chainType === "ethereum"
+  )
   const activeEvmWallet = linkedEvmWallets.find(
     (w: any) => w.address?.toLowerCase() === address?.toLowerCase()
   ) ?? { address, walletClientType: "external", chainType: "ethereum" }
 
-  const hasExternalEvm = linkedEvmWallets.some(
-    (w: any) => w.walletClientType !== "privy"
-  ) || activeEvmWallet.walletClientType !== "privy"
+  const isEmbeddedEvm =
+    (activeEvmWallet as any)?.walletClientType === "privy"
 
   // ── Avatar / username fallbacks ───────────────────────────────────────
   const getFallbackAvatar = useCallback(() => {
     if (!user) return ""
     const google = user.google as any
-    const twitter = user.twitter as any
-    return google?.picture || google?.profilePictureUrl || twitter?.profilePictureUrl || ""
+    return google?.picture || google?.profilePictureUrl || ""
   }, [user])
 
   const getFallbackUsername = useCallback(() => {
     if (!user) return ""
-    if (user.twitter?.username) return user.twitter.username
-    if (user.discord?.username) return user.discord.username
     if (user.google?.name) return (user.google.name as string).replace(/\s+/g, "")
     if (user.email?.address) return user.email.address.split("@")[0]
+    // MiniPay: derive from phone if nothing else
+    if (resolvedPhone) return `user${resolvedPhone.slice(-4)}`
     return ""
-  }, [user])
+  }, [user, resolvedPhone])
 
-  // ── Data fetching ─────────────────────────────────────────────────────
-  const fetchProfile = useCallback(async (signal?: AbortSignal) => {
-    if (!address) return
-    setFormData({ wallet_address: address, username: "", bio: "", avatar_url: "" })
-    setLoading(true)
+  // ── Fetch profile ─────────────────────────────────────────────────────
+  const fetchProfile = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!address) return
+      setLoading(true)
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/profile/${address}`, { signal })
+        if (signal?.aborted) return
+        const data = await res.json()
+        setFormData({
+          wallet_address: address,
+          username: data.profile?.username || getFallbackUsername(),
+          bio: data.profile?.bio || "",
+          avatar_url: data.profile?.avatar_url || getFallbackAvatar(),
+          email: data.profile?.email || resolvedEmail,
+          phone: data.profile?.phone || resolvedPhone,
+        })
+      } catch (err: any) {
+        if (err.name === "AbortError") return
+      } finally {
+        if (!signal?.aborted) setLoading(false)
+      }
+    },
+    [address, getFallbackUsername, getFallbackAvatar, resolvedEmail, resolvedPhone]
+  )
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/profile/${address}`, { signal })
-      if (signal?.aborted) return
-      const data = await res.json()
-
-      setFormData({
-        wallet_address: address,
-        username: data.profile?.username || getFallbackUsername(),
-        bio: data.profile?.bio || "",
-        avatar_url: data.profile?.avatar_url || getFallbackAvatar(),
-      })
-    } catch (err: any) {
-      if (err.name === "AbortError") return
-      console.error("Failed to fetch profile")
-    } finally {
-      if (!signal?.aborted) setLoading(false)
-    }
-  }, [address, getFallbackUsername, getFallbackAvatar])
-
-  // Fetch profile when modal opens or address changes
   useEffect(() => {
     if (isOpen && address) {
       hasPrefilledRef.current = false
@@ -187,19 +181,21 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
     }
   }, [isOpen, address, fetchProfile])
 
-  // Prefill fallback data from social accounts
+  // Prefill from Privy data once modal opens
   useEffect(() => {
     if (isOpen && user && !hasPrefilledRef.current) {
       hasPrefilledRef.current = true
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         username: prev.username || getFallbackUsername(),
         avatar_url: prev.avatar_url || getFallbackAvatar(),
+        email: prev.email || resolvedEmail,
+        phone: prev.phone || resolvedPhone,
       }))
     }
-  }, [user, isOpen, getFallbackUsername, getFallbackAvatar])
+  }, [user, isOpen, getFallbackUsername, getFallbackAvatar, resolvedEmail, resolvedPhone])
 
-  // ── Username availability check ───────────────────────────────────────
+  // ── Username uniqueness ───────────────────────────────────────────────
   const checkUsernameUniqueness = async (value: string) => {
     if (!value?.trim() || !address) return true
     try {
@@ -209,14 +205,11 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
         body: JSON.stringify({
           field: "username",
           value: value.trim(),
-          current_wallet: address.toLowerCase()
-        })
+          current_wallet: address.toLowerCase(),
+        }),
       })
       const data = await res.json()
-      if (!data.available) {
-        setUsernameError(data.message)
-        return false
-      }
+      if (!data.available) { setUsernameError(data.message); return false }
       setUsernameError(null)
       return true
     } catch {
@@ -224,19 +217,17 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
     }
   }
 
-  // ── Save Profile ──────────────────────────────────────────────────────
+  // ── Save ──────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!isConnected || !address || !signer) return toast.error("Wallet error")
+    if (!isConnected || !address || !signer)
+      return toast.error("Wallet not connected")
 
     setSaving(true)
-    const validUsername = await checkUsernameUniqueness(formData.username || "")
-    if (!validUsername) {
-      setSaving(false)
-      return toast.error("Please fix username error before saving.")
-    }
+    const valid = await checkUsernameUniqueness(formData.username || "")
+    if (!valid) { setSaving(false); return toast.error("Fix username error first.") }
 
     try {
-      const nonce = Math.floor(Math.random() * 1000000).toString()
+      const nonce = Math.floor(Math.random() * 1_000_000).toString()
       const message = `Update Profile\nWallet: ${address}\nNonce: ${nonce}`
       const signature = await signer.signMessage(message)
 
@@ -245,16 +236,19 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
         username: formData.username,
         bio: formData.bio,
         avatar_url: formData.avatar_url,
-        email: resolvedEmail,
-        twitter_handle: user?.twitter?.username || "",
-        discord_handle: user?.discord?.username || "",
-        telegram_handle: user?.telegram?.username || "",
-        farcaster_handle: user?.farcaster?.username || "",
-        twitter_id: user?.twitter?.subject || "",
-        discord_id: user?.discord?.subject || "",
-        telegram_user_id: user?.telegram?.telegramUserId || "",
-        farcaster_id: user?.farcaster?.fid ? String(user.farcaster.fid) : "",
-        solana_address: solanaAddress || "",
+        // identification — send whatever we resolved
+        email: resolvedEmail || formData.email || "",
+        phone: resolvedPhone || formData.phone || "",
+        // kept empty for backend schema compatibility
+        solana_address: "",
+        twitter_handle: "",
+        discord_handle: "",
+        telegram_handle: "",
+        farcaster_handle: "",
+        twitter_id: "",
+        discord_id: "",
+        telegram_user_id: "",
+        farcaster_id: "",
         signature,
         message,
         nonce,
@@ -263,202 +257,132 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
       const res = await fetch(`${API_BASE_URL}/api/profile/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
-
       if (!res.ok) throw new Error("Update failed")
 
-      toast.success("Profile saved successfully!")
+      toast.success("Profile saved!")
       setIsOpen(false)
-      window.dispatchEvent(new CustomEvent("profileUpdated", {
-        detail: {
-          username: formData.username,
-          avatarUrl: formData.avatar_url,
-        }
-      }))
-
+      window.dispatchEvent(
+        new CustomEvent("profileUpdated", {
+          detail: { username: formData.username, avatarUrl: formData.avatar_url },
+        })
+      )
       if (formData.username && formData.username.toLowerCase() !== "anonymous") {
         router.push(`/dashboard/${formData.username}`)
       }
-    } catch (err) {
+    } catch {
       toast.error("Could not save profile")
     } finally {
       setSaving(false)
     }
   }
 
-  // ── File Upload ───────────────────────────────────────────────────────
+  // ── File upload ───────────────────────────────────────────────────────
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
     setUploading(true)
     try {
-      const uploadData = new FormData()
-      uploadData.append("file", file)
-
-      const response = await fetch(`${API_BASE_URL}/upload-image`, {
-        method: "POST",
-        body: uploadData
-      })
-      const data = await response.json()
-
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch(`${API_BASE_URL}/upload-image`, { method: "POST", body: fd })
+      const data = await res.json()
       if (data.success) {
-        setFormData(prev => ({ ...prev, avatar_url: data.imageUrl }))
-        toast.success("Image uploaded successfully!")
-      } else {
-        throw new Error(data.message)
-      }
-    } catch (error: any) {
-      toast.error(`Upload failed: ${error.message}`)
+        setFormData((prev) => ({ ...prev, avatar_url: data.imageUrl }))
+        toast.success("Image uploaded!")
+      } else throw new Error(data.message)
+    } catch (err: any) {
+      toast.error(`Upload failed: ${err.message}`)
     } finally {
       setUploading(false)
     }
   }
 
-  const handleShuffle = () => setSeedOffset(prev => (prev + 8) % GENERATED_SEEDS.length)
+  const handleShuffle = () =>
+    setSeedOffset((p) => (p + 8) % GENERATED_SEEDS.length)
   const currentSeeds = GENERATED_SEEDS.slice(seedOffset, seedOffset + 8)
 
-  // ── Social Row ────────────────────────────────────────────────────────
-  const PrivySocialRow = ({
+  // ── Reusable identification row ───────────────────────────────────────
+  const IdentRow = ({
     label,
-    handle,
+    value,
     onConnect,
     onDisconnect,
-    isRecommended = false,
-    disabled = false,
-    disabledReason,
+    mono = false,
+    hint,
   }: {
     label: string
-    handle?: string | null
-    onConnect: () => Promise<any> | void
-    onDisconnect?: () => Promise<any> | void
-    isRecommended?: boolean
-    disabled?: boolean
-    disabledReason?: string
+    value?: string | null
+    onConnect?: () => void
+    onDisconnect?: () => void
+    mono?: boolean
+    hint?: string
   }) => {
-    const [isConnecting, setIsConnecting] = useState(false)
-    const [isDisconnecting, setIsDisconnecting] = useState(false)
-    const isLinkingRef = useRef(false)
+    const [busy, setBusy] = useState(false)
 
-    const handleConnect = async () => {
-      if (isLinkingRef.current || disabled) return
-      isLinkingRef.current = true
-      setIsConnecting(true)
-
-      try {
-        await onConnect()
-      } catch (error: any) {
-        const msg = (error?.message ?? "").toLowerCase()
-        const code = (error?.code ?? "").toString().toLowerCase()
-
-        const isPopupDismissed =
-          msg.includes("closed") ||
-          msg.includes("cancelled") ||
-          msg.includes("canceled") ||
-          msg.includes("popup") ||
-          msg.includes("user rejected") ||
-          msg.includes("user denied") ||
-          msg.includes("exited") ||
-          code.includes("privy_popup_closed") ||
-          code.includes("privy_canceled")
-
-        if (isPopupDismissed) {
-          // Do nothing — if OAuth actually completed, `user` will update.
-        } else if (isMiniPay && label.toLowerCase().includes("google")) {
-          toast.error(
-            "Google login is unstable in MiniPay. Use Twitter or Telegram instead.",
-            { duration: 5000 }
-          )
-        } else {
-          toast.error(`Failed to connect ${label}. Please try again.`)
-        }
-      } finally {
-        setTimeout(() => {
-          setIsConnecting(false)
-          isLinkingRef.current = false
-        }, 800)
-      }
-    }
-
-    const handleDisconnect = async () => {
-      if (!onDisconnect) return
-      setIsDisconnecting(true)
-      try {
-        await onDisconnect()
-      } catch (error: any) {
-        const msg = (error?.message ?? "").toLowerCase()
-        if (msg.includes("cannot remove") || msg.includes("only linked account")) {
-          toast.error("You must keep at least one account linked.")
-        } else {
-          toast.error(`Failed to disconnect ${label}`)
-        }
-      } finally {
-        setIsDisconnecting(false)
-      }
+    const run = async (fn: () => void) => {
+      setBusy(true)
+      try { await (fn as any)() }
+      catch (err: any) {
+        const msg = (err?.message ?? "").toLowerCase()
+        const isPopupDismiss =
+          msg.includes("closed") || msg.includes("cancel") ||
+          msg.includes("rejected") || msg.includes("exited")
+        if (!isPopupDismiss) toast.error("Action failed. Please try again.")
+      } finally { setBusy(false) }
     }
 
     return (
-      <div className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${disabled ? "opacity-50 bg-muted/30" : "bg-card/50 hover:bg-card/80"}`}>
+      <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
         <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">{label}</span>
-            {isRecommended && isMiniPay && (
-              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-600">
-                Best in MiniPay
-              </Badge>
-            )}
-          </div>
-          <span className="text-xs text-muted-foreground flex items-center gap-1">
-            {handle ? (
-              <span className="text-green-600 flex items-center font-medium">
-                <CheckCircle2 className="h-3 w-3 mr-1" /> {handle}
-              </span>
-            ) : disabled && disabledReason ? (
-              <span className="text-amber-600">{disabledReason}</span>
-            ) : (
-              "Not linked"
-            )}
-          </span>
+          <span className="text-sm font-medium">{label}</span>
+          {value ? (
+            <span className={`text-xs text-green-600 flex items-center gap-1 ${mono ? "font-mono" : ""}`}>
+              <CheckCircle2 className="h-3 w-3 shrink-0" />
+              {value}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {hint || "Not linked"}
+            </span>
+          )}
         </div>
 
-        {handle ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            type="button"
-            onClick={handleDisconnect}
-            disabled={isDisconnecting}
-            className="text-red-500 hover:text-red-600 hover:bg-red-50"
-          >
-            {isDisconnecting && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-            {isDisconnecting ? "Removing…" : "Disconnect"}
-          </Button>
+        {value ? (
+          onDisconnect && (
+            <Button
+              size="sm" variant="ghost" type="button"
+              disabled={busy}
+              onClick={() => run(onDisconnect)}
+              className="text-red-500 hover:text-red-600 hover:bg-red-50 text-xs"
+            >
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : "Remove"}
+            </Button>
+          )
         ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            type="button"
-            onClick={handleConnect}
-            disabled={isConnecting || disabled}
-          >
-            {isConnecting && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-            {isConnecting ? "Connecting…" : "Connect"}
-          </Button>
+          onConnect && (
+            <Button size="sm" variant="outline" type="button"
+              disabled={busy} onClick={() => run(onConnect)}
+            >
+              {busy && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              {busy ? "Connecting…" : "Link"}
+            </Button>
+          )
         )}
       </div>
     )
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="w-[95%] sm:max-w-[620px] max-h-[92vh] rounded-lg flex flex-col p-0">
+      <DialogContent className="w-[95%] sm:max-w-[580px] max-h-[92vh] rounded-lg flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            Edit Profile
+            Edit profile
             {isMiniPay && (
-              <Badge variant="secondary" className="text-xs">MiniPay Mode</Badge>
+              <Badge variant="secondary" className="text-xs">MiniPay</Badge>
             )}
           </DialogTitle>
         </DialogHeader>
@@ -471,37 +395,35 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
           ) : (
             <div className="flex flex-col gap-8">
 
-              {/* Avatar Section */}
+              {/* Avatar */}
               <div className="flex flex-col items-center gap-4">
-                <Avatar className="h-24 w-24 border-2 border-primary/20">
+                <Avatar className="h-20 w-20 border-2 border-primary/20">
                   <AvatarImage src={formData.avatar_url} className="object-cover" />
-                  <AvatarFallback className="text-3xl font-bold">
+                  <AvatarFallback className="text-2xl font-bold">
                     {formData.username?.[0]?.toUpperCase() || "?"}
                   </AvatarFallback>
                 </Avatar>
 
                 <Tabs defaultValue="generate" className="w-full max-w-sm">
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="upload">Upload Photo</TabsTrigger>
-                    <TabsTrigger value="generate">Generate Avatar</TabsTrigger>
+                    <TabsTrigger value="upload">Upload</TabsTrigger>
+                    <TabsTrigger value="generate">Generate</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="upload" className="pt-4">
-                    <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 hover:bg-accent/50 transition-colors cursor-pointer relative bg-muted/30">
+                    <div className="relative flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 hover:bg-accent/50 transition-colors cursor-pointer bg-muted/30">
                       <input
-                        type="file"
-                        accept="image/*"
+                        type="file" accept="image/*"
                         onChange={handleFileUpload}
                         className="absolute inset-0 opacity-0 cursor-pointer"
                         disabled={uploading}
                       />
-                      {uploading ? (
-                        <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
-                      ) : (
-                        <Upload className="h-10 w-10 text-muted-foreground mb-3" />
-                      )}
+                      {uploading
+                        ? <Loader2 className="h-9 w-9 animate-spin text-muted-foreground" />
+                        : <Upload className="h-9 w-9 text-muted-foreground mb-2" />
+                      }
                       <p className="text-sm text-muted-foreground text-center">
-                        {uploading ? "Uploading image..." : "Click to upload custom avatar (max 5MB)"}
+                        {uploading ? "Uploading…" : "Click to upload (max 5 MB)"}
                       </p>
                     </div>
                   </TabsContent>
@@ -514,13 +436,17 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
                         return (
                           <div
                             key={`${seed}-${idx}`}
-                            onClick={() => setFormData(prev => ({ ...prev, avatar_url: url }))}
-                            className={`relative aspect-square rounded-full cursor-pointer overflow-hidden border-2 transition-all hover:scale-105 ${isSelected ? "border-primary ring-2 ring-primary/30" : "border-transparent bg-muted"}`}
+                            onClick={() => setFormData((p) => ({ ...p, avatar_url: url }))}
+                            className={`relative aspect-square rounded-full cursor-pointer overflow-hidden border-2 transition-all hover:scale-105 ${
+                              isSelected
+                                ? "border-primary ring-2 ring-primary/30"
+                                : "border-transparent bg-muted"
+                            }`}
                           >
                             <img src={url} alt={seed} className="w-full h-full" />
                             {isSelected && (
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                <Check className="h-6 w-6 text-white" />
+                                <Check className="h-5 w-5 text-white" />
                               </div>
                             )}
                           </div>
@@ -528,21 +454,19 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
                       })}
                     </div>
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleShuffle}
-                      className="w-full mt-4 text-muted-foreground hover:text-primary gap-2"
+                      variant="ghost" size="sm" onClick={handleShuffle}
+                      className="w-full mt-3 text-muted-foreground hover:text-primary gap-2"
                     >
-                      <RefreshCw className="h-4 w-4" /> Shuffle Avatars
+                      <RefreshCw className="h-4 w-4" /> Shuffle
                     </Button>
                   </TabsContent>
                 </Tabs>
               </div>
 
-              {/* Form Fields */}
-              <div className="grid gap-5">
+              {/* Basic info */}
+              <div className="grid gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
-                  <Label className="sm:text-right pt-2">Username</Label>
+                  <Label className="sm:text-right pt-2 text-sm">Username</Label>
                   <div className="col-span-3">
                     <Input
                       value={formData.username || ""}
@@ -554,176 +478,94 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
                       className={usernameError ? "border-red-500 focus-visible:ring-red-500" : ""}
                       placeholder="yourusername"
                     />
-                    {usernameError && <p className="text-xs text-red-500 mt-1">{usernameError}</p>}
+                    {usernameError && (
+                      <p className="text-xs text-red-500 mt-1">{usernameError}</p>
+                    )}
                     {usernameError === null && formData.username && (
-                      <p className="text-xs text-green-600 mt-1 flex items-center">
-                        <CheckCircle2 className="h-3 w-3 mr-1" /> Username available
+                      <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> Username available
                       </p>
                     )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
-                  <Label className="sm:text-right pt-2">Bio</Label>
+                  <Label className="sm:text-right pt-2 text-sm">Bio</Label>
                   <Textarea
                     value={formData.bio || ""}
                     onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                    className="col-span-3 resize-y min-h-[80px]"
-                    placeholder="Tell the community about yourself..."
+                    className="col-span-3 resize-y min-h-[70px]"
+                    placeholder="Tell the community about yourself…"
                   />
                 </div>
               </div>
 
-              {/* Linked Wallets */}
-              <div className="border-t pt-6">
-                <h4 className="mb-3 text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                  <Wallet className="h-4 w-4" /> Linked Wallets
-                </h4>
+              {/* Identification */}
+              <div className="border-t pt-6 flex flex-col gap-3">
+                <div>
+                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+                    Identification
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Link your email or phone so we can identify you across the platform.
+                  </p>
+                </div>
 
+                {/* MiniPay banner — only shown inside MiniPay */}
                 {isMiniPay && (
-                  <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg flex gap-2 text-sm">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-amber-700 dark:text-amber-400 text-xs">
-                      MiniPay users: Your embedded wallet works across networks. You can still link external wallets if needed.
+                  <div className="flex gap-2 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      MiniPay detected — your login email or phone has been auto-detected below.
+                      No extra steps needed.
                     </p>
                   </div>
                 )}
 
-                <div className="grid gap-3">
-                  {activeEvmWallet?.address && (
-                    <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-semibold">EVM Wallet (Celo)</span>
-                        <span className="text-xs text-muted-foreground font-mono">
-                          {activeEvmWallet.address.slice(0, 6)}...{activeEvmWallet.address.slice(-4)}
-                        </span>
-                      </div>
-                      <Badge variant="secondary" className="capitalize">
-                        {activeEvmWallet.walletClientType === "privy" ? "Embedded" : "External"}
-                      </Badge>
-                    </div>
-                  )}
+                {/* Email row — auto-populated for MiniPay Gmail users */}
+                <IdentRow
+                  label="Email / Google"
+                  value={resolvedEmail || null}
+                  hint={isMiniPay ? "Will be auto-detected from your MiniPay account" : "Link via Google or email OTP"}
+                  onConnect={
+                    // In MiniPay the email should already be there via the wallet;
+                    // only show a connect button in normal browsers
+                    isMiniPay ? undefined : linkGoogle
+                  }
+                  onDisconnect={
+                    googleSubject
+                      ? () => unlinkGoogle(googleSubject)
+                      : emailAddress
+                      ? () => unlinkEmail(emailAddress)
+                      : undefined
+                  }
+                />
 
-                  {!isEmbeddedUser && !hasExternalEvm && (
-                    <div className="flex items-center justify-between p-3 border border-dashed rounded-lg bg-card/50 hover:bg-card/80">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-semibold">External EVM Wallet</span>
-                        <span className="text-xs text-muted-foreground">MetaMask, Coinbase, etc.</span>
-                      </div>
-                      <Button size="sm" variant="outline" onClick={() => linkWallet()}>
-                        Link Wallet
-                      </Button>
-                    </div>
-                  )}
-
-                  {solanaAddress && (
-                    <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-semibold">Solana Wallet</span>
-                        <span className="text-xs text-muted-foreground font-mono">
-                          {solanaAddress.slice(0, 6)}...{solanaAddress.slice(-4)}
-                        </span>
-                      </div>
-                      <Badge variant={hasExternalSolana ? "default" : "secondary"}>
-                        {hasExternalSolana ? "External" : "Embedded"}
-                      </Badge>
-                    </div>
-                  )}
-
-                  {!isEmbeddedUser && !hasExternalSolana && (
-                    <div className="flex items-center justify-between p-3 border border-dashed rounded-lg bg-card/50 hover:bg-card/80">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-semibold">External Solana Wallet</span>
-                        <span className="text-xs text-muted-foreground">Phantom, Solflare, etc.</span>
-                      </div>
-                      <Button size="sm" variant="outline" onClick={() => linkWallet()}>
-                        {solanaAddress ? "Override" : "Link Wallet"}
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                {/* Phone row — for users who signed up with phone OTP */}
+                <IdentRow
+                  label="Phone number"
+                  value={resolvedPhone || null}
+                  hint="Link via SMS one-time code"
+                  onConnect={linkPhone}
+                  onDisconnect={
+                    phoneNumber ? () => unlinkPhone(phoneNumber) : undefined
+                  }
+                />
               </div>
 
-              {/* Social Connections */}
-              <div className="border-t pt-6">
-                <h4 className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                  <LinkIcon className="h-4 w-4" /> Verified Connections
+              {/* Wallet */}
+              <div className="border-t pt-6 flex flex-col gap-3">
+                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                  <Wallet className="h-4 w-4" /> Wallet
                 </h4>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Link any accounts you want — none are required to save.
-                </p>
 
-                {isMiniPay && (
-                  <p className="text-xs text-amber-600 mb-4">
-                    💡 In MiniPay: <strong>Telegram</strong> and <strong>Twitter</strong> work best.
-                    Google may be unreliable in this browser.
-                  </p>
+                {activeEvmWallet?.address && (
+                  <IdentRow
+                    label={`EVM wallet${isEmbeddedEvm ? " (embedded)" : ""}`}
+                    value={`${(activeEvmWallet.address as string).slice(0, 6)}...${(activeEvmWallet.address as string).slice(-4)}`}
+                    mono
+                  />
                 )}
-
-                <div className="grid gap-3">
-                  {isMiniPay ? (
-                    <PrivySocialRow
-                      label="Email (Google)"
-                      handle={miniPayEmail || user?.google?.email || user?.email?.address || null}
-                      onConnect={async () => {
-                        toast.info(
-                          "Google login is unreliable in MiniPay. Your wallet email is already used for your profile.",
-                          { duration: 5000 }
-                        )
-                      }}
-                      onDisconnect={
-                        user?.google?.subject
-                          ? () => unlinkGoogle(user.google!.subject!)
-                          : undefined
-                      }
-                    />
-                  ) : (
-                    <PrivySocialRow
-                      label="Email (Google)"
-                      handle={user?.google?.email || user?.email?.address}
-                      onConnect={linkGoogle}
-                      onDisconnect={
-                        user?.google?.subject
-                          ? () => unlinkGoogle(user.google!.subject!)
-                          : undefined
-                      }
-                    />
-                  )}
-
-                  <PrivySocialRow
-                    label="X (Twitter)"
-                    handle={user?.twitter?.username}
-                    onConnect={linkTwitter}
-                    onDisconnect={() => unlinkTwitter(user?.twitter?.subject!)}
-                    isRecommended={isMiniPay}
-                  />
-
-                  <PrivySocialRow
-                    label="Telegram"
-                    handle={user?.telegram?.username}
-                    onConnect={linkTelegram}
-                    onDisconnect={() => unlinkTelegram(user?.telegram?.telegramUserId!)}
-                    isRecommended={isMiniPay}
-                  />
-
-                  <PrivySocialRow
-                    label="Discord"
-                    handle={user?.discord?.username}
-                    onConnect={linkDiscord}
-                    onDisconnect={() => unlinkDiscord(user?.discord?.subject!)}
-                  />
-
-                  <PrivySocialRow
-                    label="Farcaster"
-                    handle={user?.farcaster?.username}
-                    onConnect={linkFarcaster}
-                    onDisconnect={() => unlinkFarcaster(user?.farcaster?.fid!)}
-                  />
-                </div>
-
-                <p className="text-xs text-muted-foreground mt-4">
-                  * Linked accounts will be saved when you click "Save Profile"
-                </p>
               </div>
 
             </div>
@@ -731,22 +573,16 @@ export function ProfileSettingsModal({ open: externalOpen, onOpenChange: externa
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 px-6 py-6 border-t bg-background">
+        <div className="shrink-0 px-6 py-5 border-t bg-background">
           <Button
             onClick={handleSave}
             disabled={saving || loading || !!usernameError}
-            className="w-full h-12 text-base"
+            className="w-full h-11 text-sm"
           >
             {saving ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Saving Profile...
-              </>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
             ) : (
-              <>
-                <Save className="mr-2 h-5 w-5" />
-                Save Profile
-              </>
+              <><Save className="mr-2 h-4 w-4" /> Save profile</>
             )}
           </Button>
         </div>

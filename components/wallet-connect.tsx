@@ -113,7 +113,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
   const displayAvatar = dbAvatarUrl || ""
   const dashboardLink = dbUsername
     ? `/dashboard/${dbUsername}`
-    : `/dashboard/${address?.toLowerCase() || ""}`
+    : `/dashboard/${dbUsername || ""}`
 
   // Loading state
   if (isConnecting) {

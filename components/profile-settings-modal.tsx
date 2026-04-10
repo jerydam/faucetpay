@@ -43,16 +43,16 @@ const GENERATED_SEEDS = [
   "River", "Sky", "Ocean", "Forest", "Mountain", "Rain", "Storm", "Snow",
   "Leo", "Zoe", "Max", "Ruby", "Kai", "Luna", "Finn", "Cleo",
   "Jasper", "Milo", "Otis", "Arlo", "Ezra", "Silas", "Jude", "Rowan"
-];
+]
 
 export function ProfileSettingsModal() {
   const { address, isConnected, signer } = useWallet()
-  
-  const { 
-    user, 
-    linkTwitter, 
-    linkDiscord, 
-    linkGoogle, 
+
+  const {
+    user,
+    linkTwitter,
+    linkDiscord,
+    linkGoogle,
     linkTelegram,
     linkFarcaster,
     unlinkTwitter,
@@ -87,8 +87,33 @@ export function ProfileSettingsModal() {
   })
 
   // ── MiniPay Detection ─────────────────────────────────────────────────
-  const isMiniPay = typeof navigator !== "undefined" && 
+  const isMiniPay = typeof navigator !== "undefined" &&
     /MiniPay|Opera Mini/i.test(navigator.userAgent)
+
+  // ── For MiniPay users: derive a best-effort "google" email from their
+  //    Privy embedded wallet or any linked email account so the backend
+  //    receives a valid email without requiring a real Google OAuth link.
+  const miniPayEmail: string = isMiniPay
+    ? (
+        user?.google?.email ||
+        user?.email?.address ||
+        // Privy sometimes surfaces the MiniPay account's email via linkedAccounts
+        (user?.linkedAccounts?.find(
+          (a: any) => a.type === "email" || a.type === "google_oauth"
+        ) as any)?.email ||
+        (user?.linkedAccounts?.find(
+          (a: any) => a.type === "email" || a.type === "google_oauth"
+        ) as any)?.address ||
+        ""
+      )
+    : ""
+
+  // Resolved email: for normal users require Google/email; for MiniPay
+  // fall back to the derived miniPayEmail so save is never blocked.
+  const resolvedEmail: string =
+    user?.google?.email ||
+    user?.email?.address ||
+    miniPayEmail
 
   // ── EVM wallet details ────────────────────────────────────────────────
   const linkedWallets = user?.linkedAccounts.filter((acc) => acc.type === "wallet") || []
@@ -191,14 +216,9 @@ export function ProfileSettingsModal() {
   }
 
   // ── Save Profile ──────────────────────────────────────────────────────
+  // No required socials — any combination is accepted.
   const handleSave = async () => {
     if (!isConnected || !address || !signer) return toast.error("Wallet error")
-    if (!user?.google?.email && !user?.email?.address) {
-      return toast.error("Please connect your email or Google account.")
-    }
-    if (!user?.twitter?.username) {
-      return toast.error("Please connect your X (Twitter) account to continue.")
-    }
 
     setSaving(true)
     const validUsername = await checkUsernameUniqueness(formData.username || "")
@@ -217,7 +237,9 @@ export function ProfileSettingsModal() {
         username: formData.username,
         bio: formData.bio,
         avatar_url: formData.avatar_url,
-        email: user?.google?.email || user?.email?.address || "",
+        // For MiniPay users, resolvedEmail fills the email field even if
+        // they haven't explicitly linked Google — keeping the backend happy.
+        email: resolvedEmail,
         twitter_handle: user?.twitter?.username || "",
         discord_handle: user?.discord?.username || "",
         telegram_handle: user?.telegram?.username || "",
@@ -286,26 +308,30 @@ export function ProfileSettingsModal() {
   const handleShuffle = () => setSeedOffset(prev => (prev + 8) % GENERATED_SEEDS.length)
   const currentSeeds = GENERATED_SEEDS.slice(seedOffset, seedOffset + 8)
 
-  // ── MiniPay-aware Social Row ───────────────────────────────────────────
+  // ── Social Row ────────────────────────────────────────────────────────
   const PrivySocialRow = ({
     label,
     handle,
     onConnect,
     onDisconnect,
-    isRecommended = false
+    isRecommended = false,
+    disabled = false,
+    disabledReason,
   }: {
     label: string
     handle?: string | null
     onConnect: () => Promise<any> | void
     onDisconnect?: () => Promise<any> | void
     isRecommended?: boolean
+    disabled?: boolean
+    disabledReason?: string
   }) => {
     const [isConnecting, setIsConnecting] = useState(false)
     const [isDisconnecting, setIsDisconnecting] = useState(false)
     const isLinkingRef = useRef(false)
 
     const handleConnect = async () => {
-      if (isLinkingRef.current) return
+      if (isLinkingRef.current || disabled) return
       isLinkingRef.current = true
       setIsConnecting(true)
 
@@ -313,17 +339,37 @@ export function ProfileSettingsModal() {
         await onConnect()
       } catch (error: any) {
         const msg = (error?.message ?? "").toLowerCase()
+        const code = (error?.code ?? "").toString().toLowerCase()
 
-        if (isMiniPay && label.toLowerCase().includes("google")) {
-          toast.error("Google login is unstable in MiniPay. Please use Email, Twitter, or Telegram instead.", {
-            duration: 5000,
-          })
-        } else if (!msg.includes("closed") && !msg.includes("cancelled") && !msg.includes("popup")) {
-          toast.error(`Failed to connect ${label}`)
+        // Privy throws these when the popup closes — even on success.
+        // The `user` object updates reactively, so silently ignore them.
+        const isPopupDismissed =
+          msg.includes("closed") ||
+          msg.includes("cancelled") ||
+          msg.includes("canceled") ||
+          msg.includes("popup") ||
+          msg.includes("user rejected") ||
+          msg.includes("user denied") ||
+          msg.includes("exited") ||
+          code.includes("privy_popup_closed") ||
+          code.includes("privy_canceled")
+
+        if (isPopupDismissed) {
+          // Do nothing — if OAuth actually completed, `user` will update.
+        } else if (isMiniPay && label.toLowerCase().includes("google")) {
+          toast.error(
+            "Google login is unstable in MiniPay. Use Twitter or Telegram instead.",
+            { duration: 5000 }
+          )
+        } else {
+          toast.error(`Failed to connect ${label}. Please try again.`)
         }
       } finally {
-        setIsConnecting(false)
-        isLinkingRef.current = false
+        // Small delay so Privy has time to update `user` before re-enabling
+        setTimeout(() => {
+          setIsConnecting(false)
+          isLinkingRef.current = false
+        }, 800)
       }
     }
 
@@ -345,12 +391,14 @@ export function ProfileSettingsModal() {
     }
 
     return (
-      <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50 hover:bg-card/80 transition-colors">
-        <div className="flex flex-col">
+      <div className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${disabled ? "opacity-50 bg-muted/30" : "bg-card/50 hover:bg-card/80"}`}>
+        <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-foreground">{label}</span>
             {isRecommended && isMiniPay && (
-              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-600">Recommended</Badge>
+              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-600">
+                Best in MiniPay
+              </Badge>
             )}
           </div>
           <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -358,7 +406,11 @@ export function ProfileSettingsModal() {
               <span className="text-green-600 flex items-center font-medium">
                 <CheckCircle2 className="h-3 w-3 mr-1" /> {handle}
               </span>
-            ) : "Not linked"}
+            ) : disabled && disabledReason ? (
+              <span className="text-amber-600">{disabledReason}</span>
+            ) : (
+              "Not linked"
+            )}
           </span>
         </div>
 
@@ -380,7 +432,7 @@ export function ProfileSettingsModal() {
             variant="outline"
             type="button"
             onClick={handleConnect}
-            disabled={isConnecting}
+            disabled={isConnecting || disabled}
           >
             {isConnecting && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
             {isConnecting ? "Connecting…" : "Connect"}
@@ -592,23 +644,51 @@ export function ProfileSettingsModal() {
 
               {/* Social Connections */}
               <div className="border-t pt-6">
-                <h4 className="mb-4 text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <h4 className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <LinkIcon className="h-4 w-4" /> Verified Connections
                 </h4>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Link any accounts you want — none are required to save.
+                </p>
 
                 {isMiniPay && (
                   <p className="text-xs text-amber-600 mb-4">
                     💡 In MiniPay: <strong>Telegram</strong> and <strong>Twitter</strong> work best.
+                    Google may be unreliable in this browser.
                   </p>
                 )}
 
                 <div className="grid gap-3">
-                  <PrivySocialRow
-                    label="Email (Google)"
-                    handle={user?.google?.email || user?.email?.address}
-                    onConnect={linkGoogle}
-                    onDisconnect={() => unlinkGoogle(user?.google?.subject!)}
-                  />
+                  {/* Google / Email — for MiniPay users, show their derived email as already linked
+                      and disable the button so they aren't confused by a failing OAuth popup.    */}
+                  {isMiniPay ? (
+                    <PrivySocialRow
+                      label="Email (Google)"
+                      handle={miniPayEmail || user?.google?.email || user?.email?.address || null}
+                      onConnect={async () => {
+                        toast.info(
+                          "Google login is unreliable in MiniPay. Your wallet email is already used for your profile.",
+                          { duration: 5000 }
+                        )
+                      }}
+                      onDisconnect={
+                        user?.google?.subject
+                          ? () => unlinkGoogle(user.google!.subject!)
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <PrivySocialRow
+                      label="Email (Google)"
+                      handle={user?.google?.email || user?.email?.address}
+                      onConnect={linkGoogle}
+                      onDisconnect={
+                        user?.google?.subject
+                          ? () => unlinkGoogle(user.google!.subject!)
+                          : undefined
+                      }
+                    />
+                  )}
 
                   <PrivySocialRow
                     label="X (Twitter)"

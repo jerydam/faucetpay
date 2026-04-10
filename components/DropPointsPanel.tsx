@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Contract, JsonRpcProvider, formatUnits } from "ethers";
 import {
   Droplets,
-  Trophy,
   History,
   Clock,
   Zap,
@@ -61,6 +60,8 @@ const CHAIN_CONFIG: Record<
   },
 };
 
+
+
 const CHAIN_IDS = Object.keys(CHAIN_CONFIG).map(Number);
 
 const API_BASE_URL = "https://faucetdrop-backend.onrender.com";
@@ -93,13 +94,7 @@ interface ClaimEntry {
   tx_hash: string;
 }
 
-
-
-// ─── Module-level helpers (no hooks, no state) ────────────────────────────────
-
-function shortAddr(addr: string) {
-  return `${addr.slice(0, 6)}\u2026${addr.slice(-4)}`;
-}
+// ─── Module-level helpers ─────────────────────────────────────────────────────
 
 function formatCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -152,6 +147,32 @@ async function verifyWithRetry(
   }
 }
 
+// ─── LS cache helpers ─────────────────────────────────────────────────────────
+
+const HISTORY_CACHE_KEY = (addr: string) => `drop_history_${addr.toLowerCase()}`;
+const HISTORY_CACHE_TTL = 30 * 60 * 1000;
+
+function saveHistoryCache(addr: string, data: ClaimEntry[]) {
+  try {
+    localStorage.setItem(
+      HISTORY_CACHE_KEY(addr),
+      JSON.stringify({ data, cachedAt: Date.now() })
+    );
+  } catch {}
+}
+
+function loadHistoryCache(addr: string): ClaimEntry[] | null {
+  try {
+    const raw = localStorage.getItem(HISTORY_CACHE_KEY(addr));
+    if (!raw) return null;
+    const { data, cachedAt } = JSON.parse(raw);
+    if (Date.now() - cachedAt > HISTORY_CACHE_TTL) return null;
+    return data as ClaimEntry[];
+  } catch {
+    return null;
+  }
+}
+
 // ─── Particle burst ───────────────────────────────────────────────────────────
 
 function ClaimBurst({ trigger }: { trigger: boolean }) {
@@ -187,6 +208,16 @@ function ClaimBurst({ trigger }: { trigger: boolean }) {
   );
 }
 
+// ─── Block lookback per chain ─────────────────────────────────────────────────
+
+const BLOCK_LOOKBACK: Record<number, number> = {
+  42220: 1_000_000,
+  8453: 2_000_000,
+  56: 3_000_000,
+  1135: 500_000,
+  42161: 15_000_000,
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DropPointsPanel() {
@@ -205,7 +236,6 @@ export default function DropPointsPanel() {
 
   const [history, setHistory]               = useState<ClaimEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [lbLoading, setLbLoading]           = useState(false);
 
   const claimLockRef = useRef(false);
 
@@ -213,12 +243,56 @@ export default function DropPointsPanel() {
   const allLoaded   = chainBalances.every((c) => !c.loading);
   const maxBalance  = Math.max(...chainBalances.map((c) => c.balance), 1);
 
-  // ── Single chain sweep: balances + last claim timestamp ──────────────────────
+  // ── Cooldown from contract (connected chain only) ─────────────────────────
+
+  const fetchCooldownFromContract = useCallback(async (addr: string, cId: number) => {
+    const cfg = CHAIN_CONFIG[cId];
+    if (!cfg) return;
+
+    const provider = getProvider(cId);
+    const contract = new Contract(cfg.contract, POINTS_ABI, provider);
+
+    try {
+      // 1. Ask the contract directly
+      const eligible: boolean = await contract.canClaim(addr);
+      if (eligible) {
+        setCanClaim(true);
+        setRemainingMs(0);
+        setLastClaimAt(null);
+        return;
+      }
+
+      // 2. On cooldown — find the last mint Transfer for the exact timestamp
+      const filter = contract.filters.Transfer(
+        "0x0000000000000000000000000000000000000000",
+        addr
+      );
+      const currentBlock = await provider.getBlockNumber();
+      const fromBlock = Math.max(0, currentBlock - 100_000);
+      const logs = await contract.queryFilter(filter, fromBlock, "latest");
+
+      if (logs.length > 0) {
+        const lastLog = logs[logs.length - 1] as any;
+        const block = await provider.getBlock(lastLog.blockNumber);
+        if (block) {
+          setLastClaimAt(new Date(block.timestamp * 1000).toISOString());
+          return;
+        }
+      }
+
+      // 3. canClaim=false but no log found in window — safe fallback
+      setLastClaimAt(new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString());
+    } catch (err) {
+      console.warn("Cooldown fetch failed:", err);
+    }
+  }, []);
+
+  // ── Chain balances (all chains, no cooldown logic here) ───────────────────
 
   const fetchChainData = useCallback(async (addr: string) => {
-    setChainBalances(CHAIN_IDS.map((id) => ({ chainId: id, balance: 0, loading: true, error: false })));
-
-    let latestClaimTs: number | null = null;
+    setChainBalances(
+      CHAIN_IDS.map((id) => ({ chainId: id, balance: 0, loading: true, error: false }))
+    );
 
     await Promise.allSettled(
       CHAIN_IDS.map(async (id) => {
@@ -226,7 +300,6 @@ export default function DropPointsPanel() {
         const provider = getProvider(id);
         const contract = new Contract(cfg.contract, POINTS_ABI, provider);
 
-        // Balance
         try {
           const [raw, dec]: [bigint, number] = await Promise.all([
             contract.balanceOf(addr),
@@ -235,264 +308,210 @@ export default function DropPointsPanel() {
           const balance = parseFloat(formatUnits(raw, dec));
           setChainBalances((prev) =>
             prev.map((c) =>
-              c.chainId === id ? { chainId: id, balance, loading: false, error: false } : c
+              c.chainId === id
+                ? { chainId: id, balance, loading: false, error: false }
+                : c
             )
           );
         } catch {
           setChainBalances((prev) =>
-            prev.map((c) => (c.chainId === id ? { ...c, loading: false, error: true } : c))
+            prev.map((c) =>
+              c.chainId === id ? { ...c, loading: false, error: true } : c
+            )
           );
         }
-
-        // Last claim timestamp via most recent mint Transfer
-        try {
-          const filter = contract.filters.Transfer(
-            "0x0000000000000000000000000000000000000000",
-            addr
-          );
-          const currentBlock = await provider.getBlockNumber();
-          const fromBlock = Math.max(0, currentBlock - 50000);
-          const logs = await contract.queryFilter(filter, fromBlock, "latest");
-
-          if (logs.length > 0) {
-            const lastLog = logs[logs.length - 1] as any;
-            const block = await provider.getBlock(lastLog.blockNumber);
-            if (block && (latestClaimTs === null || block.timestamp > latestClaimTs)) {
-              latestClaimTs = block.timestamp;
-            }
-          }
-        } catch { /* non-fatal */ }
       })
     );
-
-    if (latestClaimTs !== null) {
-      setLastClaimAt(new Date(latestClaimTs * 1000).toISOString());
-    }
   }, []);
 
-  // ── History ───────────────────────────────────────────────────────────────────
-// ─── LS cache helpers ─────────────────────────────────────────────────────────
+  // ── History ───────────────────────────────────────────────────────────────
 
-const HISTORY_CACHE_KEY = (addr: string) => `drop_history_${addr.toLowerCase()}`;
-const HISTORY_CACHE_TTL = 30 * 60 * 1000; // 30 min
+  const fetchHistory = useCallback(
+    async (forceRefresh = false) => {
+      if (!address) return;
 
-function saveHistoryCache(addr: string, data: ClaimEntry[]) {
-  try {
-    localStorage.setItem(
-      HISTORY_CACHE_KEY(addr),
-      JSON.stringify({ data, cachedAt: Date.now() })
-    );
-  } catch { /* storage full — ignore */ }
-}
-
-function loadHistoryCache(addr: string): ClaimEntry[] | null {
-  try {
-    const raw = localStorage.getItem(HISTORY_CACHE_KEY(addr));
-    if (!raw) return null;
-    const { data, cachedAt } = JSON.parse(raw);
-    if (Date.now() - cachedAt > HISTORY_CACHE_TTL) return null; // expired
-    return data as ClaimEntry[];
-  } catch {
-    return null;
-  }
-}
-
-function appendToHistoryCache(addr: string, newEntry: ClaimEntry) {
-  const existing = loadHistoryCache(addr) ?? [];
-  const deduped = [newEntry, ...existing.filter(e => e.tx_hash !== newEntry.tx_hash)];
-  deduped.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  saveHistoryCache(addr, deduped);
-}
-useEffect(() => {
-  if (!address) return;
-
-  // Show cached data instantly if available
-  const cached = loadHistoryCache(address);
-  if (cached) setHistory(cached);
-
-  // Always kick off a background refresh (won't set loading if cache exists)
-  const timer = setTimeout(() => {
-    fetchHistory(false); // respects cache TTL — won't hit RPC if fresh
-  }, 2000); // 2s delay so chain balance fetch gets priority
-
-  return () => clearTimeout(timer);
-}, [address]); // intentionally exclude fetchHistory to run only on wallet change
-const BLOCK_LOOKBACK: Record<number, number> = {
-  42220: 1_000_000,  // Celo  ~5s blocks → ~90 days
-  8453:  2_000_000,  // Base  ~2s blocks → ~90 days
-  56:    3_000_000,  // BNB   ~3s blocks → ~90 days
-  1135:  500_000,    // Lisk
-  42161: 15_000_000, // Arbitrum ~0.5s blocks → ~90 days
-};
-const fetchHistory = useCallback(async (forceRefresh = false) => {
-  if (!address) return;
-
-  // 1. Load cache immediately — paint UI before any RPC call
-  if (!forceRefresh) {
-    const cached = loadHistoryCache(address);
-    if (cached) {
-      setHistory(cached);
-      setHistoryLoading(false);
-      return; // fresh enough — skip RPC
-    }
-  }
-
-  setHistoryLoading(true);
-  try {
-    const allClaims: ClaimEntry[] = [];
-
-    await Promise.allSettled(
-      CHAIN_IDS.map(async (id) => {
-        try {
-          const cfg = CHAIN_CONFIG[id];
-          const provider = getProvider(id);
-          const contract = new Contract(cfg.contract, POINTS_ABI, provider);
-
-          const filter = contract.filters.Transfer(
-            "0x0000000000000000000000000000000000000000",
-            address
-          );
-
-          const currentBlock = await provider.getBlockNumber();
-          const lookback = BLOCK_LOOKBACK[id] ?? 100_000;
-          const fromBlock = Math.max(0, currentBlock - lookback);
-
-          const CHUNK = 100_000;
-          const chunks: { from: number; to: number }[] = [];
-          for (let start = fromBlock; start < currentBlock; start += CHUNK) {
-            chunks.push({ from: start, to: Math.min(start + CHUNK - 1, currentBlock) });
-          }
-
-          const logs: any[] = [];
-          for (const chunk of chunks) {
-            try {
-              const chunkLogs = await contract.queryFilter(filter, chunk.from, chunk.to);
-              logs.push(...chunkLogs);
-            } catch { /* skip bad chunk */ }
-          }
-
-          if (logs.length === 0) return;
-
-          const blockCache: Record<number, number> = {};
-          const decimals: number = await contract.decimals().catch(() => 18);
-
-          const uniqueBlocks = [...new Set(logs.map((l: any) => l.blockNumber))];
-          await Promise.allSettled(
-            uniqueBlocks.map(async (bn) => {
-              const block = await provider.getBlock(bn);
-              blockCache[bn] = block?.timestamp ?? Math.floor(Date.now() / 1000);
-            })
-          );
-
-          for (const log of logs) {
-            const parsedLog = log as any;
-            allClaims.push({
-              chain_id: id,
-              tx_hash: parsedLog.transactionHash,
-              amount: parseFloat(
-                formatUnits(parsedLog.args[2] ?? parsedLog.args.value, decimals)
-              ),
-              timestamp: new Date(
-                (blockCache[parsedLog.blockNumber] ?? Math.floor(Date.now() / 1000)) * 1000
-              ).toISOString(),
-            });
-          }
-        } catch (chainErr) {
-          console.warn(`History fetch failed for chain ${id}:`, chainErr);
+      if (!forceRefresh) {
+        const cached = loadHistoryCache(address);
+        if (cached) {
+          setHistory(cached);
+          setHistoryLoading(false);
+          return;
         }
-      })
-    );
+      }
 
-    allClaims.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-
-    setHistory(allClaims);
-    saveHistoryCache(address, allClaims); // ← persist after full fetch
-  } catch (e) {
-    console.error("Error fetching on-chain history:", e);
-    toast.error("Failed to load on-chain history.");
-  } finally {
-    setHistoryLoading(false);
-  }
-}, [address]);
-
-
-  // ── Post-claim refresh (needs setters — stays as useCallback) ─────────────────
-
-  const refreshAllPostClaim = useCallback(async (
-    verifyData: any,
-    receipt: any,
-    claimedChainId: number
-  ) => {
-    // 1. Balances from verify response
-    if (verifyData?.chain_balances?.length) {
-      setChainBalances((prev) =>
-        prev.map((c) => {
-          const match = verifyData.chain_balances.find((r: any) => r.chain_id === c.chainId);
-          if (!match) return c;
-          return {
-            chainId: c.chainId,
-            balance: match.balance ?? c.balance,
-            loading: false,
-            error: !!match.error,
-          };
-        })
-      );
-    }
-
-    // 2. Cooldown from confirmed block timestamp
-    if (receipt?.blockNumber) {
+      setHistoryLoading(true);
       try {
-        const provider = getProvider(claimedChainId);
-        const block = await provider.getBlock(receipt.blockNumber);
-        setLastClaimAt(
-          block
-            ? new Date(block.timestamp * 1000).toISOString()
-            : (verifyData?.last_claim_at ?? new Date().toISOString())
+        const allClaims: ClaimEntry[] = [];
+
+        await Promise.allSettled(
+          CHAIN_IDS.map(async (id) => {
+            try {
+              const cfg = CHAIN_CONFIG[id];
+              const provider = getProvider(id);
+              const contract = new Contract(cfg.contract, POINTS_ABI, provider);
+
+              const filter = contract.filters.Transfer(
+                "0x0000000000000000000000000000000000000000",
+                address
+              );
+
+              const currentBlock = await provider.getBlockNumber();
+              const lookback = BLOCK_LOOKBACK[id] ?? 100_000;
+              const fromBlock = Math.max(0, currentBlock - lookback);
+
+              const CHUNK = 100_000;
+              const chunks: { from: number; to: number }[] = [];
+              for (let start = fromBlock; start < currentBlock; start += CHUNK) {
+                chunks.push({ from: start, to: Math.min(start + CHUNK - 1, currentBlock) });
+              }
+
+              const logs: any[] = [];
+              for (const chunk of chunks) {
+                try {
+                  const chunkLogs = await contract.queryFilter(filter, chunk.from, chunk.to);
+                  logs.push(...chunkLogs);
+                } catch {}
+              }
+
+              if (logs.length === 0) return;
+
+              const blockCache: Record<number, number> = {};
+              const decimals: number = await contract.decimals().catch(() => 18);
+
+              const uniqueBlocks = [...new Set(logs.map((l: any) => l.blockNumber))];
+              await Promise.allSettled(
+                uniqueBlocks.map(async (bn) => {
+                  const block = await provider.getBlock(bn);
+                  blockCache[bn] = block?.timestamp ?? Math.floor(Date.now() / 1000);
+                })
+              );
+
+              for (const log of logs) {
+                const parsedLog = log as any;
+                allClaims.push({
+                  chain_id: id,
+                  tx_hash: parsedLog.transactionHash,
+                  amount: parseFloat(
+                    formatUnits(parsedLog.args[2] ?? parsedLog.args.value, decimals)
+                  ),
+                  timestamp: new Date(
+                    (blockCache[parsedLog.blockNumber] ?? Math.floor(Date.now() / 1000)) * 1000
+                  ).toISOString(),
+                });
+              }
+            } catch (chainErr) {
+              console.warn(`History fetch failed for chain ${id}:`, chainErr);
+            }
+          })
         );
-      } catch {
+
+        allClaims.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+
+        setHistory(allClaims);
+        saveHistoryCache(address, allClaims);
+      } catch (e) {
+        console.error("Error fetching on-chain history:", e);
+        toast.error("Failed to load on-chain history.");
+      } finally {
+        setHistoryLoading(false);
+      }
+    },
+    [address]
+  );
+
+  // ── Post-claim refresh ────────────────────────────────────────────────────
+
+  const refreshAllPostClaim = useCallback(
+    async (verifyData: any, receipt: any, claimedChainId: number) => {
+      if (verifyData?.chain_balances?.length) {
+        setChainBalances((prev) =>
+          prev.map((c) => {
+            const match = verifyData.chain_balances.find(
+              (r: any) => r.chain_id === c.chainId
+            );
+            if (!match) return c;
+            return {
+              chainId: c.chainId,
+              balance: match.balance ?? c.balance,
+              loading: false,
+              error: !!match.error,
+            };
+          })
+        );
+      }
+
+      if (receipt?.blockNumber) {
+        try {
+          const provider = getProvider(claimedChainId);
+          const block = await provider.getBlock(receipt.blockNumber);
+          setLastClaimAt(
+            block
+              ? new Date(block.timestamp * 1000).toISOString()
+              : (verifyData?.last_claim_at ?? new Date().toISOString())
+          );
+        } catch {
+          setLastClaimAt(verifyData?.last_claim_at ?? new Date().toISOString());
+        }
+      } else {
         setLastClaimAt(verifyData?.last_claim_at ?? new Date().toISOString());
       }
-    } else {
-      setLastClaimAt(verifyData?.last_claim_at ?? new Date().toISOString());
-    }
 
-    // 4. Background refresh
-    Promise.allSettled([fetchHistory()]);
-  }, [address, fetchHistory]);
+      Promise.allSettled([fetchHistory()]);
+    },
+    [fetchHistory]
+  );
 
-  // ── Effects ───────────────────────────────────────────────────────────────────
+  // ── Effects ───────────────────────────────────────────────────────────────
 
+  // Balances + cooldown whenever wallet or chain changes
+  useEffect(() => {
+    if (!address || !chainId) return;
+    fetchChainData(address);
+    fetchCooldownFromContract(address, chainId);
+  }, [address, chainId, fetchChainData, fetchCooldownFromContract]);
+
+  // History prefetch on wallet connect
   useEffect(() => {
     if (!address) return;
-    fetchChainData(address);
-  }, [address, chainId, fetchChainData]);
+    const cached = loadHistoryCache(address);
+    if (cached) setHistory(cached);
+    const timer = setTimeout(() => fetchHistory(false), 2000);
+    return () => clearTimeout(timer);
+  }, [address]);
 
- useEffect(() => {
-  if (activeTab !== "history") return;
-  
-  // If we already have data (from prefetch or cache), don't re-fetch
-  if (history.length > 0) return;
-  
-  fetchHistory(false);
-}, [activeTab]);
-
-  // Countdown — every second
+  // History tab — only fetch if nothing loaded yet
   useEffect(() => {
-    if (!lastClaimAt) { setCanClaim(true); setRemainingMs(0); return; }
+    if (activeTab !== "history") return;
+    if (history.length > 0) return;
+    fetchHistory(false);
+  }, [activeTab]);
+
+  // Countdown tick
+  useEffect(() => {
+    if (!lastClaimAt) {
+      setCanClaim(true);
+      setRemainingMs(0);
+      return;
+    }
     const COOLDOWN = 24 * 60 * 60 * 1000;
     const tick = () => {
       const rem = COOLDOWN - (Date.now() - new Date(lastClaimAt).getTime());
-      if (rem > 0) { setCanClaim(false); setRemainingMs(rem); }
-      else         { setCanClaim(true);  setRemainingMs(0); }
+      if (rem > 0) {
+        setCanClaim(false);
+        setRemainingMs(rem);
+      } else {
+        setCanClaim(true);
+        setRemainingMs(0);
+      }
     };
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, [lastClaimAt]);
 
-  // ── Claim ─────────────────────────────────────────────────────────────────────
+  // ── Claim ─────────────────────────────────────────────────────────────────
 
   const handleClaim = async () => {
     if (!canClaim)    { toast.error(`Come back in ${formatCountdown(remainingMs)}`); return; }
@@ -514,8 +533,12 @@ const fetchHistory = useCallback(async (forceRefresh = false) => {
         const provider = getProvider(chainId);
         const readOnly = new Contract(cfg.contract, POINTS_ABI, provider);
         const eligible: boolean = await readOnly.canClaim(address);
-        if (!eligible) { toast.error("Already claimed today."); setCanClaim(false); return; }
-      } catch { /* proceed if RPC check fails */ }
+        if (!eligible) {
+          toast.error("Already claimed today.");
+          setCanClaim(false);
+          return;
+        }
+      } catch {}
 
       // 2. Get signature from backend
       toast.loading("Generating secure signature...", { id: "claim-tx" });
@@ -530,24 +553,22 @@ const fetchHistory = useCallback(async (forceRefresh = false) => {
       const { amount, timestamp, signature } = sigData;
 
       if (amount === undefined || amount === null)
-        throw new Error("Server returned missing 'amount' — cannot submit transaction.");
+        throw new Error("Server returned missing 'amount'.");
       if (timestamp === undefined || timestamp === null)
-        throw new Error("Server returned missing 'timestamp' — cannot submit transaction.");
+        throw new Error("Server returned missing 'timestamp'.");
       if (!signature || typeof signature !== "string" || signature.length < 10)
-        throw new Error("Server returned invalid signature — cannot submit transaction.");
+        throw new Error("Server returned invalid signature.");
 
       const sig = signature.startsWith("0x") ? signature : `0x${signature}`;
       if (!/^0x[0-9a-fA-F]{130}$/.test(sig))
-        throw new Error(
-          `Malformed signature received (got length ${sig.length}, expected 132). Contact support.`
-        );
+        throw new Error(`Malformed signature (length ${sig.length}, expected 132).`);
 
       // 3. Send transaction
       toast.loading("Awaiting wallet confirmation...", { id: "claim-tx" });
       const contract = new Contract(cfg.contract, POINTS_ABI, signer);
       const tx = await contract.claim(BigInt(amount), BigInt(timestamp), sig, { from: address });
 
-      // 4. Wait for on-chain confirmation
+      // 4. Wait for confirmation
       toast.loading("Confirming on-chain...", { id: "claim-tx" });
       receipt = await tx.wait();
 
@@ -557,18 +578,17 @@ const fetchHistory = useCallback(async (forceRefresh = false) => {
         const verifyData = await verifyWithRetry(receipt.hash, chainId, address);
         await refreshAllPostClaim(verifyData, receipt, chainId);
       } catch (verifyErr: any) {
-        // Tx is confirmed on-chain — treat verify failure as a soft warning
         console.warn("[DropPoints] Verify failed but tx confirmed:", verifyErr);
         toast.warning("Claimed! Balance will update shortly.", { id: "claim-tx" });
         setClaimBurst(true);
         setTimeout(() => setClaimBurst(false), 800);
-        // Start cooldown from the confirmed block even without backend
         if (receipt?.blockNumber) {
           try {
             const provider = getProvider(chainId);
             const block = await provider.getBlock(receipt.blockNumber);
-            if (block) setLastClaimAt(new Date(block.timestamp * 1000).toISOString());
-            else setLastClaimAt(new Date().toISOString());
+            setLastClaimAt(
+              block ? new Date(block.timestamp * 1000).toISOString() : new Date().toISOString()
+            );
           } catch {
             setLastClaimAt(new Date().toISOString());
           }
@@ -584,7 +604,6 @@ const fetchHistory = useCallback(async (forceRefresh = false) => {
       toast.success("Drop Points claimed! 🎉", { id: "claim-tx" });
       setClaimBurst(true);
       setTimeout(() => setClaimBurst(false), 800);
-
     } catch (error: any) {
       const msg: string = error?.reason || error?.message || "Claim failed";
       if (msg.toLowerCase().includes("user rejected") || error?.code === 4001) {
@@ -605,15 +624,14 @@ const fetchHistory = useCallback(async (forceRefresh = false) => {
     }
   };
 
-  // ── Tabs config ───────────────────────────────────────────────────────────────
+  // ── Tabs ──────────────────────────────────────────────────────────────────
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "overview",    label: "Overview",    icon: <Droplets size={13} /> },
-    { id: "history",     label: "History",     icon: <History size={13} /> },
-    
+    { id: "overview", label: "Overview", icon: <Droplets size={13} /> },
+    { id: "history",  label: "History",  icon: <History size={13} /> },
   ];
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -641,9 +659,12 @@ const fetchHistory = useCallback(async (forceRefresh = false) => {
             )}
             {address && (
               <button
-                onClick={() => fetchChainData(address)}
+                onClick={() => {
+                  fetchChainData(address);
+                  if (chainId) fetchCooldownFromContract(address, chainId);
+                }}
                 className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
-                title="Refresh on-chain balances"
+                title="Refresh"
               >
                 <RefreshCw size={12} />
               </button>
@@ -654,7 +675,12 @@ const fetchHistory = useCallback(async (forceRefresh = false) => {
         {/* Total balance */}
         <div className="flex items-center gap-3 mb-5">
           <div className="relative w-12 h-12 shrink-0">
-            <Image src="/drop-token.png" alt="Drop" fill className="object-contain drop-shadow-md" />
+            <Image
+              src="/drop-token.png"
+              alt="Drop"
+              fill
+              className="object-contain drop-shadow-md"
+            />
           </div>
           <div>
             <p className="text-[10px] text-muted-foreground font-semibold">
@@ -674,7 +700,7 @@ const fetchHistory = useCallback(async (forceRefresh = false) => {
               >
                 {address
                   ? totalPoints.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                  : "\u2014"}
+                  : "—"}
               </motion.p>
             )}
           </div>
@@ -840,8 +866,6 @@ const fetchHistory = useCallback(async (forceRefresh = false) => {
               )}
             </div>
           )}
-
-          
         </motion.div>
       </AnimatePresence>
     </div>

@@ -2144,7 +2144,6 @@
           loadingInitialResults={loadingInitialResults}
           rewardsReady={rewardsReady}
           quizReward={quizReward}
-          wallets={wallets}
         />
       );
     }

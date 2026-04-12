@@ -858,14 +858,7 @@
                           {isWinner && <Badge className="text-[9px] h-4 px-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300 border-0 shrink-0">🏆</Badge>}
                           {(entry.streak > 1) && <Badge className="text-[9px] h-4 px-1 bg-orange-500 text-white border-0 shrink-0">🔥{entry.streak}</Badge>}
                         </div>
-                        {isWinner && payout.amount > 0 && (
-                          <p className="text-yellow-600 dark:text-yellow-400 text-xs font-bold mt-0.5 flex items-center gap-1.5">
-                            {payout.amount} {payout.tokenSymbol}
-                            <span className={cn("text-[10px]", payout.status === "claimed" ? "text-green-500" : "text-amber-500")}>
-                              {payout.status === "claimed" ? "• Claimed ✓" : "• Unclaimed"}
-                            </span>
-                          </p>
-                        )}
+                        
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-surface-primary font-black text-sm sm:text-lg leading-tight">{entry.points}</p>

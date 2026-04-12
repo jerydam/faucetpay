@@ -96,10 +96,10 @@
 
   // ── Safe WS URL ──
   function getWsBaseUrl(): string {
-    if (typeof window === "undefined") return "wss://faucetdrop-backend.onrender.com";
+    if (typeof window === "undefined") return "wss://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
     return window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
       ? "ws://127.0.0.1:8000"
-      : "wss://faucetdrop-backend.onrender.com";
+      : "wss://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
   }
 
   // ── Types ──

@@ -12,6 +12,8 @@ import {
   ExternalLink,
   RefreshCw,
   AlertCircle,
+  ShoppingBag,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useWallet } from "@/hooks/use-wallet";
@@ -59,8 +61,6 @@ const CHAIN_CONFIG: Record<
     contract: "0xEcb026D22f9aA7FD9Aa83B509834dB8Fd66B27F6",
   },
 };
-
-
 
 const CHAIN_IDS = Object.keys(CHAIN_CONFIG).map(Number);
 
@@ -223,12 +223,13 @@ const BLOCK_LOOKBACK: Record<number, number> = {
 export default function DropPointsPanel() {
   const { address, isConnected, signer, chainId } = useWallet();
 
-  const [activeTab, setActiveTab]     = useState<Tab>("overview");
-  const [isClaiming, setIsClaiming]   = useState(false);
-  const [claimBurst, setClaimBurst]   = useState(false);
-  const [lastClaimAt, setLastClaimAt] = useState<string | null>(null);
-  const [canClaim, setCanClaim]       = useState(true);
-  const [remainingMs, setRemainingMs] = useState(0);
+  const [activeTab, setActiveTab]       = useState<Tab>("overview");
+  const [tabsExpanded, setTabsExpanded] = useState(true); // ← collapse/expand state
+  const [isClaiming, setIsClaiming]     = useState(false);
+  const [claimBurst, setClaimBurst]     = useState(false);
+  const [lastClaimAt, setLastClaimAt]   = useState<string | null>(null);
+  const [canClaim, setCanClaim]         = useState(true);
+  const [remainingMs, setRemainingMs]   = useState(0);
 
   const [chainBalances, setChainBalances] = useState<ChainBalance[]>(
     CHAIN_IDS.map((id) => ({ chainId: id, balance: 0, loading: true, error: false }))
@@ -253,7 +254,6 @@ export default function DropPointsPanel() {
     const contract = new Contract(cfg.contract, POINTS_ABI, provider);
 
     try {
-      // 1. Ask the contract directly
       const eligible: boolean = await contract.canClaim(addr);
       if (eligible) {
         setCanClaim(true);
@@ -262,7 +262,6 @@ export default function DropPointsPanel() {
         return;
       }
 
-      // 2. On cooldown — find the last mint Transfer for the exact timestamp
       const filter = contract.filters.Transfer(
         "0x0000000000000000000000000000000000000000",
         addr
@@ -280,14 +279,13 @@ export default function DropPointsPanel() {
         }
       }
 
-      // 3. canClaim=false but no log found in window — safe fallback
       setLastClaimAt(new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString());
     } catch (err) {
       console.warn("Cooldown fetch failed:", err);
     }
   }, []);
 
-  // ── Chain balances (all chains, no cooldown logic here) ───────────────────
+  // ── Chain balances ────────────────────────────────────────────────────────
 
   const fetchChainData = useCallback(async (addr: string) => {
     setChainBalances(
@@ -465,14 +463,12 @@ export default function DropPointsPanel() {
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
-  // Balances + cooldown whenever wallet or chain changes
   useEffect(() => {
     if (!address || !chainId) return;
     fetchChainData(address);
     fetchCooldownFromContract(address, chainId);
   }, [address, chainId, fetchChainData, fetchCooldownFromContract]);
 
-  // History prefetch on wallet connect
   useEffect(() => {
     if (!address) return;
     const cached = loadHistoryCache(address);
@@ -481,14 +477,12 @@ export default function DropPointsPanel() {
     return () => clearTimeout(timer);
   }, [address]);
 
-  // History tab — only fetch if nothing loaded yet
   useEffect(() => {
     if (activeTab !== "history") return;
     if (history.length > 0) return;
     fetchHistory(false);
   }, [activeTab]);
 
-  // Countdown tick
   useEffect(() => {
     if (!lastClaimAt) {
       setCanClaim(true);
@@ -528,7 +522,6 @@ export default function DropPointsPanel() {
     let receipt: any = null;
 
     try {
-      // 1. On-chain canClaim check
       try {
         const provider = getProvider(chainId);
         const readOnly = new Contract(cfg.contract, POINTS_ABI, provider);
@@ -540,7 +533,6 @@ export default function DropPointsPanel() {
         }
       } catch {}
 
-      // 2. Get signature from backend
       toast.loading("Generating secure signature...", { id: "claim-tx" });
       const sigRes = await fetch(`${API_BASE_URL}/api/droplist/generate-signature`, {
         method: "POST",
@@ -563,16 +555,13 @@ export default function DropPointsPanel() {
       if (!/^0x[0-9a-fA-F]{130}$/.test(sig))
         throw new Error(`Malformed signature (length ${sig.length}, expected 132).`);
 
-      // 3. Send transaction
       toast.loading("Awaiting wallet confirmation...", { id: "claim-tx" });
       const contract = new Contract(cfg.contract, POINTS_ABI, signer);
       const tx = await contract.claim(BigInt(amount), BigInt(timestamp), sig, { from: address });
 
-      // 4. Wait for confirmation
       toast.loading("Confirming on-chain...", { id: "claim-tx" });
       receipt = await tx.wait();
 
-      // 5. Verify with backend
       toast.loading("Verifying proof...", { id: "claim-tx" });
       try {
         const verifyData = await verifyWithRetry(receipt.hash, chainId, address);
@@ -600,7 +589,6 @@ export default function DropPointsPanel() {
         return;
       }
 
-      // 6. Success
       toast.success("Drop Points claimed! 🎉", { id: "claim-tx" });
       setClaimBurst(true);
       setTimeout(() => setClaimBurst(false), 800);
@@ -624,12 +612,28 @@ export default function DropPointsPanel() {
     }
   };
 
-  // ── Tabs ──────────────────────────────────────────────────────────────────
+  // ── Tabs config ───────────────────────────────────────────────────────────
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "overview", label: "Overview", icon: <Droplets size={13} /> },
     { id: "history",  label: "History",  icon: <History size={13} /> },
   ];
+
+  // ── Toggle: switch tab OR expand if collapsed ─────────────────────────────
+
+  const handleTabClick = (tabId: Tab) => {
+    if (!tabsExpanded) {
+      // If collapsed, always expand — and switch to the tapped tab
+      setActiveTab(tabId);
+      setTabsExpanded(true);
+    } else if (activeTab === tabId) {
+      // Clicking the active tab while expanded → collapse
+      setTabsExpanded(false);
+    } else {
+      // Just switch tab (stays expanded)
+      setActiveTab(tabId);
+    }
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -732,16 +736,39 @@ export default function DropPointsPanel() {
             )}
           </motion.button>
         </div>
+
+        {/* Redeem link */}
+        <div
+          className="mt-3 w-full group relative overflow-hidden flex items-center gap-3 px-4 py-3
+            rounded-xl border border-border/40 bg-accent/20 cursor-not-allowed opacity-60"
+        >
+          <div className="w-8 h-8 rounded-lg bg-accent border border-border/50
+            flex items-center justify-center shrink-0">
+            <ShoppingBag size={14} className="text-muted-foreground" />
+          </div>
+          <div className="flex-1 text-left">
+            <p className="text-[11px] font-bold text-foreground leading-none mb-0.5">
+              Redeem at Merch Store
+            </p>
+            <p className="text-[10px] text-muted-foreground leading-none">
+              Trade DROP points for exclusive gear
+            </p>
+          </div>
+          <span className="text-[9px] font-black px-2 py-0.5 rounded-full
+            bg-amber-500/15 border border-amber-500/30 text-amber-500 shrink-0">
+            SOON
+          </span>
+        </div>
       </div>
 
-      {/* Tabs */}
+      {/* ── Tab bar ─────────────────────────────────────────────────────────── */}
       <div className="flex border-b border-border">
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabClick(tab.id)}
             className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[11px] font-bold transition-colors ${
-              activeTab === tab.id
+              activeTab === tab.id && tabsExpanded
                 ? "text-primary border-b-2 border-primary"
                 : "text-muted-foreground hover:text-foreground"
             }`}
@@ -750,124 +777,148 @@ export default function DropPointsPanel() {
             {tab.label}
           </button>
         ))}
+
+        {/* Collapse / expand chevron */}
+        <button
+          onClick={() => setTabsExpanded((v) => !v)}
+          className="px-3 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          title={tabsExpanded ? "Collapse" : "Expand"}
+        >
+          <motion.div
+            animate={{ rotate: tabsExpanded ? 0 : 180 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+          >
+            <ChevronDown size={14} />
+          </motion.div>
+        </button>
       </div>
 
-      {/* Tab content */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.15 }}
-          className="flex-1 overflow-y-auto max-h-[340px]"
-        >
-          {/* Overview */}
-          {activeTab === "overview" && (
-            <div className="p-4 space-y-2.5">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 mb-3">
-                On-chain Balance per Network
-              </p>
-              {chainBalances.map(({ chainId: id, balance, loading, error }) => {
-                const cfg = CHAIN_CONFIG[id];
-                const pct = Math.round((balance / maxBalance) * 100);
-                return (
-                  <div
-                    key={id}
-                    className="bg-accent/30 dark:bg-accent/10 rounded-xl px-4 py-3 border border-border/50"
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{ background: cfg.color }}
-                        />
-                        <span className="text-xs font-semibold">{cfg.name}</span>
-                      </div>
-                      {loading ? (
-                        <div className="h-3.5 w-16 rounded bg-accent animate-pulse" />
-                      ) : error ? (
-                        <span className="flex items-center gap-1 text-[10px] text-red-400">
-                          <AlertCircle size={10} /> RPC error
-                        </span>
-                      ) : (
-                        <span className="text-xs font-black tabular-nums">
-                          {balance.toLocaleString(undefined, { maximumFractionDigits: 2 })} pts
-                        </span>
-                      )}
-                    </div>
-                    <div className="h-1 w-full bg-border rounded-full overflow-hidden">
-                      <motion.div
-                        className="h-full rounded-full"
-                        style={{ background: cfg.color }}
-                        initial={{ width: 0 }}
-                        animate={{ width: loading ? "0%" : `${pct}%` }}
-                        transition={{ duration: 0.5, ease: "easeOut" }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* History */}
-          {activeTab === "history" && (
-            <div className="p-4 space-y-2">
-              {historyLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-14 rounded-xl bg-accent animate-pulse" />
-                ))
-              ) : history.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-                  <History size={28} strokeWidth={1.5} />
-                  <p className="text-xs">No claims yet</p>
-                </div>
-              ) : (
-                history.map((entry, i) => {
-                  const cfg = CHAIN_CONFIG[entry.chain_id];
-                  const date = new Date(entry.timestamp);
+      {/* ── Collapsible tab content ──────────────────────────────────────────── */}
+      <motion.div
+        animate={tabsExpanded ? "open" : "closed"}
+        variants={{
+          open:   { height: "auto", opacity: 1 },
+          closed: { height: 0,      opacity: 0 },
+        }}
+        transition={{ duration: 0.25, ease: "easeInOut" }}
+        style={{ overflow: "hidden" }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-y-auto max-h-[340px]"
+          >
+            {/* Overview */}
+            {activeTab === "overview" && (
+              <div className="p-4 space-y-2.5">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1 mb-3">
+                  On-chain Balance per Network
+                </p>
+                {chainBalances.map(({ chainId: id, balance, loading, error }) => {
+                  const cfg = CHAIN_CONFIG[id];
+                  const pct = Math.round((balance / maxBalance) * 100);
                   return (
                     <div
-                      key={i}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-accent/30 dark:bg-accent/10 border border-border/50 group"
+                      key={id}
+                      className="bg-accent/30 dark:bg-accent/10 rounded-xl px-4 py-3 border border-border/50"
                     >
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ background: cfg?.color ?? "#888" }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold">
-                          +{entry.amount.toLocaleString()} pts
-                          <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
-                            {cfg?.name}
-                          </span>
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {date.toLocaleDateString()} · {date.toLocaleTimeString()}
-                        </p>
-                      </div>
-                      {cfg && entry.tx_hash && (
-                        <a
-                          href={`${cfg.explorer}${entry.tx_hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <ExternalLink
-                            size={12}
-                            className="text-muted-foreground hover:text-foreground"
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ background: cfg.color }}
                           />
-                        </a>
-                      )}
+                          <span className="text-xs font-semibold">{cfg.name}</span>
+                        </div>
+                        {loading ? (
+                          <div className="h-3.5 w-16 rounded bg-accent animate-pulse" />
+                        ) : error ? (
+                          <span className="flex items-center gap-1 text-[10px] text-red-400">
+                            <AlertCircle size={10} /> RPC error
+                          </span>
+                        ) : (
+                          <span className="text-xs font-black tabular-nums">
+                            {balance.toLocaleString(undefined, { maximumFractionDigits: 2 })} pts
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-1 w-full bg-border rounded-full overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{ background: cfg.color }}
+                          initial={{ width: 0 }}
+                          animate={{ width: loading ? "0%" : `${pct}%` }}
+                          transition={{ duration: 0.5, ease: "easeOut" }}
+                        />
+                      </div>
                     </div>
                   );
-                })
-              )}
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+                })}
+              </div>
+            )}
+
+            {/* History */}
+            {activeTab === "history" && (
+              <div className="p-4 space-y-2">
+                {historyLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-14 rounded-xl bg-accent animate-pulse" />
+                  ))
+                ) : history.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+                    <History size={28} strokeWidth={1.5} />
+                    <p className="text-xs">No claims yet</p>
+                  </div>
+                ) : (
+                  history.map((entry, i) => {
+                    const cfg = CHAIN_CONFIG[entry.chain_id];
+                    const date = new Date(entry.timestamp);
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-accent/30 dark:bg-accent/10 border border-border/50 group"
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ background: cfg?.color ?? "#888" }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold">
+                            +{entry.amount.toLocaleString()} pts
+                            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+                              {cfg?.name}
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {date.toLocaleDateString()} · {date.toLocaleTimeString()}
+                          </p>
+                        </div>
+                        {cfg && entry.tx_hash && (
+                          <a
+                            href={`${cfg.explorer}${entry.tx_hash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <ExternalLink
+                              size={12}
+                              className="text-muted-foreground hover:text-foreground"
+                            />
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
     </div>
   );
 }

@@ -252,310 +252,263 @@
   interface PayoutsData { success: boolean; faucetAddress: string; chainId: number; payouts: PayoutRecord[]; }
 
   function QuizGameOver({
-    quizMeta, code, leaderboard, myWallet, isCreator, showConfetti, router,
-    initialResults, loadingInitialResults, rewardsReady,
-    wallets
-  }: any) {
-    const [payoutsData, setPayoutsData] = useState<PayoutsData | null>(null);
-    const { address: userWalletAddress } = useWallet();
-    const [loadingPayouts, setLoadingPayouts] = useState(true);
-    const [isClaiming, setIsClaiming] = useState(false);
-    const [claimedTx, setClaimedTx] = useState<string | null>(null);
-    const [showFullResults, setShowFullResults] = useState(!!initialResults);
-    const [resultsData, setResultsData] = useState<any>(initialResults ?? null);
-    const [loadingResults, setLoadingResults] = useState(false);
+  quizMeta, code, leaderboard, myWallet, isCreator, showConfetti, router,
+  initialResults, loadingInitialResults, rewardsReady,
+}: any) {
+  const [payoutsData, setPayoutsData] = useState<PayoutsData | null>(null);
+  const { address: userWalletAddress, chainId: walletChainId } = useWallet();
+  const [loadingPayouts, setLoadingPayouts] = useState(true);
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [claimedTx, setClaimedTx] = useState<string | null>(null);
+  const [showFullResults, setShowFullResults] = useState(!!initialResults);
+  const [resultsData, setResultsData] = useState<any>(initialResults ?? null);
+  const [loadingResults, setLoadingResults] = useState(false);
 
-    // ── New clean claim state ──
-    const [claimStatus, setClaimStatus] = useState<"loading" | "not_eligible" | "pending" | "claim" | "claimed" | "expired">("loading");
-    const [rewardAmount, setRewardAmount] = useState<string>("");
-    const [contractInfo, setContractInfo] = useState<{
-      address: string;
-      chainId: number;
-      tokenSymbol: string;
-      tokenDecimals: number;
-    } | null>(null);
+  const [claimStatus, setClaimStatus] = useState<"loading" | "not_eligible" | "pending" | "claim" | "claimed" | "expired">("loading");
+  const [rewardAmount, setRewardAmount] = useState<string>("");
+  const [contractInfo, setContractInfo] = useState<{
+    address: string;
+    chainId: number;
+    tokenSymbol: string;
+    tokenDecimals: number;
+  } | null>(null);
 
-    const CHAIN_RPC: Record<number, string> = {
-      42220: "https://forno.celo.org",
-      1135:  "https://rpc.api.lisk.com",
-      42161: "https://arb1.arbitrum.io/rpc",
-      8453:  "https://mainnet.base.org",
-      56:    "https://bsc-dataseed.binance.org",
-    };
-
-    const activeWallet =
-      wallets.find((w: any) => w.walletClientType === "privy") ||
-      wallets.find((w: any) => w.address.toLowerCase() === userWalletAddress?.toLowerCase()) ||
-      wallets?.[0];
-
-    const [viewingProfile, setViewingProfile] = useState<{
-      walletAddress: string;
-      username: string;
-      avatarUrl?: string | null;
-      points: number;
-      rank: number;
-    } | null>(null);
-
-    // ── Single contract check effect ──
-    useEffect(() => {
-      if (!myWallet || isCreator) return;
-
-      let cancelled = false;
-      let intervalId: ReturnType<typeof setInterval>;
-
-      const checkContract = async (
-    contractAddress: string,
-    chainId: number,
-    tokenDecimals: number,
-    tokenSymbol: string
-  ) => {
-    const rpcUrl = CHAIN_RPC[chainId];
-    if (!rpcUrl) {
-      console.warn("❌ [ClaimCheck] No RPC for chainId:", chainId);
-      return;
-    }
-
-    try {
-      const { JsonRpcProvider, Contract, formatUnits } = await import("ethers");
-      const provider = new JsonRpcProvider(rpcUrl);
-      const contract = new Contract(
-        contractAddress,
-        ["function getClaimStatus(address user) view returns (bool claimed, bool hasRewardAmount, uint256 rewardAmount, bool canClaim, uint256 timeRemaining)"],
-        provider
-      );
-
-      console.log("🔍 [ClaimCheck] Calling getClaimStatus for:", {
-        user: myWallet,
-        contract: contractAddress,
-        chainId,
-        tokenDecimals,
-        tokenSymbol,
-        rpcUrl,
-      });
-
-      const result = await contract.getClaimStatus(myWallet);
-
-      const claimed      = result[0];
-      const hasReward    = result[1];
-      const rewardRaw    = result[2];
-      const canClaim     = result[3];
-      const timeRemaining = result[4];
-
-      console.log("📦 [ClaimCheck] Raw contract result:", result);
-      console.log("📊 [ClaimCheck] Parsed values:", {
-        claimed,
-        hasReward,
-        rewardRaw: rewardRaw?.toString(),
-        canClaim,
-        timeRemaining: timeRemaining?.toString(),
-        rewardsReady,
-        claimedTx,
-        myWallet,
-      });
-
-      if (cancelled) {
-        console.log("🚫 [ClaimCheck] Cancelled, skipping state update");
-        return;
-      }
-
-
-
-      const fmt = hasReward
-        ? parseFloat(formatUnits(rewardRaw, tokenDecimals)).toFixed(4) + " " + tokenSymbol
-        : "";
-
-      console.log("💰 [ClaimCheck] Formatted reward:", fmt || "(none)");
-
-      if (claimedTx || claimed) {
-        console.log("✅ [ClaimCheck] → STATUS: claimed", { claimedTx, claimed });
-        setClaimStatus("claimed");
-        if (fmt) setRewardAmount(fmt);
-        clearInterval(intervalId);
-        return;
-      }
-      if (hasReward && canClaim) {
-        console.log("🟢 [ClaimCheck] → STATUS: claim (eligible, not yet claimed)");
-        setClaimStatus("claim");
-        setRewardAmount(fmt);
-        clearInterval(intervalId);
-        return;
-      }
-      if (hasReward && !canClaim) {
-    const timeRemainingNum = Number(timeRemaining);
-    if (timeRemainingNum === 0) {
-      console.log("🔴 [ClaimCheck] → STATUS: expired (has reward, canClaim=false, timeRemaining=0)");
-      setClaimStatus("expired");
-      setRewardAmount(fmt);
-      clearInterval(intervalId);
-      return;
-    }
-    console.log("🟡 [ClaimCheck] → STATUS: pending (has reward but canClaim=false)", {
-      timeRemaining: timeRemaining?.toString(),
-    });
-    setClaimStatus("pending");
-    setRewardAmount(fmt);
-    return;
-  }
-
-      // hasReward is false
-      console.log("⚪ [ClaimCheck] → STATUS: not_eligible", {
-        reason: "hasReward is false",
-        rewardsReady,
-        hasReward,
-        canClaim,
-      });
-      setClaimStatus(rewardsReady ? "pending" : "not_eligible");
-    } catch (e) {
-      console.error("💥 [ClaimCheck] Contract call failed:", e);
-    }
-  };
-  const init = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/quiz/${code}/results`);
-      const data = await res.json();
-
-      console.log("📋 [ClaimCheck] /results response:", JSON.stringify(data, null, 2));
-
-      if (!data.success) {
-        console.warn("❌ [ClaimCheck] results not success, setting not_eligible");
-        setClaimStatus("not_eligible");
-        return;
-      }
-
-      const contractAddress = data.quiz?.reward?.contractAddress || data.quiz?.faucetAddress;
-      const chainId = data.quiz?.chainId;
-      const tokenDecimals = data.quiz?.reward?.tokenDecimals ?? 18;
-      const tokenSymbol = data.quiz?.reward?.tokenSymbol ?? "";
-
-      console.log("🏗️ [ClaimCheck] Extracted contract info:", {
-        contractAddress,
-        chainId,
-        tokenDecimals,
-        tokenSymbol,
-        myWallet,
-        rewardsReady,
-      });
-
-      if (!contractAddress || !chainId) {
-        console.warn("❌ [ClaimCheck] Missing contractAddress or chainId, setting not_eligible");
-        setClaimStatus("not_eligible");
-        return;
-      }
-
-      setContractInfo({ address: contractAddress, chainId, tokenDecimals, tokenSymbol });
-      await checkContract(contractAddress, chainId, tokenDecimals, tokenSymbol);
-
-      intervalId = setInterval(() => {
-        if (!cancelled) checkContract(contractAddress, chainId, tokenDecimals, tokenSymbol);
-      }, 5000);
-    } catch (e) {
-      console.error("💥 [ClaimCheck] init failed:", e);
-      setClaimStatus("not_eligible");
-    }
+  const CHAIN_RPC: Record<number, string> = {
+    42220: "https://forno.celo.org",
+    1135:  "https://rpc.api.lisk.com",
+    42161: "https://arb1.arbitrum.io/rpc",
+    8453:  "https://mainnet.base.org",
+    56:    "https://bsc-dataseed.binance.org",
   };
 
-      init();
-      return () => { cancelled = true; clearInterval(intervalId); };
-    }, [myWallet, isCreator, code, rewardsReady, claimedTx]);
+  const [viewingProfile, setViewingProfile] = useState<{
+    walletAddress: string;
+    username: string;
+    avatarUrl?: string | null;
+    points: number;
+    rank: number;
+  } | null>(null);
 
-    useEffect(() => {
-      if (initialResults && !resultsData) {
-        setResultsData(initialResults);
-        setShowFullResults(true);
+  // ── Single contract check effect ──
+  useEffect(() => {
+    if (!myWallet || isCreator) return;
+
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval>;
+
+    const checkContract = async (
+      contractAddress: string,
+      chainId: number,
+      tokenDecimals: number,
+      tokenSymbol: string
+    ) => {
+      const rpcUrl = CHAIN_RPC[chainId];
+      if (!rpcUrl) {
+        console.warn("❌ [ClaimCheck] No RPC for chainId:", chainId);
+        return;
       }
-    }, [initialResults]);
 
-    useEffect(() => {
-      fetch(`${API_BASE_URL}/api/quiz/${code}/payouts`)
-        .then(r => r.json())
-        .then(d => { if (d.success) setPayoutsData(d); })
-        .finally(() => setLoadingPayouts(false));
-    }, [code, rewardsReady]);
+      try {
+        const provider = new JsonRpcProvider(rpcUrl);
+        const contract = new Contract(
+          contractAddress,
+          ["function getClaimStatus(address user) view returns (bool claimed, bool hasRewardAmount, uint256 rewardAmount, bool canClaim, uint256 timeRemaining)"],
+          provider
+        );
 
-    const myPayout = payoutsData?.payouts.find(
-      p => p.wallet_address.toLowerCase() === myWallet.toLowerCase()
-    );
-    const totalWinners = payoutsData?.payouts.length ?? 0;
+        const result = await contract.getClaimStatus(myWallet);
 
-    const payoutByWallet = useMemo(() => {
-      const map: Record<string, PayoutRecord> = {};
-      payoutsData?.payouts.forEach(p => { map[p.wallet_address.toLowerCase()] = p; });
-      return map;
-    }, [payoutsData]);
+        const claimed       = result[0];
+        const hasReward     = result[1];
+        const rewardRaw     = result[2];
+        const canClaim      = result[3];
+        const timeRemaining = result[4];
 
-    const handleSwitchAndClaim = async () => {
-      if (!activeWallet || !contractInfo) { toast.error("Wallet not connected"); return; }
-      const currentChainId = parseInt(activeWallet.chainId.split(":")[1] ?? "0");
-      if (currentChainId !== contractInfo.chainId) {
-        try {
-          toast.info("Switching to the correct network...");
-          await activeWallet.switchChain(contractInfo.chainId);
-          await new Promise(r => setTimeout(r, 1500));
-        } catch {
-          toast.error("Please switch to the correct network in your wallet");
+        if (cancelled) return;
+
+        const fmt = hasReward
+          ? parseFloat(formatUnits(rewardRaw, tokenDecimals)).toFixed(4) + " " + tokenSymbol
+          : "";
+
+        if (claimedTx || claimed) {
+          setClaimStatus("claimed");
+          if (fmt) setRewardAmount(fmt);
+          clearInterval(intervalId);
           return;
         }
-      }
-      handleClaim();
-    };
+        if (hasReward && canClaim) {
+          setClaimStatus("claim");
+          setRewardAmount(fmt);
+          clearInterval(intervalId);
+          return;
+        }
+        if (hasReward && !canClaim) {
+          const timeRemainingNum = Number(timeRemaining);
+          if (timeRemainingNum === 0) {
+            setClaimStatus("expired");
+            setRewardAmount(fmt);
+            clearInterval(intervalId);
+            return;
+          }
+          setClaimStatus("pending");
+          setRewardAmount(fmt);
+          return;
+        }
 
-    const handleClaim = async () => {
-      if (!activeWallet) { toast.error("Wallet not connected"); return; }
-      setIsClaiming(true);
-      toast.info("Processing claim...");
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/quiz/${code}/claim`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ walletAddress: myWallet }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.detail || data.message || "Claim failed");
-        setClaimedTx(data.txHash);
-        setClaimStatus("claimed");
-        toast.success("Reward claimed! It is now in your wallet.");
-        setPayoutsData(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            payouts: prev.payouts.map(p =>
-              p.wallet_address.toLowerCase() === myWallet.toLowerCase()
-                ? { ...p, status: "claimed", tx_hash: data.txHash }
-                : p
-            ),
-          };
-        });
-      } catch (e: any) {
-        toast.error(e.message || "Failed to process claim");
-      } finally {
-        setIsClaiming(false);
+        setClaimStatus(rewardsReady ? "pending" : "not_eligible");
+      } catch (e) {
+        console.error("💥 [ClaimCheck] Contract call failed:", e);
       }
     };
 
-    const fetchResults = async () => {
-      if (resultsData) { setShowFullResults(true); return; }
-      setLoadingResults(true);
+    const init = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/api/quiz/${code}/results`);
-        const d = await res.json();
-        if (d.success) {
-          if ((!d.leaderboard || d.leaderboard.length === 0) && leaderboard.length > 0) {
-            d.leaderboard = leaderboard;
-            d.totalPlayers = leaderboard.length;
-          }
-          setResultsData(d);
-          setShowFullResults(true);
-        } else {
-          setResultsData({ success: true, quiz: quizMeta, leaderboard, payouts: payoutByWallet, totalPlayers: leaderboard.length, endedAt: null });
-          setShowFullResults(true);
+        const data = await res.json();
+
+        if (!data.success) {
+          setClaimStatus("not_eligible");
+          return;
         }
-      } catch {
-        setResultsData({ success: true, quiz: quizMeta, leaderboard, payouts: payoutByWallet, totalPlayers: leaderboard.length, endedAt: null });
-        setShowFullResults(true);
-      } finally {
-        setLoadingResults(false);
+
+        const contractAddress = data.quiz?.reward?.contractAddress || data.quiz?.faucetAddress;
+        const chainId         = data.quiz?.chainId;
+        const tokenDecimals   = data.quiz?.reward?.tokenDecimals ?? 18;
+        const tokenSymbol     = data.quiz?.reward?.tokenSymbol ?? "";
+
+        if (!contractAddress || !chainId) {
+          setClaimStatus("not_eligible");
+          return;
+        }
+
+        setContractInfo({ address: contractAddress, chainId, tokenDecimals, tokenSymbol });
+        await checkContract(contractAddress, chainId, tokenDecimals, tokenSymbol);
+
+        intervalId = setInterval(() => {
+          if (!cancelled) checkContract(contractAddress, chainId, tokenDecimals, tokenSymbol);
+        }, 5000);
+      } catch (e) {
+        console.error("💥 [ClaimCheck] init failed:", e);
+        setClaimStatus("not_eligible");
       }
     };
+
+    init();
+    return () => { cancelled = true; clearInterval(intervalId); };
+  }, [myWallet, isCreator, code, rewardsReady, claimedTx]);
+
+  useEffect(() => {
+    if (initialResults && !resultsData) {
+      setResultsData(initialResults);
+      setShowFullResults(true);
+    }
+  }, [initialResults]);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/quiz/${code}/payouts`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setPayoutsData(d); })
+      .finally(() => setLoadingPayouts(false));
+  }, [code, rewardsReady]);
+
+  const myPayout = payoutsData?.payouts.find(
+    p => p.wallet_address.toLowerCase() === myWallet.toLowerCase()
+  );
+  const totalWinners = payoutsData?.payouts.length ?? 0;
+
+  const payoutByWallet = useMemo(() => {
+    const map: Record<string, PayoutRecord> = {};
+    payoutsData?.payouts.forEach(p => { map[p.wallet_address.toLowerCase()] = p; });
+    return map;
+  }, [payoutsData]);
+
+  const handleSwitchAndClaim = async () => {
+    if (!userWalletAddress || !contractInfo) {
+      toast.error("Wallet not connected");
+      return;
+    }
+
+    if (walletChainId !== contractInfo.chainId) {
+      try {
+        toast.info("Switching to the correct network...");
+        await window.ethereum?.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: `0x${contractInfo.chainId.toString(16)}` }],
+        });
+        await new Promise(r => setTimeout(r, 1500));
+      } catch {
+        toast.error("Please switch to the correct network in your wallet");
+        return;
+      }
+    }
+
+    handleClaim();
+  };
+
+  const handleClaim = async () => {
+    if (!userWalletAddress) {
+      toast.error("Wallet not connected");
+      return;
+    }
+
+    setIsClaiming(true);
+    toast.info("Processing claim...");
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/quiz/${code}/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: myWallet }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.detail || data.message || "Claim failed");
+
+      setClaimedTx(data.txHash);
+      setClaimStatus("claimed");
+      toast.success("Reward claimed! It is now in your wallet.");
+
+      setPayoutsData(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          payouts: prev.payouts.map(p =>
+            p.wallet_address.toLowerCase() === myWallet.toLowerCase()
+              ? { ...p, status: "claimed", tx_hash: data.txHash }
+              : p
+          ),
+        };
+      });
+    } catch (e: any) {
+      toast.error(e.message || "Failed to process claim");
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  const fetchResults = async () => {
+    if (resultsData) { setShowFullResults(true); return; }
+    setLoadingResults(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/quiz/${code}/results`);
+      const d = await res.json();
+      if (d.success) {
+        if ((!d.leaderboard || d.leaderboard.length === 0) && leaderboard.length > 0) {
+          d.leaderboard = leaderboard;
+          d.totalPlayers = leaderboard.length;
+        }
+        setResultsData(d);
+        setShowFullResults(true);
+      } else {
+        setResultsData({ success: true, quiz: quizMeta, leaderboard, payouts: payoutByWallet, totalPlayers: leaderboard.length, endedAt: null });
+        setShowFullResults(true);
+      }
+    } catch {
+      setResultsData({ success: true, quiz: quizMeta, leaderboard, payouts: payoutByWallet, totalPlayers: leaderboard.length, endedAt: null });
+      setShowFullResults(true);
+    } finally {
+      setLoadingResults(false);
+    }
+  };
 
     const top3 = leaderboard.slice(0, 3);
 

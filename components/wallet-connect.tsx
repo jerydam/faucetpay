@@ -198,9 +198,15 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
 
         <DropdownMenuGroup>
           <DropdownMenuItem asChild>
-            <Link href={dashboardLink} className="cursor-pointer flex items-center gap-2">
+            <Link
+              href={dashboardLink}
+              className={cn(
+                "cursor-pointer flex items-center gap-2",
+                (loading || !dbUsername) && "pointer-events-none opacity-50"  // disable while loading
+              )}
+            >
               <LayoutDashboard className="h-4 w-4" />
-              <span>{dbUsername ? "Profile" : "Dashboard"}</span>
+              <span>{loading ? "Loading..." : dbUsername ? "Profile" : "Dashboard"}</span>
             </Link>
           </DropdownMenuItem>
           {address && (

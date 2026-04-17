@@ -21,14 +21,8 @@ import {
 
 import { useToast } from "@/hooks/use-toast"
 import { ProfileSettingsModal } from "@/components/profile-settings-modal"
-import { MyCreationsModal } from "@/components/my-creations-modal"
-import { CreateNewModal } from "@/components/create-new-modal"
 import { usePrivy } from "@privy-io/react-auth"
-import { EmbeddedWalletControlProduction } from "@/components/embeddedwallet"
-import { SelfVerificationModal } from "@/components/self-verification-modal"
-import { VerifiedAvatar, VerifyPill, VerifiedBadge } from "@/components/verified-profile-avatar"
 import Loading from "@/app/loading"
-import { buildFaucetSlug } from "@/lib/faucet-slug"
 
 // --- Types ---
 interface FaucetData {
@@ -88,7 +82,7 @@ interface UserProfileData {
 }
 
 export default function DashboardPage() {
-  const backendUrl = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app"
+  const backendUrl = "http://127.0.0.1:8000"
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
@@ -535,33 +529,19 @@ export default function DashboardPage() {
             <CardContent className="p-6 sm:p-8 flex flex-col md:flex-row items-start md:items-center gap-6 relative">
               {isOwner && (
                 <div className="absolute top-4 right-4 md:hidden z-30">
-                  <EmbeddedWalletControlProduction />
                 </div>
               )}
 
-              <VerifiedAvatar
-                displayAvatar={displayAvatar}
-                displayName={displayName}
-                isVerified={isVerified}
-                isOwner={isOwner}
-              />
+              
 
-              <SelfVerificationModal
-                isOpen={isVerifyModalOpen}
-                onOpenChange={setIsVerifyModalOpen}
-                account={connectedAddress || ""}
-                onSuccess={handleVerificationSuccess}
-              />
+            
 
               <div className="flex-1 space-y-2">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                     {displayName}
                   </h1>
-                  {isOwner && !isVerified && (
-                    <VerifyPill onClick={() => setIsVerifyModalOpen(true)} />
-                  )}
-                  {isVerified && <VerifiedBadge />}
+                
                 </div>
 
                 {/* Wallet address */}
@@ -661,13 +641,8 @@ export default function DashboardPage() {
           {isOwner && (
             <div className="flex gap-3 w-full md:w-auto">
               <div className="md:hidden flex gap-3 w-full">
-                <MyCreationsModal faucets={faucets} address={connectedAddress!} />
-                <CreateNewModal onSuccess={fetchData} />
               </div>
               <div className="hidden md:flex gap-3 flex-wrap">
-                <EmbeddedWalletControlProduction />
-                <MyCreationsModal faucets={faucets} address={connectedAddress!} />
-                <CreateNewModal onSuccess={fetchData} />
               </div>
             </div>
           )}

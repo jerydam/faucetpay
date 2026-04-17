@@ -10,7 +10,6 @@ import { NetworkProvider } from "@/hooks/use-network"
 import { WalletProvider } from "@/components/wallet-provider"
 import { Footer } from "@/components/footer"
 
-import { SubscriptionModalProvider } from "@/components/subscribe"
 import sdk from "@farcaster/miniapp-sdk"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -83,7 +82,6 @@ export default function RootLayout({
           {/* SINGLE PROVIDER WRAPPER - handles Privy, Wagmi, and QueryClient */}
             <NetworkProvider>
               <WalletProvider>
-              <SubscriptionModalProvider>
                 <div className="min-h-screen flex flex-col">
                   <main className="flex-1">
                     {children}
@@ -91,7 +89,6 @@ export default function RootLayout({
                   <Footer />
                 </div>
                 <Toaster richColors position="top-center" closeButton />
-              </SubscriptionModalProvider>
             </WalletProvider>
             </NetworkProvider>
         </ThemeProvider>

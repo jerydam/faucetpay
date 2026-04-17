@@ -3,13 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { WalletConnectButton } from "@/components/wallet-connect";
-import { NetworkSelector, MiniNetworkIndicator } from "@/components/network-selector";
 import Link from "next/link";
 import { Menu, X, ChevronLeft, Plus, RefreshCw } from "lucide-react"; // Added RefreshCw icon
 import { useRouter, usePathname } from "next/navigation";
 import { useWallet } from "@/hooks/use-wallet";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme";
+import { NotificationBell } from "./notifications-provider";
 
 export function Header({ 
   pageTitle, 
@@ -99,9 +99,9 @@ export function Header({
           {/* Desktop Actions */}
           <div className="hidden lg:flex items-center gap-4">
             <ThemeToggle/>
+            <NotificationBell/>
             {isConnected && (
               <>
-                <NetworkSelector />
                 {!hideAction && (
                   <Button
                       onClick={() => router.push(action.path)}
@@ -122,11 +122,10 @@ export function Header({
           {/* Mobile Actions */}
           <div className="lg:hidden flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
+              <NotificationBell/>
             <WalletConnectButton />
 
-            {isConnected && (
-              <MiniNetworkIndicator className="h-9 w-9 border border-border rounded-md" />
-            )}
+        
 
             {!isDashboardPage && isConnected && 
               <Button

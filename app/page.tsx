@@ -19,13 +19,10 @@ import { toast } from "sonner";
 import { useWallet } from "@/hooks/use-wallet";
 import { usePrivy } from "@privy-io/react-auth";
 import Image from "next/image";
-import { MiniNetworkIndicator, NetworkSelector } from "@/components/network-selector";
 import { WalletConnectButton } from "@/components/wallet-connect";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme";
-import { useDashboard } from "@/hooks/useDashboard";
-import AnalyticsDashboard from "@/components/Analyticsdashboard";
-import DropPointsPanel from "@/components/DropPointsPanel";
+import { NotificationBell } from "@/components/notifications-provider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,7 +34,7 @@ const POINTS_CONTRACT_ADDRESSES: Record<number, string> = {
   42161: "0xEcb026D22f9aA7FD9Aa83B509834dB8Fd66B27F6",
 };
 
-const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 const POINTS_ABI = [
   "function claim(uint256 amount, uint256 timestamp, bytes signature) external",
@@ -233,7 +230,6 @@ function HomeContent() {
   const hasTriggeredTx     = useRef(false);
   const hasToastedLoading  = useRef(false);
 
-  const { data: dashData, loading: dashLoading } = useDashboard();
 
   // ── Fetch balance ────────────────────────────────────────────────────────────
   const fetchBalance = async () => {
@@ -402,16 +398,7 @@ function HomeContent() {
         <div className="flex items-center gap-2 sm:gap-4">
           <ThemeToggle />
           <WalletConnectButton />
-          {isConnected && (
-            <div className="flex sm:hidden items-center justify-center">
-              <MiniNetworkIndicator className="p-1 border border-border rounded-full bg-accent h-8 w-8 flex items-center justify-center" />
-            </div>
-          )}
-          {isConnected && (
-            <div className="hidden sm:block">
-              <NetworkSelector />
-            </div>
-          )}
+         <NotificationBell />
         </div>
       </nav>
 
@@ -468,183 +455,9 @@ function HomeContent() {
             </div>
           </div>
 
-         <DropPointsPanel/>
         </div>
 
-        {/* ── Analytics Dashboard ── */}
-        <AnalyticsDashboard />
-
-        {/* ── Trending Quests ── */}
-        <section>
-          <div className="flex justify-between items-center mb-6 px-2">
-            <h2 className="text-xl sm:text-2xl font-bold">Trending Quests</h2>
-            <Link
-              href="#"
-              className="flex items-center gap-1 text-muted-foreground text-xs sm:text-sm hover:text-foreground"
-            >
-              View All <ChevronRight size={14} />
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-x-12 bg-accent/20 rounded-2xl sm:rounded-[2rem] border border-border p-4 sm:p-8">
-            {HOT_SPACES.map((s, idx) => (
-              <div
-                key={idx}
-                className="flex items-center gap-4 py-3 px-4 hover:bg-accent/50 rounded-xl transition-colors cursor-pointer group"
-              >
-                <span className="w-6 text-sm font-mono text-muted-foreground">{idx + 1}</span>
-                <div className="w-12 h-12 rounded-full bg-background border border-border flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <s.logo className="w-6 h-6 text-primary" />
-                </div>
-                <div className="flex-1 flex items-center gap-1.5">
-                  <span className="font-semibold text-sm">{s.name}</span>
-                  {s.verified && <CheckCircle2 size={14} className="text-blue-500" />}
-                </div>
-                <span className="text-sm font-medium text-muted-foreground">{s.participation}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── New Quests ── */}
-        <section>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold">New Quests</h2>
-            <div className="text-muted-foreground hover:text-foreground cursor-pointer">
-              <ArrowRight size={20} />
-            </div>
-          </div>
-          <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-            {NEW_SPACES.map((space) => (
-              <div
-                key={space.id}
-                className="min-w-[300px] sm:min-w-[320px] bg-card border border-border rounded-2xl p-6 relative group hover:border-primary/50 transition-all duration-300"
-              >
-                <div className="absolute top-4 right-4 bg-primary text-primary-foreground text-[10px] font-black px-2 py-0.5 rounded uppercase shadow-sm">
-                  New
-                </div>
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 rounded-full bg-accent border border-border flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
-                    <space.logo className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm sm:text-base mb-1">{space.name}</h3>
-                    <div className="flex gap-1 flex-wrap">
-                      {space.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-[9px] bg-accent border border-border px-1.5 py-0.5 rounded text-muted-foreground"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-y-4 pt-4 border-t border-border">
-                  <div>
-                    <p className="text-[9px] text-muted-foreground font-bold uppercase mb-1">Quests</p>
-                    <p className="text-sm font-bold">{space.quests}</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] text-muted-foreground font-bold uppercase mb-1">Funding</p>
-                    <p className="text-xs font-bold truncate">{space.funding}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Network Stats ── */}
-        <section className="py-24 bg-accent/5 border-y border-border">
-          <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
-            <div className="flex flex-col lg:flex-row gap-20 items-start">
-              <div className="lg:w-1/3">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-black uppercase tracking-[0.2em] mb-6">
-                  Live Network Stats
-                </div>
-                <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight leading-[1.1]">
-                  Trusted by Top Web3 Protocols
-                </h2>
-                <p className="text-muted-foreground mb-8 leading-relaxed max-w-md">
-                  Powering growth for Celo, Lisk, Self Protocol & more through verifiable onchain metrics.
-                </p>
-                {dashData && (
-                  <p className="text-[10px] text-muted-foreground">
-                    Last updated: {new Date(dashData.last_updated).toLocaleTimeString()}
-                  </p>
-                )}
-              </div>
-
-              <div className="lg:w-2/3 w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[
-                  { label: "Faucets",      value: dashData?.total_faucets,       sub: "Total Faucets",        icon: <Droplets size={20} /> },
-                  { label: "Transactions", value: dashData?.total_transactions,  sub: "Onchain Transactions", icon: <ChartLine size={20} /> },
-                  { label: "Users",        value: dashData?.total_unique_users,  sub: "Active Users",         icon: <User size={20} /> },
-                ].map((stat, i) => (
-                  <div
-                    key={i}
-                    className="p-8 rounded-[2rem] bg-background border border-border group hover:border-primary/50 transition-all duration-500 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="p-3 bg-primary/10 rounded-2xl text-primary group-hover:scale-110 transition-transform">
-                        {stat.icon}
-                      </div>
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                        {stat.label}
-                      </span>
-                    </div>
-                    {dashLoading || stat.value == null ? (
-                      <div className="h-10 w-24 rounded-lg bg-accent animate-pulse mb-1" />
-                    ) : (
-                      <div className="text-4xl font-black mb-1 tracking-tighter">
-                        {stat.value.toLocaleString()}+
-                      </div>
-                    )}
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
-                      {stat.sub}
-                    </div>
-                  </div>
-                ))}
-
-                <div className="sm:col-span-2 lg:col-span-3 p-8 rounded-[2.5rem] bg-background border border-border group hover:border-primary/50 transition-all duration-500 flex flex-col sm:flex-row sm:items-center justify-between gap-8 shadow-sm">
-                  <div className="flex items-center gap-6">
-                    <div className="p-4 bg-primary/10 rounded-2xl text-primary group-hover:rotate-12 transition-transform">
-                      <Globe size={28} />
-                    </div>
-                    <div>
-                      {dashLoading ? (
-                        <div className="h-10 w-32 rounded-lg bg-accent animate-pulse mb-1" />
-                      ) : (
-                        <div className="text-4xl font-black tracking-tighter">
-                          {(dashData?.total_claims ?? 0).toLocaleString()}+
-                        </div>
-                      )}
-                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
-                        Total Drops Distributed
-                      </div>
-                    </div>
-                  </div>
-                  <div className="hidden sm:block h-12 w-px bg-border" />
-                  <div className="flex gap-12">
-                    <div>
-                      <div className="text-xl font-bold tracking-tight">4.9/5</div>
-                      <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                        Satisfaction
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xl font-bold tracking-tight">99.9%</div>
-                      <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                        Uptime
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+       
       </main>
     </div>
   );

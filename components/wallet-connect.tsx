@@ -1,7 +1,8 @@
+/** /components/wallet-connect-button.tsx */
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useWallet } from "@/components/wallet-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,12 +14,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LayoutDashboard, LogOut, Copy, ChevronDown } from "lucide-react"
+import { LayoutDashboard, LogOut, Copy, ChevronDown, Wallet } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
-const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app"
+const API_BASE_URL = "http://127.0.0.1:8000"
 
 interface WalletConnectButtonProps {
   className?: string
@@ -32,7 +33,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
   const [loading, setLoading] = useState(false)
   const hasSyncedRef = useRef(false)
 
-  // Fetch or create profile when wallet connects
+  // 1. Fetch or create profile when wallet connects
   useEffect(() => {
     if (!isConnected || !address) {
       setDbUsername(null)
@@ -61,7 +62,6 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
           }
         }
 
-        // No profile yet — create one
         if (!hasSyncedRef.current) {
           hasSyncedRef.current = true
           const fallbackUsername = `user_${address.slice(-4)}`
@@ -103,7 +103,6 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
     return () => { isMounted = false }
   }, [address, isConnected])
 
-  // Listen for manual profile saves
   useEffect(() => {
     const handleProfileUpdate = (event: CustomEvent) => {
       const { username, avatarUrl } = event.detail
@@ -120,13 +119,15 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
     ? `/dashboard/${dbUsername}`
     : `/dashboard/${address?.toLowerCase() || ""}`
 
+  // --- RENDERING LOGIC ---
+
   if (isConnecting) {
     return (
       <Button
         size="sm"
         disabled
         variant="outline"
-        className={cn("text-xs font-bold uppercase tracking-widest px-6 opacity-50 border-border", className)}
+        className={cn("text-xs font-bold uppercase tracking-widest px-6 opacity-50 border-border animate-pulse", className)}
       >
         Connecting...
       </Button>
@@ -134,29 +135,22 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
   }
 
   if (!isConnected) {
-    const isMiniPay = typeof window !== "undefined" && !!window.ethereum?.isMiniPay
-
-    if (!isMiniPay) {
-      return (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled
-          className={cn("text-xs font-bold uppercase tracking-widest px-6 opacity-60 border-border", className)}
-        >
-          Open in MiniPay
-        </Button>
-      )
-    }
+    // Check if any wallet is available (MetaMask, MiniPay, etc.)
+    const hasWallet = typeof window !== "undefined" && !!window.ethereum
 
     return (
       <Button
         onClick={connect}
+        disabled={!hasWallet}
         size="sm"
         variant="default"
-        className={cn("text-xs font-bold uppercase tracking-widest px-6 shadow-md hover:scale-105 transition-all", className)}
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest px-6 shadow-md hover:scale-105 transition-all bg-blue-600 hover:bg-blue-500 text-white",
+          className
+        )}
       >
-        Get Started
+        <Wallet className="mr-2 h-4 w-4" />
+        {hasWallet ? "Connect Wallet" : "No Wallet Detected"}
       </Button>
     )
   }
@@ -182,12 +176,12 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-56 z-[200]" sideOffset={8}>
+      <DropdownMenuContent align="end" className="w-56 z-[200] rounded-xl" sideOffset={8}>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none truncate">{displayName}</p>
+            <p className="text-sm font-bold leading-none truncate">{displayName}</p>
             {address && (
-              <p className="text-xs leading-none text-muted-foreground font-mono">
+              <p className="text-[10px] leading-none text-muted-foreground font-mono">
                 {address.slice(0, 6)}...{address.slice(-4)}
               </p>
             )}
@@ -202,28 +196,32 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
               href={dashboardLink}
               className={cn(
                 "cursor-pointer flex items-center gap-2",
-                (loading || !dbUsername) && "pointer-events-none opacity-50"  // disable while loading
+                (loading || !dbUsername) && "pointer-events-none opacity-50"
               )}
             >
               <LayoutDashboard className="h-4 w-4" />
-              <span>{loading ? "Loading..." : dbUsername ? "Profile" : "Dashboard"}</span>
+              <span>Profile</span>
             </Link>
           </DropdownMenuItem>
-          {address && (
-            <DropdownMenuItem
-              onClick={() => { navigator.clipboard.writeText(address); toast.success("Address copied!") }}
-              className="cursor-pointer flex items-center gap-2"
-            >
-              <Copy className="h-4 w-4" />
-              <span>Copy Address</span>
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuItem
+            onClick={() => { 
+              if (address) {
+                navigator.clipboard.writeText(address); 
+                toast.success("Address copied!");
+              }
+            }}
+            className="cursor-pointer flex items-center gap-2"
+          >
+            <Copy className="h-4 w-4" />
+            <span>Copy Address</span>
+          </DropdownMenuItem>
         </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
+        
         <DropdownMenuItem
           onClick={disconnect}
-          className="cursor-pointer flex items-center gap-2 text-red-600 focus:text-red-600 focus:bg-red-50"
+          className="cursor-pointer flex items-center gap-2 text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"
         >
           <LogOut className="h-4 w-4" />
           <span>Disconnect</span>

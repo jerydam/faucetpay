@@ -45,11 +45,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     try {
       const ethersProvider = new BrowserProvider(eth)
-      const network = await ethersProvider.getNetwork()
       const accounts = await ethersProvider.listAccounts()
 
       if (accounts.length === 0) return
 
+      const network = await ethersProvider.getNetwork()
       const ethersSigner = await ethersProvider.getSigner()
 
       setProvider(ethersProvider)
@@ -65,25 +65,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await setupProvider()
   }, [setupProvider])
 
-  // Auto-connect if MiniPay is already injected and has accounts
+  // EFFECT 1: Handle MiniPay Auto-connect ONLY
   useEffect(() => {
     if (typeof window === "undefined") return
+    
+    // MiniPay is designed to be "always connected" within the Opera browser
     if (window.ethereum?.isMiniPay) {
       setupProvider()
     }
+    // Note: If MetaMask is present, we do NOT auto-connect here. 
+    // The user must click "Connect Wallet".
   }, [setupProvider])
 
-  // Listen for account/chain changes
+  // EFFECT 2: Sync UI with Wallet Changes
   useEffect(() => {
     const eth = window.ethereum
     if (!eth) return
 
     const handleAccountsChanged = (accounts: string[]) => {
       if (accounts.length === 0) {
-        setProvider(null)
-        setSigner(null)
-        setAddress(null)
-        setChainId(null)
+        disconnect()
       } else {
         setupProvider()
       }
@@ -104,17 +105,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const connect = async () => {
     if (typeof window === "undefined" || !window.ethereum) {
-      toast.error("MiniPay not detected. Please open this app inside MiniPay.")
+      toast.error("No Ethereum wallet detected. Please install MetaMask or use MiniPay.")
       return
     }
 
     setIsConnecting(true)
     try {
+      // Trigger the wallet popup (MetaMask or MiniPay account selector)
       await window.ethereum.request({ method: "eth_requestAccounts" })
       await setupProvider()
+      toast.success("Wallet connected!")
     } catch (err: any) {
       if (err?.code === 4001) {
-        toast.error("Connection rejected.")
+        toast.error("Connection rejected by user.")
       } else {
         toast.error("Failed to connect wallet.")
       }
@@ -144,7 +147,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         await setupProvider()
         return true
       } catch (err: any) {
-        toast.error("Failed to switch network.")
+        toast.error("Please switch to the correct network in your wallet.")
         throw err
       }
     }

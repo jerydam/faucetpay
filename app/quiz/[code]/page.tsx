@@ -351,7 +351,7 @@ export default function ChallengePage() {
   const params = useParams();
   const router = useRouter();
   const code   = ((params.code as string) ?? "").toUpperCase();
-
+  
   const { address: userWalletAddress } = useWallet();
   const myWallet = useMemo(() => userWalletAddress?.toLowerCase() ?? "", [userWalletAddress]);
 
@@ -363,7 +363,8 @@ export default function ChallengePage() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [hasJoined, setHasJoined] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
-
+  const myPlayerEntry = players.find(p => p.walletAddress.toLowerCase() === myWallet);
+  const myTxVerified  = myPlayerEntry?.txVerified ?? false;
   // ── Staking state ───────────────────────────────────────────────────────────
   const [isStaking, setIsStaking]           = useState(false);
   const [stakeTxHash, setStakeTxHash]       = useState<string | null>(null);
@@ -401,6 +402,9 @@ export default function ChallengePage() {
   const reconnectAttempts = useRef(0);
   // Prevent creator auto-staking multiple times
   const creatorStakedRef  = useRef(false);
+  // Add this state near your other state declarations
+const [isSyncing, setIsSyncing] = useState(false);
+
 
   // ── Profile ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -487,16 +491,29 @@ export default function ChallengePage() {
 
       switch (msg.type) {
 
-        case "state_sync": {
-          const c = msg.challenge;
-          setChallenge(c);
-          const entries = Object.entries(c.players ?? {}).map(([w, d]: [string, any]) => ({
-            walletAddress: w, username: d.username,
-            points: d.points, ready: d.ready, txVerified: d.txVerified,
-          }));
-          setPlayers(entries);
-          break;
-        }
+      case "state_sync": {
+  const c = msg.challenge;
+  setChallenge(c);
+  setPlayers(prev => {
+    const incoming = Object.entries(c.players ?? {}).map(([w, d]: [string, any]) => ({
+      walletAddress: w,
+      username: d.username,
+      points: d.points,
+      ready: d.ready,
+      txVerified: d.txVerified,
+    }));
+    if (prev.length === 0) return incoming;  // fine now that /join sets txVerified:true
+    return incoming.map(newP => {
+      const existing = prev.find(
+        p => p.walletAddress.toLowerCase() === newP.walletAddress.toLowerCase()
+      );
+      return existing
+        ? { ...newP, txVerified: newP.txVerified || existing.txVerified }
+        : newP;
+    });
+  });
+  break;
+}
 
         case "player_joined": {
           const p = msg.player;
@@ -512,15 +529,29 @@ export default function ChallengePage() {
         }
 
         case "stake_verified": {
-          setPlayers(prev => prev.map(p =>
-            p.walletAddress === msg.wallet ? { ...p, txVerified: true } : p
-          ));
-          if (msg.wallet === myWallet) {
-            setStakeVerifying(false);
-            toast.success("Stake verified on-chain ✓ — you can ready up!");
-          }
-          break;
-        }
+  setPlayers(prev => {
+  const wallet = userWalletAddress.toLowerCase();
+  const exists = prev.some(p => p.walletAddress.toLowerCase() === wallet);
+  if (!exists) {
+    // Creator wasn't in the list — add them
+    return [...prev, {
+      walletAddress: wallet,
+      username,
+      points: 0,
+      ready: false,
+      txVerified: true,
+    }];
+  }
+  return prev.map(p =>
+    p.walletAddress.toLowerCase() === wallet ? { ...p, txVerified: true } : p
+  );
+});
+  if (msg.wallet.toLowerCase() === myWallet) {
+    setStakeVerifying(false);
+    toast.success("Stake verified ✓ — click Ready!");
+  }
+  break;
+}
 
         case "stake_failed": {
           if (msg.wallet === myWallet) {
@@ -642,37 +673,49 @@ export default function ChallengePage() {
 
   // ── Actions ───────────────────────────────────────────────────────────────────
 
-  /**
-   * Unified stake handler — works for both joiner (first-time join + stake)
-   * and creator (or joiner retry) stake-only flow.
-   */
+  
   const handleStake = useCallback(async () => {
-    if (!userWalletAddress || !challenge) return;
-    setIsStaking(true);
-    try {
-      toast.info("Approve the stake transaction in your wallet…");
-      const txHash = await stakeOnChain(code, challenge.stake, challenge.token);
+  if (!userWalletAddress || !challenge) return;
+  setIsStaking(true);
+  try {
+    toast.info("Approve the stake transaction in your wallet…");
+    const txHash = await stakeOnChain(code, challenge.stake, challenge.token);
 
-      // If this player hasn't joined yet (i.e., they are a joiner), call join API
-      if (!hasJoined) {
-        const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ walletAddress: userWalletAddress, username, txHash }),
-        });
-        const d = await res.json();
-        if (!d.success) throw new Error(d.detail);
-        setHasJoined(true);
-      }
+    // Joiner: call join API first
+    if (!hasJoined) {
+   const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: userWalletAddress, username, txHash }),
+      });
+  const d = await res.json();
+  if (!d.success) throw new Error(d.detail ?? "Join failed");
+  setHasJoined(true);
+  
+  // ← ADD THIS: eagerly add ourselves to players with txVerified:true
+  setPlayers(prev => {
+    if (prev.some(p => p.walletAddress.toLowerCase() === myWallet)) return prev;
+    return [...prev, {
+      walletAddress: userWalletAddress,
+      username,
+      points: 0,
+      ready: false,
+      txVerified: true,  // we just confirmed the tx
+    }];
+  });
+}
 
-      sendStakeConfirmed(txHash);
-      toast.success("Stake sent! Verifying on-chain…");
-    } catch (err: any) {
-      toast.error(err?.message ?? "Stake failed. Try again.");
-    } finally {
-      setIsStaking(false);
-    }
-  }, [userWalletAddress, challenge, hasJoined, code, username, sendStakeConfirmed]);
+    // Both creator and joiner: immediately notify backend via WS
+    // Backend now trusts this since tx.wait() already confirmed on-chain
+    sendStakeConfirmed(txHash);
+    toast.success("Stake confirmed! You can now ready up.");
+  } catch (err: any) {
+    toast.error(err?.message ?? "Stake failed.");
+  } finally {
+    setIsStaking(false);
+  }
+}, [userWalletAddress, challenge, hasJoined, code, username, sendStakeConfirmed]);
+
 
   const handleReady = () => {
     if (!userWalletAddress) return;
@@ -723,8 +766,183 @@ export default function ChallengePage() {
       setIsClaiming(false);
     }
   };
+// ── Add this import at the top (already have ethers imported) ─────────────
+// Contract already imported: Contract, BrowserProvider, keccak256, toUtf8Bytes
 
-  const handleRematch = async () => {
+const handleSyncStake = useCallback(async () => {
+  if (!userWalletAddress || !challenge) return;
+  setIsSyncing(true);
+  try {
+    // 1. Read stake status DIRECTLY from the contract — no backend needed
+    const GET_QUIZ_ABI = [
+      {
+        inputs: [{ internalType: "bytes32", name: "quizId", type: "bytes32" }],
+        name: "getQuiz",
+        outputs: [{
+          components: [
+            { internalType: "bytes32",  name: "id",             type: "bytes32"  },
+            { internalType: "address",  name: "token",          type: "address"  },
+            { internalType: "uint256",  name: "stakePerPlayer", type: "uint256"  },
+            { internalType: "uint256",  name: "totalStaked",    type: "uint256"  },
+            { internalType: "address",  name: "player1",        type: "address"  },
+            { internalType: "address",  name: "player2",        type: "address"  },
+            { internalType: "address",  name: "winner",         type: "address"  },
+            { internalType: "bool",     name: "resolved",       type: "bool"     },
+            { internalType: "bool",     name: "rewardClaimed",  type: "bool"     },
+            { internalType: "uint256",  name: "createdAt",      type: "uint256"  },
+          ],
+          internalType: "struct QuizHub.Quiz",
+          name: "",
+          type: "tuple",
+        }],
+        stateMutability: "view",
+        type: "function",
+      },
+    ];
+
+    const provider  = new BrowserProvider(window.ethereum);
+    const contract  = new Contract(CONTRACT_ADDRESS, GET_QUIZ_ABI, provider);
+    const quizId    = keccak256(toUtf8Bytes(code));
+    const quiz      = await contract.getQuiz(quizId);
+
+    // quiz tuple: [id, token, stakePerPlayer, totalStaked, player1, player2, winner, resolved, rewardClaimed, createdAt]
+    const stakePerPlayer = quiz[2];
+    const totalStaked    = quiz[3];
+    const player1        = quiz[4].toLowerCase();
+    const player2        = quiz[5].toLowerCase();
+    const wallet         = userWalletAddress.toLowerCase();
+
+    let hasStaked = false;
+    if (wallet === player1) {
+      hasStaked = totalStaked >= stakePerPlayer;
+    } else if (wallet === player2) {
+      hasStaked = totalStaked >= stakePerPlayer * 2n;
+    } else {
+      // Wallet not yet recorded on-chain as player2 — check if totalStaked covers 2x (race condition)
+      hasStaked = totalStaked >= stakePerPlayer * 2n;
+    }
+
+    if (!hasStaked) {
+      toast.error("No stake found on-chain yet. Complete the stake transaction first.");
+      return;
+    } 
+    
+    if (!hasJoined) {
+      const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: userWalletAddress,
+          username,
+          txHash: "sync-recovery",
+        }),
+      });
+      const d = await res.json();
+      if (!d.success) throw new Error(d.detail ?? "Join failed");
+      setHasJoined(true);
+    }
+
+    // Notify backend via WS
+    wsRef.current?.send(JSON.stringify({
+      type:          "stake_confirmed",
+      walletAddress: userWalletAddress,
+      txHash:        "sync-recovery",
+    }));
+
+    // Optimistically update local UI
+    setPlayers(prev => {
+      const wallet = userWalletAddress.toLowerCase();
+      const exists = prev.some(p => p.walletAddress.toLowerCase() === wallet);
+      if (!exists) {
+        return [...prev, {
+          walletAddress: userWalletAddress,
+          username,
+          points: 0,
+          ready: false,
+          txVerified: true,
+        }];
+      }
+      return prev.map(p =>
+        p.walletAddress.toLowerCase() === wallet ? { ...p, txVerified: true } : p
+      );
+    });
+
+    toast.success("Stake synced! Click 'I'm Ready' to continue.");
+  } catch (err: any) {
+    console.error("[syncStake]", err);
+    toast.error(err?.message ?? "Could not read on-chain data.");
+  } finally {
+    setIsSyncing(false);
+  }
+}, [userWalletAddress, challenge, code, username, hasJoined]);
+
+
+// // ── Add this effect — auto-sync on lobby load for both players ────────────
+// // Place it after your "Load challenge meta" useEffect
+// useEffect(() => {
+//   if (phase !== "lobby" || !userWalletAddress || !challenge || myTxVerified) return;
+//   if (!window.ethereum) return;
+
+//   // Wait 2s then silently check — catches the case where the page
+//   // was refreshed after staking but before the WS confirmed it
+//   const timer = setTimeout(async () => {
+//     try {
+//       const GET_QUIZ_ABI = [{
+//         inputs: [{ internalType: "bytes32", name: "quizId", type: "bytes32" }],
+//         name: "getQuiz",
+//         outputs: [{ components: [
+//           { internalType: "bytes32",  name: "id",             type: "bytes32"  },
+//           { internalType: "address",  name: "token",          type: "address"  },
+//           { internalType: "uint256",  name: "stakePerPlayer", type: "uint256"  },
+//           { internalType: "uint256",  name: "totalStaked",    type: "uint256"  },
+//           { internalType: "address",  name: "player1",        type: "address"  },
+//           { internalType: "address",  name: "player2",        type: "address"  },
+//           { internalType: "address",  name: "winner",         type: "address"  },
+//           { internalType: "bool",     name: "resolved",       type: "bool"     },
+//           { internalType: "bool",     name: "rewardClaimed",  type: "bool"     },
+//           { internalType: "uint256",  name: "createdAt",      type: "uint256"  },
+//         ], internalType: "struct QuizHub.Quiz", name: "", type: "tuple" }],
+//         stateMutability: "view",
+//         type: "function",
+//       }];
+
+//       const provider = new BrowserProvider(window.ethereum);
+//       const contract = new Contract(CONTRACT_ADDRESS, GET_QUIZ_ABI, provider);
+//       const quizId   = keccak256(toUtf8Bytes(code));
+//       const quiz     = await contract.getQuiz(quizId);
+
+//       const stakePerPlayer = quiz[2];
+//       const totalStaked    = quiz[3];
+//       const player1        = quiz[4].toLowerCase();
+//       const player2        = quiz[5].toLowerCase();
+//       const wallet         = userWalletAddress.toLowerCase();
+
+//       const hasStaked =
+//         (wallet === player1 && totalStaked >= stakePerPlayer) ||
+//         (wallet === player2 && totalStaked >= stakePerPlayer * 2n) ||
+//         (wallet !== player1 && wallet !== player2 && false); // not registered yet
+
+//       if (hasStaked) {
+//         wsRef.current?.send(JSON.stringify({
+//           type: "stake_confirmed",
+//           walletAddress: userWalletAddress,
+//           txHash: "auto-sync",
+//         }));
+//         setPlayers(prev => prev.map(p =>
+//           p.walletAddress.toLowerCase() === wallet ? { ...p, txVerified: true } : p
+//         ));
+//         toast.info("Stake detected on-chain — synced automatically ✓");
+//       }
+//     } catch {
+//       // Silent fail — user can always click the manual sync button
+//     }
+//   }, 2000);
+
+//   return () => clearTimeout(timer);
+// }, [phase, userWalletAddress, challenge, myTxVerified, code]);
+ 
+
+const handleRematch = async () => {
     if (!userWalletAddress) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/rematch`, {
@@ -739,8 +957,8 @@ export default function ChallengePage() {
   };
 
   // ── Derived ───────────────────────────────────────────────────────────────────
-  const myPlayerEntry = players.find(p => p.walletAddress.toLowerCase() === myWallet);
-  const myTxVerified  = myPlayerEntry?.txVerified ?? false;
+  
+  
   const myReady       = myPlayerEntry?.ready ?? false;
   const myClaim       = pendingClaims.find(c => c.code === code);
   const totalPool     = challenge ? (challenge.stake * 2).toFixed(2) : "0.00";
@@ -843,7 +1061,10 @@ export default function ChallengePage() {
   // ─────────────────────────────────────────────────────────────────────────────
   //  PRE-JOIN — only shown to non-creator joiners in lobby
   // ─────────────────────────────────────────────────────────────────────────────
-  if (!hasJoined && !isCreator && phase === "lobby") {
+  const amCreator = challenge && userWalletAddress &&
+  challenge.creator?.toLowerCase() === userWalletAddress.toLowerCase();
+
+if (!hasJoined && !amCreator && phase === "lobby") {
 
     if (!challenge) {
       return (
@@ -926,6 +1147,13 @@ export default function ChallengePage() {
                   <><Zap className="mr-2 h-5 w-5" /> Join &amp; Stake {challenge.stake} {challenge.token}</>
                 )}
               </Button>
+              <button
+                onClick={handleSyncStake}
+                disabled={isSyncing}
+                className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors py-1"
+              >
+                {isSyncing ? "Checking on-chain…" : "Already staked? Sync my stake"}
+             </button>
             </div>
           )}
         </div>
@@ -1197,7 +1425,8 @@ export default function ChallengePage() {
 
             {/* State 1: Not yet staked — show Stake button (for both creator and joiner retries) */}
             {!myTxVerified && (
-              <Button
+             <>
+             <Button
                 className="w-full h-16 text-lg font-black bg-yellow-500 hover:bg-yellow-400 text-yellow-950 rounded-2xl shadow-[0_4px_0_rgb(161,120,0)] active:translate-y-1 active:shadow-none transition-all"
                 onClick={handleStake}
                 disabled={isStaking || stakeVerifying}
@@ -1210,6 +1439,15 @@ export default function ChallengePage() {
                   <><Zap className="mr-2 h-6 w-6" /> Stake {challenge?.stake} {challenge?.token} to Play</>
                 )}
               </Button>
+               <button
+                onClick={handleSyncStake}
+                disabled={isSyncing}
+                className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors py-1"
+              >
+                {isSyncing ? "Checking on-chain…" : "Already staked? Sync my stake"}
+             </button>
+              </>
+              
             )}
 
             {/* State 2: Staked, not yet ready */}

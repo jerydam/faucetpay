@@ -1159,9 +1159,14 @@ export default function ChallengePage() {
             )}
 
             {myReady && (
-              <div className="w-full h-16 flex items-center justify-center gap-3 rounded-2xl bg-muted/50 border-2 border-dashed border-border">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                <span className="font-bold text-muted-foreground uppercase tracking-widest text-sm">Waiting for Opponent…</span>
+              <div className={cn(
+                "w-full h-16 flex items-center justify-center gap-3 rounded-2xl border-2 border-dashed",
+                allReady ? "bg-emerald-500/10 border-emerald-500/50" : "bg-muted/50 border-border"
+              )}>
+                <Loader2 className={cn("h-5 w-5 animate-spin", allReady ? "text-emerald-500" : "text-primary")} />
+                <span className={cn("font-bold uppercase tracking-widest text-sm", allReady ? "text-emerald-500" : "text-muted-foreground")}>
+                  {allReady ? "Game Starting..." : "Waiting for Opponent..."}
+                </span>
               </div>
             )}
 

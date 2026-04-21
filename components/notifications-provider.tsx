@@ -55,87 +55,105 @@ function ChallengePopupOverlay({
   const pct = (secondsLeft / POPUP_DURATION) * 100;
   const isUrgent = secondsLeft <= 10;
 
+  // Extract variables for cleaner code
+  const creatorName = n.data?.creatorName || "A challenger";
+  const topic = n.data?.topic || "a random topic";
+
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200"
-      style={{
-        // Web3 style: semi-transparent background with heavy blur
-        background: "radial-gradient(circle at center, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%)",
-        backdropFilter: "blur(8px)",
-      }}
-      onClick={onDecline}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[360px] overflow-hidden rounded-[32px] border border-white/10 bg-slate-900 shadow-2xl animate-in slide-in-from-bottom-4"
-      >
-        {/* Subtle decorative background for the card */}
-        <div className="absolute inset-0 opacity-10 pointer-events-none" 
-             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} 
-        />
+  className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-300"
+  style={{
+    // Adaptive Web3 Background: 
+    // Dark mode: Deep Slate/Blue radial
+    // Light mode: Soft Blue/Lavender radial
+    background: "radial-gradient(circle at center, var(--overlay-gradient-start, rgba(30, 41, 59, 0.6)) 0%, var(--overlay-gradient-end, rgba(15, 23, 42, 0.8)) 100%)",
+    backdropFilter: "blur(12px) saturate(180%)",
+  }}
+  onClick={onDecline}
+>
+  <div
+    onClick={(e) => e.stopPropagation()}
+    className={cn(
+      "relative w-full max-w-[360px] overflow-hidden rounded-[32px] border shadow-2xl animate-in slide-in-from-bottom-8 duration-500",
+      // Adaptive Card Styling:
+      "bg-white dark:bg-slate-900",
+      "border-slate-200 dark:border-white/10"
+    )}
+  >
+    {/* Dynamic "Glass" Effect Layer */}
+    <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.1] pointer-events-none" 
+         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23475569' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} 
+    />
 
-        <div className="relative p-6">
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold border border-blue-500/30">
-              {n.data?.creatorName?.slice(0, 2).toUpperCase()}
-            </div>
-            <div className="flex-1">
-              <h3 className="text-white font-bold text-lg leading-tight">New Challenge!</h3>
-              <p className="text-slate-400 text-sm">{n.data?.creatorName} wants to play</p>
-            </div>
-          </div>
-
-          {/* Topic & Stake */}
-          <div className="space-y-3 mb-6">
-            <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
-              <p className="text-xs text-slate-500 uppercase font-black tracking-widest mb-1">Topic</p>
-              <p className="text-white font-medium">{n.data?.topic}</p>
-            </div>
-            
-            <div className="flex items-center justify-between bg-amber-500/10 rounded-2xl p-4 border border-amber-500/20">
-              <div className="flex items-center gap-2">
-                <Zap size={16} className="text-amber-500" />
-                <span className="text-sm font-bold text-amber-500/80">Stake</span>
-              </div>
-              <span className="text-white font-black">{n.data?.stake} {n.data?.token}</span>
-            </div>
-          </div>
-
-          {/* Timer Section */}
-          <div className="mb-6">
-             <div className="flex justify-between items-end mb-2">
-                <span className="text-slate-500 text-xs font-bold">EXPIRES IN</span>
-                <span className={cn("text-2xl font-mono font-black", isUrgent ? "text-red-500 animate-pulse" : "text-white")}>
-                   {secondsLeft}s
-                </span>
-             </div>
-             <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  className={cn("h-full transition-all duration-1000 linear", isUrgent ? "bg-red-500" : "bg-blue-500")}
-                  style={{ width: `${pct}%` }}
-                />
-             </div>
-          </div>
-
-          {/* Actions */}
-          <div className="grid grid-cols-2 gap-3">
-            <button 
-              onClick={onDecline}
-              className="py-3.5 rounded-2xl bg-slate-800 text-slate-300 font-bold text-sm hover:bg-slate-700 transition-colors"
-            >
-              Decline
-            </button>
-            <button 
-              onClick={onAccept}
-              className="py-3.5 rounded-2xl bg-blue-600 text-white font-black text-sm hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-all active:scale-95"
-            >
-              Accept
-            </button>
-          </div>
+    <div className="relative p-7 text-center">
+      {/* Icon/Avatar Section */}
+      <div className="flex justify-center mb-5">
+        <div className="h-20 w-20 rounded-full flex items-center justify-center font-black text-2xl transition-transform hover:scale-110 duration-300
+          bg-blue-500/10 dark:bg-blue-500/20 
+          text-blue-600 dark:text-blue-400 
+          border-2 border-blue-500/20 dark:border-blue-500/30 
+          shadow-xl">
+          {creatorName.slice(0, 2).toUpperCase()}
         </div>
       </div>
+
+      {/* Text Content */}
+      <div className="space-y-3 mb-8">
+        <h3 className="text-slate-900 dark:text-white font-black text-2xl leading-tight">
+          Challenge Issued!
+        </h3>
+        <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed px-2">
+          <span className="text-blue-600 dark:text-blue-400 font-bold">{creatorName}</span> just challenged your knowledge on <span className="text-slate-900 dark:text-white font-black italic">"{topic}"</span>
+        </p>
+      </div>
+
+      {/* Stake Badge */}
+      {n.data?.stake && (
+        <div className="inline-flex items-center gap-2 bg-amber-500/10 rounded-full py-2 px-5 border border-amber-500/20 mb-8 shadow-sm">
+          <Zap size={16} className="text-amber-500 fill-amber-500" />
+          <span className="text-xs font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.1em]">
+            Stake: {n.data.stake} {n.data.token}
+          </span>
+        </div>
+      )}
+
+      {/* Timer UI */}
+      <div className="mb-8 px-4">
+         <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
+            <div 
+              className={cn("h-full transition-all duration-1000 linear", isUrgent ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : "bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]")}
+              style={{ width: `${pct}%` }}
+            />
+         </div>
+         <p className={cn("text-[11px] font-black mt-3 tracking-[0.2em] uppercase", isUrgent ? "text-red-500 animate-pulse" : "text-slate-400")}>
+           {isUrgent ? `HURRY! ${secondsLeft}S REMAINING` : `Expiring in ${secondsLeft}s`}
+         </p>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="grid grid-cols-2 gap-4">
+        <button 
+          onClick={onDecline}
+          className="py-4 rounded-2xl font-bold text-sm transition-all active:scale-95
+            bg-slate-100 dark:bg-slate-800 
+            text-slate-600 dark:text-slate-300 
+            hover:bg-slate-200 dark:hover:bg-slate-700"
+        >
+          Decline
+        </button>
+        <button 
+          onClick={onAccept}
+          className="py-4 rounded-2xl font-black text-sm transition-all active:scale-95 shadow-lg
+            bg-blue-600 text-white 
+            hover:bg-blue-500 hover:shadow-blue-600/30 
+            flex items-center justify-center gap-2"
+        >
+          Accept
+        </button>
+      </div>
     </div>
+  </div>
+</div>
   );
 }
 

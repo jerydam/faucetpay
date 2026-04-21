@@ -8,7 +8,6 @@ import {
 } from "ethers";
 
 import { ERC20_ABI, QUIZ_FACTORY_ABI, QUIZ_ABI } from "./abis";
-import { BACKEND_ADDRESS} from './faucet';
 
 // ✅ Import the helper from your useNetwork file (adjust the path to match your project structure)
 import { getNetworkByChainId } from "@/hooks/use-network"; 
@@ -39,6 +38,7 @@ export interface QuizRewardConfig {
     claimWindowDuration?: number;
 }
 
+const BACKEND_ADDRESS = process.env.NEXT_PUBLIC_BACKEND_WALLET_A || process.env.NEXT_PUBLIC_BACKEND_WALLET_B || "0x9fbc2a0de6e5c5fd96e8d11541608f5f328c0785";
 // ── 1. Deploy QuizReward (no fund) ───────────────────────────────────────────
 export async function deployQuizReward(
     provider: BrowserProvider,

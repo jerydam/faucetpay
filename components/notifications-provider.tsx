@@ -320,7 +320,7 @@ export function NotificationBell() {
       prev.map((n) => (n.id === popup.notification.id ? { ...n, isRead: true } : n))
     );
     setPopup(null);
-    if (code) router.push(`/quiz/${code}/pre-lobby`);
+    if (code) router.push(`/challenge/${code}/pre-lobby`);
   };
 
   const handleDecline = () => {
@@ -389,9 +389,9 @@ export function NotificationBell() {
                       markOneRead(n.id);
                       if (n.data?.code) {
                         if (n.type === "public_challenge" || n.type === "challenge_invite") {
-                          router.push(`/quiz/${n.data.code}/pre-lobby`);  // ← negotiate first
+                          router.push(`/challenge/${n.data.code}/pre-lobby`);  // ← negotiate first
                         } else {
-                          router.push(`/quiz/${n.data.code}`);             // game_over, player_joined → straight to lobby
+                          router.push(`/challenge/${n.data.code}`);             // game_over, player_joined → straight to lobby
                         }
                       }
                     }}

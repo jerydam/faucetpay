@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /app/quiz/[code]/pre-lobby/page.tsx
+ * /app/challenge/[code]/pre-lobby/page.tsx
  *
  * Negotiation arena. Challengers arrive, submit stake offers, and the creator
  * can accept OR counter a specific challenger's offer. Counter-offers are sent
@@ -288,13 +288,13 @@ export default function PreLobbyPage() {
     fetch(`${API_BASE_URL}/api/challenge/${code}`)
       .then(r => r.json())
       .then(d => {
-        if (!d.success) { toast.error("Challenge not found"); router.push("/quiz"); return; }
+        if (!d.success) { toast.error("Challenge not found"); router.push("/challenge"); return; }
         const c: Challenge = d.challenge;
         setChallenge(c);
         setMyOffer(c.stake);
 
         if (c.status === "active" || c.status === "finished") {
-          router.replace(`/quiz/${code}`);
+          router.replace(`/challenge/${code}`);
           return;
         }
         setPageState("loading");
@@ -382,7 +382,7 @@ export default function PreLobbyPage() {
             setPageState("accepted");
             toast.success("🎉 Deal locked! Heading to lobby…");
             setTimeout(() =>
-              router.push(`/quiz/${code}?stake=${amount}&agreed=1`),
+              router.push(`/challenge/${code}?stake=${amount}&agreed=1`),
             1800);
           } else {
             setPageState("rejected");
@@ -419,7 +419,7 @@ export default function PreLobbyPage() {
         setLockedAmount(d.amount);
         setPageState("accepted");
         toast.success(`✅ Deal at ${fmt(d.amount)} ${challenge?.token}!`);
-        setTimeout(() => router.push(`/quiz/${code}?stake=${d.amount}&agreed=1`), 1800);
+        setTimeout(() => router.push(`/challenge/${code}?stake=${d.amount}&agreed=1`), 1800);
       } else {
         setPendingCounter(null); // dismiss any counter banner — we responded
         setPageState("pending");
@@ -551,13 +551,13 @@ export default function PreLobbyPage() {
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => router.push("/quiz")}
+              onClick={() => router.push("/challenge")}
               className="px-5 py-3 rounded-2xl border-2 border-border bg-card font-bold text-sm text-foreground hover:bg-muted transition-all"
             >
               Browse Hub
             </button>
             <button
-              onClick={() => router.push("/quiz/create-quiz")}
+              onClick={() => router.push("/challenge/create-quiz")}
               className="px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-all"
             >
               Create Your Own
@@ -607,7 +607,7 @@ export default function PreLobbyPage() {
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border">
         <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
           <button
-            onClick={() => router.push("/quiz")}
+            onClick={() => router.push("/challenge")}
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors font-bold text-sm"
           >
             <ArrowLeft className="h-4 w-4" /> Back

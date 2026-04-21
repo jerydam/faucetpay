@@ -30,7 +30,7 @@ function getWsBaseUrl(): string {
   if (typeof window === "undefined") return "wss://127.0.0.1:8000";
   return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
     ? "ws://127.0.0.1:8000"
-    : "wss://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
+    : "wss://faucetpay-backend.koyeb.app";
 }
 
 const CELO_CHAIN_ID = 42220;

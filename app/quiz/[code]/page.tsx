@@ -92,14 +92,14 @@
     const raw: string = err?.message || "Unknown error";
     return raw.length > 120 ? raw.slice(0, 120) + "…" : raw;
   }
-  const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
+  const API_BASE_URL = "https://faucetpay-backend.koyeb.app";
 
   // ── Safe WS URL ──
   function getWsBaseUrl(): string {
-    if (typeof window === "undefined") return "wss://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
+    if (typeof window === "undefined") return "wss://faucetpay-backend.koyeb.app";
     return window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
       ? "ws://127.0.0.1:8000"
-      : "wss://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
+      : "wss://faucetpay-backend.koyeb.app";
   }
 
   // ── Types ──

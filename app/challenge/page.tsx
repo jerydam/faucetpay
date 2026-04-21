@@ -216,7 +216,7 @@ return (
   <RefreshCw className={cn("h-4 w-4 text-blue-600", isRefreshing && "animate-spin")} />
       </Button>
       <Button
-  onClick={() => router.push("/challenge/create-quiz")}
+  onClick={() => router.push("/challenge/create-challenge")}
   className="hidden md:flex bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl px-6"
       >
   <Plus className="mr-2 h-4 w-4" /> Create Challenge
@@ -234,7 +234,7 @@ return (
     <Gamepad2 className="h-12 w-12 text-slate-200 dark:text-slate-700 mx-auto mb-4" />
     <h3 className="text-slate-900 dark:text-white font-bold text-lg">No active duels</h3>
     <p className="text-slate-500 mb-6">Be the first to create a public challenge on Celo.</p>
-    <Button onClick={() => router.push("/challenge/create-quiz")} className="bg-blue-600">Start Duel</Button>
+    <Button onClick={() => router.push("/challenge/create-challenge")} className="bg-blue-600">Start Duel</Button>
   </div>
       ) : (
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
@@ -262,7 +262,7 @@ return (
       {/* --- Mobile FAB (Visible only on mobile/tablet) --- */}
       <div className="md:hidden fixed bottom-6 right-6 z-50">
   <Button
-    onClick={() => router.push("/challenge/create-quiz")}
+    onClick={() => router.push("/challenge/create-challenge")}
     className="h-16 w-16 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-2xl border-0 p-0"
   >
     <Plus className="h-8 w-8" />

@@ -168,7 +168,7 @@ function CounterOfferBanner({
   );
 }
 
-// ── Offer card (creator view) ─────────────────────────────────────────────────
+// ── Updated Offer Card (Always show buttons) ─────────────────────────────────────────────────
 
 function OfferCard({
   offer, token, onAccept, onCounter, accepting, isSelf, isCounterTarget,
@@ -183,46 +183,49 @@ function OfferCard({
 }) {
   return (
     <div className={cn(
-      "group flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all duration-200",
-      "bg-card border-border hover:border-primary/40 hover:shadow-md",
+      "flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-2xl border transition-all duration-200",
+      "bg-card border-border hover:border-primary/40 shadow-sm",
       isSelf && "opacity-50 pointer-events-none",
       isCounterTarget && "border-amber-400/60 bg-amber-500/5",
     )}>
-      <Avatar className="h-9 w-9 shrink-0">
-        <AvatarFallback className="text-xs font-black bg-primary/10 text-primary">
-          {offer.username.slice(0, 2).toUpperCase()}
-        </AvatarFallback>
-      </Avatar>
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <Avatar className="h-9 w-9 shrink-0">
+          <AvatarFallback className="text-xs font-black bg-primary/10 text-primary">
+            {offer.username.slice(0, 2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
 
-      <div className="flex-1 min-w-0">
-        <p className="font-bold text-sm text-foreground truncate">
-          {offer.username}
-          {isSelf && <span className="ml-2 text-[10px] text-muted-foreground">(you)</span>}
-          {isCounterTarget && (
-            <span className="ml-2 text-[10px] font-black text-amber-500 uppercase tracking-wider">Countering</span>
-          )}
-        </p>
-        <p className="text-[10px] text-muted-foreground font-mono truncate">
-          {offer.wallet.slice(0, 6)}…{offer.wallet.slice(-4)}
-        </p>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-foreground truncate">
+            {offer.username}
+            {isSelf && <span className="ml-2 text-[10px] text-muted-foreground">(you)</span>}
+            {isCounterTarget && (
+              <span className="ml-2 text-[10px] font-black text-amber-500 uppercase tracking-wider">Countering</span>
+            )}
+          </p>
+          <p className="text-[10px] text-muted-foreground font-mono truncate">
+            {offer.wallet.slice(0, 6)}…{offer.wallet.slice(-4)}
+          </p>
+        </div>
+
+        <div className="text-right shrink-0">
+          <p className="font-black text-lg text-foreground tabular-nums">
+            <Pulse>{fmt(offer.amount)}</Pulse>
+            <span className="text-xs font-bold text-muted-foreground ml-1">{token}</span>
+          </p>
+          <p className="text-[10px] text-muted-foreground">{timeAgo(offer.sentAt)}</p>
+        </div>
       </div>
 
-      <div className="text-right shrink-0">
-        <p className="font-black text-lg text-foreground tabular-nums">
-          <Pulse>{fmt(offer.amount)}</Pulse>
-          <span className="text-xs font-bold text-muted-foreground ml-1">{token}</span>
-        </p>
-        <p className="text-[10px] text-muted-foreground">{timeAgo(offer.sentAt)}</p>
-      </div>
-
+      {/* Action buttons - Removed opacity-0 and group-hover classes */}
       {!isSelf && (
-        <div className="ml-2 shrink-0 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <div className="flex sm:flex-col gap-1.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border sm:ml-2">
           {/* Accept */}
           <button
             onClick={() => onAccept(offer)}
             disabled={accepting}
             className={cn(
-              "flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black transition-all",
+              "flex-1 flex items-center justify-center gap-1 px-3 py-2 sm:py-1.5 rounded-xl text-xs font-black transition-all",
               "bg-emerald-500 hover:bg-emerald-400 text-white active:scale-95",
               "disabled:opacity-50 disabled:cursor-not-allowed",
             )}
@@ -230,12 +233,13 @@ function OfferCard({
             {accepting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
             Lock In
           </button>
+          
           {/* Counter this specific offer */}
           <button
             onClick={() => onCounter(offer)}
             disabled={accepting}
             className={cn(
-              "flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black transition-all",
+              "flex-1 flex items-center justify-center gap-1 px-3 py-2 sm:py-1.5 rounded-xl text-xs font-black transition-all",
               isCounterTarget
                 ? "bg-amber-500 hover:bg-amber-400 text-white"
                 : "border-2 border-amber-400/50 text-amber-500 hover:bg-amber-500/10",

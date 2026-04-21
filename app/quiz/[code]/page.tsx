@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import Loading from "@/app/loading";
 import { ERC20_ABI, QUIZ_HUB_ABI } from "@/lib/abis";
 import { BrowserProvider, Contract, parseUnits, keccak256, toUtf8Bytes } from "ethers";
+import { useSearchParams } from "next/navigation";
+import { WalletConnectButton } from "@/components/wallet-connect";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -32,10 +34,7 @@ function getWsBaseUrl(): string {
 }
 
 const CELO_CHAIN_ID = 42220;
-
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_STAKE_CONTRACT ?? "0x51fC56257f92FBd94DBC1B39330900285497dFF1";
-
-
 
 const TOKEN_ADDRESSES: Record<string, string> = {
   cUSD: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
@@ -161,56 +160,33 @@ async function stakeOnChain(
   const provider = new BrowserProvider(window.ethereum);
   const signer   = await provider.getSigner();
   const userAddr = await signer.getAddress();
-
-  const quizId = keccak256(toUtf8Bytes(challengeCode));
-
+  const quizId   = keccak256(toUtf8Bytes(challengeCode));
   const erc20    = new Contract(tokenAddr, ERC20_ABI, signer);
   const contract = new Contract(CONTRACT_ADDRESS, QUIZ_HUB_ABI, signer);
-
   const decimals = await erc20.decimals();
   const amount   = parseUnits(stakeAmount.toString(), decimals);
-
-  // ── Sanity-check user balance first ─────────────────────────────────────
-  const balance = await erc20.balanceOf(userAddr);
-  console.log("[stakeOnChain] balance:", balance.toString(), "| amount:", amount.toString());
-
-  const flatFee = await contract.getFlatFee(tokenAddr);
-  console.log("[stakeOnChain] flatFee raw:", flatFee.toString());
-
-  // Guard: if flatFee looks unreasonably large, it may already include decimals
-  // or be denominated differently — log it in human-readable form
-  const flatFeeHuman = Number(flatFee) / 10 ** Number(decimals);
-  console.log("[stakeOnChain] flatFee human:", flatFeeHuman, tokenSymbol);
-
+  const balance  = await erc20.balanceOf(userAddr);
+  const flatFee  = await contract.getFlatFee(tokenAddr);
   const totalRequired = amount + flatFee;
-  console.log("[stakeOnChain] totalRequired:", totalRequired.toString());
 
   if (balance < totalRequired) {
     const needed = Number(totalRequired) / 10 ** Number(decimals);
     const has    = Number(balance)       / 10 ** Number(decimals);
-    throw new Error(
-      `Insufficient balance. Need ${needed.toFixed(4)} ${tokenSymbol} (stake + fee), but wallet only has ${has.toFixed(4)}.`
-    );
+    throw new Error(`Insufficient balance. Need ${needed.toFixed(4)} ${tokenSymbol} (stake + fee), but wallet only has ${has.toFixed(4)}.`);
   }
 
-  // ── Approve if needed ────────────────────────────────────────────────────
   const allowance = await erc20.allowance(userAddr, CONTRACT_ADDRESS);
   if (allowance < totalRequired) {
-    console.log("[stakeOnChain] Approving totalRequired...");
     const approveTx = await erc20.approve(CONTRACT_ADDRESS, totalRequired);
     await approveTx.wait();
-    console.log("[stakeOnChain] Approval confirmed");
   }
 
-  // ── Stake ────────────────────────────────────────────────────────────────
-  console.log("[stakeOnChain] Calling stake(quizId)...");
-  const tx = await contract.stake(quizId);
+  const tx      = await contract.stake(quizId);
   const receipt = await tx.wait();
-
-  console.log("[stakeOnChain] Stake successful! Tx:", receipt.hash);
   return receipt.hash;
 }
-// ── Floating Chat Component ───────────────────────────────────────────────────
+
+// ── Floating Chat ─────────────────────────────────────────────────────────────
 
 interface FloatingChatProps {
   messages: any[];
@@ -222,45 +198,27 @@ interface FloatingChatProps {
   unreadCount: number;
 }
 
-function FloatingChat({
-  messages, myWallet, chatInput, setChatInput, onSend, chatBottomRef, unreadCount,
-}: FloatingChatProps) {
-  const [isOpen, setIsOpen] = useState(false);
+function FloatingChat({ messages, myWallet, chatInput, setChatInput, onSend, chatBottomRef, unreadCount }: FloatingChatProps) {
+  const [isOpen, setIsOpen]       = useState(false);
   const [localUnread, setLocalUnread] = useState(0);
 
-  // Track unread when closed
   useEffect(() => {
     if (!isOpen) setLocalUnread(unreadCount);
   }, [unreadCount, isOpen]);
 
-  const handleOpen = () => {
-    setIsOpen(true);
-    setLocalUnread(0);
-  };
-
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
-      {/* Chat Panel */}
       {isOpen && (
-        <div
-          className="w-80 flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
-          style={{ height: "360px", animation: "slideUpFade 0.2s ease-out" }}
-        >
-          {/* Header */}
+        <div className="w-80 flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden" style={{ height: "360px", animation: "slideUpFade 0.2s ease-out" }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30 shrink-0">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-primary" />
               <p className="font-bold text-sm text-foreground">Lobby Chat</p>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="w-6 h-6 rounded-full hover:bg-muted flex items-center justify-center transition-colors"
-            >
+            <button onClick={() => setIsOpen(false)} className="w-6 h-6 rounded-full hover:bg-muted flex items-center justify-center transition-colors">
               <X className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           </div>
-
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
@@ -272,15 +230,8 @@ function FloatingChat({
                 const isMe = m.wallet?.toLowerCase() === myWallet;
                 return (
                   <div key={i} className={cn("flex flex-col gap-0.5", isMe ? "items-end" : "items-start")}>
-                    {!isMe && (
-                      <span className="text-[10px] text-muted-foreground px-1 font-semibold">{m.sender}</span>
-                    )}
-                    <div className={cn(
-                      "px-3 py-2 rounded-2xl text-xs max-w-[85%] break-words leading-relaxed",
-                      isMe
-                        ? "bg-primary text-primary-foreground rounded-tr-sm"
-                        : "bg-muted text-foreground rounded-tl-sm"
-                    )}>
+                    {!isMe && <span className="text-[10px] text-muted-foreground px-1 font-semibold">{m.sender}</span>}
+                    <div className={cn("px-3 py-2 rounded-2xl text-xs max-w-[85%] break-words leading-relaxed", isMe ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted text-foreground rounded-tl-sm")}>
                       {m.text}
                     </div>
                   </div>
@@ -289,58 +240,30 @@ function FloatingChat({
             )}
             <div ref={chatBottomRef} />
           </div>
-
-          {/* Input */}
           <div className="flex gap-2 px-3 py-3 border-t border-border shrink-0">
             <input
-              type="text"
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && onSend()}
-              placeholder="Say something…"
+              type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && onSend()} placeholder="Say something…" maxLength={200}
               className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-xs text-foreground outline-none focus:border-primary/50 transition-colors"
-              maxLength={200}
             />
-            <button
-              onClick={onSend}
-              disabled={!chatInput.trim()}
-              className="w-8 h-8 rounded-xl bg-primary disabled:bg-muted/50 disabled:text-muted-foreground text-primary-foreground flex items-center justify-center transition-all active:scale-95 shrink-0"
-            >
+            <button onClick={onSend} disabled={!chatInput.trim()} className="w-8 h-8 rounded-xl bg-primary disabled:bg-muted/50 disabled:text-muted-foreground text-primary-foreground flex items-center justify-center transition-all active:scale-95 shrink-0">
               <Send className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
       )}
-
-      {/* Bubble Button */}
       <button
-        onClick={isOpen ? () => setIsOpen(false) : handleOpen}
-        className={cn(
-          "relative w-14 h-14 rounded-full shadow-xl flex items-center justify-center",
-          "transition-all duration-200 hover:scale-110 active:scale-95",
-          isOpen
-            ? "bg-muted text-foreground border border-border"
-            : "bg-primary text-primary-foreground"
-        )}
+        onClick={() => { if (isOpen) { setIsOpen(false); } else { setIsOpen(true); setLocalUnread(0); } }}
+        className={cn("relative w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95", isOpen ? "bg-muted text-foreground border border-border" : "bg-primary text-primary-foreground")}
       >
-        {isOpen ? (
-          <X className="h-5 w-5" />
-        ) : (
-          <MessageSquare className="h-5 w-5" />
-        )}
+        {isOpen ? <X className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
         {!isOpen && localUnread > 0 && (
           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full border-2 border-background flex items-center justify-center">
             {localUnread > 9 ? "9+" : localUnread}
           </span>
         )}
       </button>
-
-      <style>{`
-        @keyframes slideUpFade {
-          from { opacity: 0; transform: translateY(12px) scale(0.97); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-      `}</style>
+      <style>{`@keyframes slideUpFade{from{opacity:0;transform:translateY(12px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
     </div>
   );
 }
@@ -348,12 +271,16 @@ function FloatingChat({
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function ChallengePage() {
-  const params = useParams();
-  const router = useRouter();
-  const code   = ((params.code as string) ?? "").toUpperCase();
-  
+  const params  = useParams();
+  const router  = useRouter();
+  const code    = ((params.code as string) ?? "").toUpperCase();
+
   const { address: userWalletAddress } = useWallet();
   const myWallet = useMemo(() => userWalletAddress?.toLowerCase() ?? "", [userWalletAddress]);
+
+  const searchParams     = useSearchParams();
+  const agreedStake      = searchParams.get("stake");
+  const cameFromPreLobby = searchParams.get("agreed") === "1";
 
   // ── Core state ──────────────────────────────────────────────────────────────
   const [phase, setPhase]         = useState<GamePhase>("loading");
@@ -363,50 +290,58 @@ export default function ChallengePage() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [hasJoined, setHasJoined] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
-  const myPlayerEntry = players.find(p => p.walletAddress.toLowerCase() === myWallet);
-  const myTxVerified  = myPlayerEntry?.txVerified ?? false;
-  // ── Staking state ───────────────────────────────────────────────────────────
+
+  // ── Staking state ────────────────────────────────────────────────────────────
   const [isStaking, setIsStaking]           = useState(false);
   const [stakeTxHash, setStakeTxHash]       = useState<string | null>(null);
   const [stakeVerifying, setStakeVerifying] = useState(false);
+  const [isSyncing, setIsSyncing]           = useState(false);
 
-  // ── Game state ──────────────────────────────────────────────────────────────
-  const [countdownVal, setCountdownVal]       = useState(3);
-  const [currentQ, setCurrentQ]               = useState<CurrentQuestion | null>(null);
-  const [selectedId, setSelectedId]           = useState<string | null>(null);
-  const [hasSubmitted, setHasSubmitted]       = useState(false);
-  const [timeLeft, setTimeLeft]               = useState(0);
-  const [revealCorrectId, setRevealCorrectId] = useState<string | null>(null);
-  const [questionScores, setQuestionScores]   = useState<Record<string, number>>({});
-  const [totalScores, setTotalScores]         = useState<Record<string, number>>({});
+  // ── Game state ───────────────────────────────────────────────────────────────
+  const [countdownVal, setCountdownVal]         = useState(3);
+  const [currentQ, setCurrentQ]                 = useState<CurrentQuestion | null>(null);
+  const [selectedId, setSelectedId]             = useState<string | null>(null);
+  const [hasSubmitted, setHasSubmitted]         = useState(false);
+  const [timeLeft, setTimeLeft]                 = useState(0);
+  const [revealCorrectId, setRevealCorrectId]   = useState<string | null>(null);
+  const [questionScores, setQuestionScores]     = useState<Record<string, number>>({});
+  const [totalScores, setTotalScores]           = useState<Record<string, number>>({});
   const [currentRoundName, setCurrentRoundName] = useState("");
-  const [roundScores, setRoundScores]         = useState<Record<string, number>>({});
-  const [finalScores, setFinalScores]         = useState<Record<string, FinalScore>>({});
-  const [gameOutcome, setGameOutcome]         = useState<"winner" | "tie" | null>(null);
-  const [winner, setWinner]                   = useState<string | null>(null);
-  const [showConfetti, setShowConfetti]       = useState(false);
-  const [canRematch, setCanRematch]           = useState(false);
+  const [roundScores, setRoundScores]           = useState<Record<string, number>>({});
+  const [finalScores, setFinalScores]           = useState<Record<string, FinalScore>>({});
+  const [gameOutcome, setGameOutcome]           = useState<"winner" | "tie" | null>(null);
+  const [winner, setWinner]                     = useState<string | null>(null);
+  const [showConfetti, setShowConfetti]         = useState(false);
+  const [canRematch, setCanRematch]             = useState(false);
 
-  // ── Claim ───────────────────────────────────────────────────────────────────
+  // ── Claim ────────────────────────────────────────────────────────────────────
   const [pendingClaims, setPendingClaims] = useState<any[]>([]);
   const [isClaiming, setIsClaiming]       = useState(false);
 
-  // ── Chat ────────────────────────────────────────────────────────────────────
+  // ── Chat ─────────────────────────────────────────────────────────────────────
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput]       = useState("");
   const [unreadCount, setUnreadCount]   = useState(0);
   const chatBottomRef                   = useRef<HTMLDivElement>(null);
 
+  // ── Refs — ALL at top level ──────────────────────────────────────────────────
   const timerRef          = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsRef             = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
-  // Prevent creator auto-staking multiple times
   const creatorStakedRef  = useRef(false);
-  // Add this state near your other state declarations
-const [isSyncing, setIsSyncing] = useState(false);
+  const joinCalledRef     = useRef(false); // prevents double /join call from pre-lobby
 
+  // ── Derived (safe to compute here — no hooks) ────────────────────────────────
+  const myPlayerEntry = players.find(p => p.walletAddress.toLowerCase() === myWallet);
+  const myTxVerified  = myPlayerEntry?.txVerified ?? false;
+  const myReady       = myPlayerEntry?.ready ?? false;
+  const displayStake  = agreedStake ?? challenge?.stake;
 
-  // ── Profile ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  ALL useEffect / useCallback HOOKS — must be above any early returns
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ── Profile ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userWalletAddress) return;
     fetch(`${API_BASE_URL}/api/players/${userWalletAddress}`)
@@ -418,13 +353,13 @@ const [isSyncing, setIsSyncing] = useState(false);
       .catch(() => setUsername(`User${userWalletAddress.slice(-4).toUpperCase()}`));
   }, [userWalletAddress]);
 
-  // ── Load challenge meta ──────────────────────────────────────────────────────
+  // ── Load challenge meta ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!code) return;
     fetch(`${API_BASE_URL}/api/challenge/${code}`)
       .then(r => r.json())
       .then(d => {
-        if (!d.success) { toast.error("Challenge not found"); router.push("/challenge"); return; }
+        if (!d.success) { toast.error("Challenge not found"); router.push("/quiz"); return; }
         setChallenge(d.challenge);
 
         const playerEntries = Object.entries(d.challenge.players ?? {}).map(
@@ -437,21 +372,54 @@ const [isSyncing, setIsSyncing] = useState(false);
 
         const amCreator = userWalletAddress &&
           d.challenge.creator?.toLowerCase() === userWalletAddress.toLowerCase();
+        if (amCreator) { setIsCreator(true); setHasJoined(true); }
 
-        if (amCreator) {
-          setIsCreator(true);
-          // Creator goes straight into lobby — no pre-join screen
-          setHasJoined(true);
-        }
-
-        if (d.challenge.status === "active")   setPhase("question");
+        if (d.challenge.status === "active")        setPhase("question");
         else if (d.challenge.status === "finished") setPhase("game_over");
-        else setPhase("lobby");
+        else                                        setPhase("lobby");
       })
       .catch(() => toast.error("Failed to load challenge"));
   }, [code, userWalletAddress, router]);
 
-  // ── Timer ────────────────────────────────────────────────────────────────────
+  // ── Optimistically skip pre-join when arriving from pre-lobby ────────────────
+  useEffect(() => {
+    if (cameFromPreLobby && agreedStake && userWalletAddress && !hasJoined) {
+      setHasJoined(true);
+    }
+  }, [cameFromPreLobby, agreedStake, userWalletAddress, hasJoined]);
+
+  // ── Register challenger via /join in background (once username is ready) ─────
+  useEffect(() => {
+    if (!cameFromPreLobby || !agreedStake || !userWalletAddress || !challenge || !username) return;
+    if (joinCalledRef.current) return;
+
+    const isCreatorWallet = challenge.creator?.toLowerCase() === userWalletAddress.toLowerCase();
+    if (isCreatorWallet) return;
+
+    joinCalledRef.current = true;
+
+    fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress: userWalletAddress,
+        username,
+        txHash: "pre-lobby-agreed",
+      }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        setPlayers(prev => {
+          if (prev.some(p => p.walletAddress.toLowerCase() === userWalletAddress.toLowerCase())) return prev;
+          return [...prev, { walletAddress: userWalletAddress, username, points: 0, ready: false, txVerified: false }];
+        });
+        if (!d.success) console.warn("[auto-join] backend said:", d.detail);
+        else toast.info(`Stake agreed at ${agreedStake} ${challenge.token} — approve the transaction to lock it in!`);
+      })
+      .catch(err => console.error("[auto-join] fetch failed:", err));
+  }, [cameFromPreLobby, agreedStake, userWalletAddress, challenge, code, username]);
+
+  // ── Timer ─────────────────────────────────────────────────────────────────────
   const startTimer = useCallback((startedAt: number, limit: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
     const tick = () => {
@@ -463,26 +431,21 @@ const [isSyncing, setIsSyncing] = useState(false);
     timerRef.current = setInterval(tick, 200);
   }, []);
 
-  // ── Send stake_confirmed over WS ─────────────────────────────────────────────
+  // ── Send stake_confirmed over WS ──────────────────────────────────────────────
   const sendStakeConfirmed = useCallback((txHash: string) => {
     if (!userWalletAddress) return;
     setStakeTxHash(txHash);
     setStakeVerifying(true);
-    wsRef.current?.send(JSON.stringify({
-      type:          "stake_confirmed",
-      walletAddress: userWalletAddress,
-      txHash,
-    }));
+    wsRef.current?.send(JSON.stringify({ type: "stake_confirmed", walletAddress: userWalletAddress, txHash }));
   }, [userWalletAddress]);
 
-  // ── WebSocket ────────────────────────────────────────────────────────────────
+  // ── WebSocket ─────────────────────────────────────────────────────────────────
   const connectWS = useCallback(() => {
     if (!code || !userWalletAddress) return;
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return;
 
     const ws = new WebSocket(`${getWsBaseUrl()}/ws/challenge/${code}`);
     wsRef.current = ws;
-
     ws.onopen = () => { reconnectAttempts.current = 0; };
 
     ws.onmessage = (ev) => {
@@ -490,107 +453,71 @@ const [isSyncing, setIsSyncing] = useState(false);
       try { msg = JSON.parse(ev.data); } catch { return; }
 
       switch (msg.type) {
-
-      case "state_sync": {
-  const c = msg.challenge;
-  setChallenge(c);
-  setPlayers(prev => {
-    const incoming = Object.entries(c.players ?? {}).map(([w, d]: [string, any]) => ({
-      walletAddress: w,
-      username: d.username,
-      points: d.points,
-      ready: d.ready,
-      txVerified: d.txVerified,
-    }));
-    if (prev.length === 0) return incoming;  // fine now that /join sets txVerified:true
-    return incoming.map(newP => {
-      const existing = prev.find(
-        p => p.walletAddress.toLowerCase() === newP.walletAddress.toLowerCase()
-      );
-      return existing
-        ? { ...newP, txVerified: newP.txVerified || existing.txVerified }
-        : newP;
-    });
-  });
-  break;
-}
-
+        case "state_sync": {
+          const c = msg.challenge;
+          setChallenge(c);
+          setPlayers(prev => {
+            const incoming = Object.entries(c.players ?? {}).map(([w, d]: [string, any]) => ({
+              walletAddress: w, username: d.username, points: d.points, ready: d.ready, txVerified: d.txVerified,
+            }));
+            if (prev.length === 0) return incoming;
+            return incoming.map(newP => {
+              const existing = prev.find(p => p.walletAddress.toLowerCase() === newP.walletAddress.toLowerCase());
+              return existing ? { ...newP, txVerified: newP.txVerified || existing.txVerified } : newP;
+            });
+          });
+          break;
+        }
         case "player_joined": {
           const p = msg.player;
           setPlayers(prev => {
             if (prev.some(e => e.walletAddress === p.walletAddress)) return prev;
-            return [...prev, {
-              walletAddress: p.walletAddress, username: p.username,
-              points: 0, ready: false, txVerified: false,
-            }];
+            return [...prev, { walletAddress: p.walletAddress, username: p.username, points: 0, ready: false, txVerified: false }];
           });
           toast.info(`${p.username} joined the lobby!`);
           break;
         }
-
         case "stake_verified": {
-  setPlayers(prev => {
-  const wallet = userWalletAddress.toLowerCase();
-  const exists = prev.some(p => p.walletAddress.toLowerCase() === wallet);
-  if (!exists) {
-    // Creator wasn't in the list — add them
-    return [...prev, {
-      walletAddress: wallet,
-      username,
-      points: 0,
-      ready: false,
-      txVerified: true,
-    }];
-  }
-  return prev.map(p =>
-    p.walletAddress.toLowerCase() === wallet ? { ...p, txVerified: true } : p
-  );
-});
-  if (msg.wallet.toLowerCase() === myWallet) {
-    setStakeVerifying(false);
-    toast.success("Stake verified ✓ — click Ready!");
-  }
-  break;
-}
-
+          setPlayers(prev => {
+            const wallet = msg.wallet.toLowerCase();
+            const exists = prev.some(p => p.walletAddress.toLowerCase() === wallet);
+            if (!exists) return [...prev, { walletAddress: wallet, username, points: 0, ready: false, txVerified: true }];
+            return prev.map(p => p.walletAddress.toLowerCase() === wallet ? { ...p, txVerified: true } : p);
+          });
+          if (msg.wallet.toLowerCase() === myWallet) {
+            setStakeVerifying(false);
+            toast.success("Stake verified ✓ — click Ready!");
+          }
+          break;
+        }
         case "stake_failed": {
-          if (msg.wallet === myWallet) {
+          if (msg.wallet.toLowerCase() === myWallet) {
             setStakeVerifying(false);
             toast.error("On-chain stake verification failed. Please retry.");
           }
           break;
         }
-
         case "player_ready": {
-          setPlayers(prev => prev.map(p =>
-            p.walletAddress === msg.wallet ? { ...p, ready: true } : p
-          ));
+          setPlayers(prev => prev.map(p => p.walletAddress === msg.wallet ? { ...p, ready: true } : p));
           break;
         }
-
         case "game_start": {
           toast.success(msg.message || "Game starting!");
           break;
         }
-
         case "round_announce": {
           setCurrentRoundName(msg.round);
           setPhase("countdown");
           setCountdownVal(3);
           break;
         }
-
         case "question": {
           if (timerRef.current) clearInterval(timerRef.current);
           const localStart = Date.now();
           setCurrentQ({
-            roundIndex:     msg.roundIndex,
-            questionIndex:  msg.questionIndex,
-            totalQuestions: msg.totalQuestions,
-            question:       msg.data.question,
-            options:        msg.data.options,
-            timeLimit:      msg.data.timeLimit,
-            startedAt:      localStart,
+            roundIndex: msg.roundIndex, questionIndex: msg.questionIndex,
+            totalQuestions: msg.totalQuestions, question: msg.data.question,
+            options: msg.data.options, timeLimit: msg.data.timeLimit, startedAt: localStart,
           });
           setSelectedId(null);
           setHasSubmitted(false);
@@ -600,42 +527,32 @@ const [isSyncing, setIsSyncing] = useState(false);
           startTimer(localStart, msg.data.timeLimit);
           break;
         }
-
         case "question_end": {
           if (timerRef.current) clearInterval(timerRef.current);
           setTimeLeft(0);
           setRevealCorrectId(msg.correctId);
           setQuestionScores(msg.questionScores ?? {});
           setTotalScores(msg.totalScores ?? {});
-          setPlayers(prev => prev.map(p => ({
-            ...p, points: msg.totalScores?.[p.walletAddress] ?? p.points,
-          })));
+          setPlayers(prev => prev.map(p => ({ ...p, points: msg.totalScores?.[p.walletAddress] ?? p.points })));
           setPhase("reveal");
           break;
         }
-
         case "round_end": {
           setRoundScores(msg.scores ?? {});
           setPhase("round_end");
           break;
         }
-
         case "game_over": {
           setFinalScores(msg.finalScores ?? {});
           setGameOutcome(msg.outcome);
           setWinner(msg.winner ?? null);
           setCanRematch(!!msg.canRematch);
           setPhase("game_over");
-          if (msg.winner === myWallet) {
-            setShowConfetti(true);
-            setTimeout(() => setShowConfetti(false), 6000);
-          }
+          if (msg.winner === myWallet) { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 6000); }
           break;
         }
-
         case "chat": {
           setChatMessages(prev => [...prev, msg]);
-          // Increment global unread — FloatingChat manages display
           setUnreadCount(prev => prev + 1);
           break;
         }
@@ -646,11 +563,9 @@ const [isSyncing, setIsSyncing] = useState(false);
       if (ev.code === 1000 || ev.code === 1008) return;
       if (reconnectAttempts.current >= 5) { toast.error("Connection lost. Refresh."); return; }
       reconnectAttempts.current += 1;
-      setTimeout(() => {
-        if (wsRef.current?.readyState !== WebSocket.OPEN) connectWS();
-      }, 2000 * reconnectAttempts.current);
+      setTimeout(() => { if (wsRef.current?.readyState !== WebSocket.OPEN) connectWS(); }, 2000 * reconnectAttempts.current);
     };
-  }, [code, userWalletAddress, myWallet, startTimer]);
+  }, [code, userWalletAddress, myWallet, startTimer, username]);
 
   useEffect(() => {
     if (!userWalletAddress) return;
@@ -662,7 +577,7 @@ const [isSyncing, setIsSyncing] = useState(false);
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // ── Claim ────────────────────────────────────────────────────────────────────
+  // ── Claim ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== "game_over" || !myWallet) return;
     fetch(`${API_BASE_URL}/api/challenge/${myWallet}/pending-claims`)
@@ -673,78 +588,63 @@ const [isSyncing, setIsSyncing] = useState(false);
 
   // ── Actions ───────────────────────────────────────────────────────────────────
 
-  
   const handleStake = useCallback(async () => {
-  if (!userWalletAddress || !challenge) return;
-  setIsStaking(true);
-  try {
-    toast.info("Approve the stake transaction in your wallet…");
-    const txHash = await stakeOnChain(code, challenge.stake, challenge.token);
+    if (!userWalletAddress || !challenge) return;
+    setIsStaking(true);
+    try {
+      toast.info("Approve the stake transaction in your wallet…");
+      const stakeAmt = agreedStake ? parseFloat(agreedStake) : challenge.stake;
+      const txHash   = await stakeOnChain(code, stakeAmt, challenge.token);
 
-    // Joiner: call join API first
-    if (!hasJoined) {
-   const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: userWalletAddress, username, txHash }),
-      });
-  const d = await res.json();
-  if (!d.success) throw new Error(d.detail ?? "Join failed");
-  setHasJoined(true);
-  
-  // ← ADD THIS: eagerly add ourselves to players with txVerified:true
-  setPlayers(prev => {
-    if (prev.some(p => p.walletAddress.toLowerCase() === myWallet)) return prev;
-    return [...prev, {
-      walletAddress: userWalletAddress,
-      username,
-      points: 0,
-      ready: false,
-      txVerified: true,  // we just confirmed the tx
-    }];
-  });
-}
+      if (!hasJoined) {
+        const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ walletAddress: userWalletAddress, username, txHash }),
+        });
+        const d = await res.json();
+        if (!d.success) throw new Error(d.detail ?? "Join failed");
+        setHasJoined(true);
+        setPlayers(prev => {
+          if (prev.some(p => p.walletAddress.toLowerCase() === myWallet)) return prev;
+          return [...prev, { walletAddress: userWalletAddress, username, points: 0, ready: false, txVerified: true }];
+        });
+      }
 
-    // Both creator and joiner: immediately notify backend via WS
-    // Backend now trusts this since tx.wait() already confirmed on-chain
-    sendStakeConfirmed(txHash);
-    toast.success("Stake confirmed! You can now ready up.");
-  } catch (err: any) {
-    toast.error(err?.message ?? "Stake failed.");
-  } finally {
-    setIsStaking(false);
-  }
-}, [userWalletAddress, challenge, hasJoined, code, username, sendStakeConfirmed]);
+      sendStakeConfirmed(txHash);
+      toast.success("Stake confirmed! Click Ready to start.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Stake failed.");
+    } finally {
+      setIsStaking(false);
+    }
+  }, [userWalletAddress, challenge, hasJoined, code, username, sendStakeConfirmed, agreedStake, myWallet]);
 
-
-  const handleReady = () => {
+  const handleReady = useCallback(() => {
     if (!userWalletAddress) return;
     wsRef.current?.send(JSON.stringify({ type: "ready", walletAddress: userWalletAddress }));
-  };
+  }, [userWalletAddress]);
 
-  const handleSelectAnswer = (optId: string) => {
+  const handleSelectAnswer = useCallback((optId: string) => {
     if (!currentQ || timeLeft <= 0 || hasSubmitted) return;
     const timeTaken = currentQ.timeLimit - timeLeft;
     wsRef.current?.send(JSON.stringify({
-      type:          "submit_answer",
-      walletAddress: userWalletAddress,
-      roundIndex:    currentQ.roundIndex,
-      questionIndex: currentQ.questionIndex,
-      answerId:      optId,
-      timeTaken,
+      type: "submit_answer", walletAddress: userWalletAddress,
+      roundIndex: currentQ.roundIndex, questionIndex: currentQ.questionIndex,
+      answerId: optId, timeTaken,
     }));
     setSelectedId(optId);
     setHasSubmitted(true);
-  };
+  }, [currentQ, timeLeft, hasSubmitted, userWalletAddress]);
 
-  const handleSendChat = () => {
+  const handleSendChat = useCallback(() => {
     const text = chatInput.trim();
     if (!text || wsRef.current?.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({ type: "chat", walletAddress: userWalletAddress, username, text }));
     setChatInput("");
-  };
+  }, [chatInput, userWalletAddress, username]);
 
-  const handleClaim = async (claimCode: string) => {
+  const handleClaim = useCallback(async (claimCode: string) => {
     setIsClaiming(true);
     try {
       const provider = new BrowserProvider(window.ethereum);
@@ -756,216 +656,102 @@ const [isSyncing, setIsSyncing] = useState(false);
       await tx.wait();
       toast.success("Funds transferred to your wallet! 🏆");
       await fetch(`${API_BASE_URL}/api/challenge/claim`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: claimCode, walletAddress: userWalletAddress }),
       });
-    } catch {
-      toast.error("Claim failed");
-    } finally {
-      setIsClaiming(false);
-    }
-  };
-// ── Add this import at the top (already have ethers imported) ─────────────
-// Contract already imported: Contract, BrowserProvider, keccak256, toUtf8Bytes
+    } catch { toast.error("Claim failed"); }
+    finally { setIsClaiming(false); }
+  }, [userWalletAddress]);
 
-const handleSyncStake = useCallback(async () => {
-  if (!userWalletAddress || !challenge) return;
-  setIsSyncing(true);
-  try {
-    // 1. Read stake status DIRECTLY from the contract — no backend needed
-    const GET_QUIZ_ABI = [
-      {
+  const handleSyncStake = useCallback(async () => {
+    if (!userWalletAddress || !challenge) return;
+    setIsSyncing(true);
+    try {
+      const GET_QUIZ_ABI = [{
         inputs: [{ internalType: "bytes32", name: "quizId", type: "bytes32" }],
         name: "getQuiz",
-        outputs: [{
-          components: [
-            { internalType: "bytes32",  name: "id",             type: "bytes32"  },
-            { internalType: "address",  name: "token",          type: "address"  },
-            { internalType: "uint256",  name: "stakePerPlayer", type: "uint256"  },
-            { internalType: "uint256",  name: "totalStaked",    type: "uint256"  },
-            { internalType: "address",  name: "player1",        type: "address"  },
-            { internalType: "address",  name: "player2",        type: "address"  },
-            { internalType: "address",  name: "winner",         type: "address"  },
-            { internalType: "bool",     name: "resolved",       type: "bool"     },
-            { internalType: "bool",     name: "rewardClaimed",  type: "bool"     },
-            { internalType: "uint256",  name: "createdAt",      type: "uint256"  },
-          ],
-          internalType: "struct QuizHub.Quiz",
-          name: "",
-          type: "tuple",
-        }],
-        stateMutability: "view",
-        type: "function",
-      },
-    ];
+        outputs: [{ components: [
+          { internalType: "bytes32",  name: "id",             type: "bytes32"  },
+          { internalType: "address",  name: "token",          type: "address"  },
+          { internalType: "uint256",  name: "stakePerPlayer", type: "uint256"  },
+          { internalType: "uint256",  name: "totalStaked",    type: "uint256"  },
+          { internalType: "address",  name: "player1",        type: "address"  },
+          { internalType: "address",  name: "player2",        type: "address"  },
+          { internalType: "address",  name: "winner",         type: "address"  },
+          { internalType: "bool",     name: "resolved",       type: "bool"     },
+          { internalType: "bool",     name: "rewardClaimed",  type: "bool"     },
+          { internalType: "uint256",  name: "createdAt",      type: "uint256"  },
+        ], internalType: "struct QuizHub.Quiz", name: "", type: "tuple" }],
+        stateMutability: "view", type: "function",
+      }];
 
-    const provider  = new BrowserProvider(window.ethereum);
-    const contract  = new Contract(CONTRACT_ADDRESS, GET_QUIZ_ABI, provider);
-    const quizId    = keccak256(toUtf8Bytes(code));
-    const quiz      = await contract.getQuiz(quizId);
+      const provider       = new BrowserProvider(window.ethereum);
+      const contract       = new Contract(CONTRACT_ADDRESS, GET_QUIZ_ABI, provider);
+      const quizId         = keccak256(toUtf8Bytes(code));
+      const quiz           = await contract.getQuiz(quizId);
+      const stakePerPlayer = quiz[2];
+      const totalStaked    = quiz[3];
+      const player1        = quiz[4].toLowerCase();
+      const player2        = quiz[5].toLowerCase();
+      const wallet         = userWalletAddress.toLowerCase();
 
-    // quiz tuple: [id, token, stakePerPlayer, totalStaked, player1, player2, winner, resolved, rewardClaimed, createdAt]
-    const stakePerPlayer = quiz[2];
-    const totalStaked    = quiz[3];
-    const player1        = quiz[4].toLowerCase();
-    const player2        = quiz[5].toLowerCase();
-    const wallet         = userWalletAddress.toLowerCase();
+      let hasStaked = false;
+      if (wallet === player1)       hasStaked = totalStaked >= stakePerPlayer;
+      else if (wallet === player2)  hasStaked = totalStaked >= stakePerPlayer * 2n;
+      else                          hasStaked = totalStaked >= stakePerPlayer * 2n;
 
-    let hasStaked = false;
-    if (wallet === player1) {
-      hasStaked = totalStaked >= stakePerPlayer;
-    } else if (wallet === player2) {
-      hasStaked = totalStaked >= stakePerPlayer * 2n;
-    } else {
-      // Wallet not yet recorded on-chain as player2 — check if totalStaked covers 2x (race condition)
-      hasStaked = totalStaked >= stakePerPlayer * 2n;
-    }
+      if (!hasStaked) { toast.error("No stake found on-chain yet. Complete the stake transaction first."); return; }
 
-    if (!hasStaked) {
-      toast.error("No stake found on-chain yet. Complete the stake transaction first.");
-      return;
-    } 
-    
-    if (!hasJoined) {
-      const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          walletAddress: userWalletAddress,
-          username,
-          txHash: "sync-recovery",
-        }),
-      });
-      const d = await res.json();
-      if (!d.success) throw new Error(d.detail ?? "Join failed");
-      setHasJoined(true);
-    }
-
-    // Notify backend via WS
-    wsRef.current?.send(JSON.stringify({
-      type:          "stake_confirmed",
-      walletAddress: userWalletAddress,
-      txHash:        "sync-recovery",
-    }));
-
-    // Optimistically update local UI
-    setPlayers(prev => {
-      const wallet = userWalletAddress.toLowerCase();
-      const exists = prev.some(p => p.walletAddress.toLowerCase() === wallet);
-      if (!exists) {
-        return [...prev, {
-          walletAddress: userWalletAddress,
-          username,
-          points: 0,
-          ready: false,
-          txVerified: true,
-        }];
+      if (!hasJoined) {
+        const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ walletAddress: userWalletAddress, username, txHash: "sync-recovery" }),
+        });
+        const d = await res.json();
+        if (!d.success) throw new Error(d.detail ?? "Join failed");
+        setHasJoined(true);
       }
-      return prev.map(p =>
-        p.walletAddress.toLowerCase() === wallet ? { ...p, txVerified: true } : p
-      );
-    });
 
-    toast.success("Stake synced! Click 'I'm Ready' to continue.");
-  } catch (err: any) {
-    console.error("[syncStake]", err);
-    toast.error(err?.message ?? "Could not read on-chain data.");
-  } finally {
-    setIsSyncing(false);
-  }
-}, [userWalletAddress, challenge, code, username, hasJoined]);
+      wsRef.current?.send(JSON.stringify({ type: "stake_confirmed", walletAddress: userWalletAddress, txHash: "sync-recovery" }));
 
+      setPlayers(prev => {
+        const w      = userWalletAddress.toLowerCase();
+        const exists = prev.some(p => p.walletAddress.toLowerCase() === w);
+        if (!exists) return [...prev, { walletAddress: userWalletAddress, username, points: 0, ready: false, txVerified: true }];
+        return prev.map(p => p.walletAddress.toLowerCase() === w ? { ...p, txVerified: true } : p);
+      });
 
-// // ── Add this effect — auto-sync on lobby load for both players ────────────
-// // Place it after your "Load challenge meta" useEffect
-// useEffect(() => {
-//   if (phase !== "lobby" || !userWalletAddress || !challenge || myTxVerified) return;
-//   if (!window.ethereum) return;
+      toast.success("Stake synced! Click 'I'm Ready' to continue.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not read on-chain data.");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [userWalletAddress, challenge, code, username, hasJoined]);
 
-//   // Wait 2s then silently check — catches the case where the page
-//   // was refreshed after staking but before the WS confirmed it
-//   const timer = setTimeout(async () => {
-//     try {
-//       const GET_QUIZ_ABI = [{
-//         inputs: [{ internalType: "bytes32", name: "quizId", type: "bytes32" }],
-//         name: "getQuiz",
-//         outputs: [{ components: [
-//           { internalType: "bytes32",  name: "id",             type: "bytes32"  },
-//           { internalType: "address",  name: "token",          type: "address"  },
-//           { internalType: "uint256",  name: "stakePerPlayer", type: "uint256"  },
-//           { internalType: "uint256",  name: "totalStaked",    type: "uint256"  },
-//           { internalType: "address",  name: "player1",        type: "address"  },
-//           { internalType: "address",  name: "player2",        type: "address"  },
-//           { internalType: "address",  name: "winner",         type: "address"  },
-//           { internalType: "bool",     name: "resolved",       type: "bool"     },
-//           { internalType: "bool",     name: "rewardClaimed",  type: "bool"     },
-//           { internalType: "uint256",  name: "createdAt",      type: "uint256"  },
-//         ], internalType: "struct QuizHub.Quiz", name: "", type: "tuple" }],
-//         stateMutability: "view",
-//         type: "function",
-//       }];
-
-//       const provider = new BrowserProvider(window.ethereum);
-//       const contract = new Contract(CONTRACT_ADDRESS, GET_QUIZ_ABI, provider);
-//       const quizId   = keccak256(toUtf8Bytes(code));
-//       const quiz     = await contract.getQuiz(quizId);
-
-//       const stakePerPlayer = quiz[2];
-//       const totalStaked    = quiz[3];
-//       const player1        = quiz[4].toLowerCase();
-//       const player2        = quiz[5].toLowerCase();
-//       const wallet         = userWalletAddress.toLowerCase();
-
-//       const hasStaked =
-//         (wallet === player1 && totalStaked >= stakePerPlayer) ||
-//         (wallet === player2 && totalStaked >= stakePerPlayer * 2n) ||
-//         (wallet !== player1 && wallet !== player2 && false); // not registered yet
-
-//       if (hasStaked) {
-//         wsRef.current?.send(JSON.stringify({
-//           type: "stake_confirmed",
-//           walletAddress: userWalletAddress,
-//           txHash: "auto-sync",
-//         }));
-//         setPlayers(prev => prev.map(p =>
-//           p.walletAddress.toLowerCase() === wallet ? { ...p, txVerified: true } : p
-//         ));
-//         toast.info("Stake detected on-chain — synced automatically ✓");
-//       }
-//     } catch {
-//       // Silent fail — user can always click the manual sync button
-//     }
-//   }, 2000);
-
-//   return () => clearTimeout(timer);
-// }, [phase, userWalletAddress, challenge, myTxVerified, code]);
- 
-
-const handleRematch = async () => {
+  const handleRematch = useCallback(async () => {
     if (!userWalletAddress) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/rematch`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ requesterWallet: userWalletAddress }),
       });
       const d = await res.json();
-      if (d.success) { toast.success(`Rematch! Code: ${d.newCode}`); router.push(`/challenge/${d.newCode}`); }
+      if (d.success) { toast.success(`Rematch! Code: ${d.newCode}`); router.push(`/quiz/${d.newCode}`); }
       else toast.error(d.detail || "Rematch failed");
     } catch { toast.error("Could not start rematch"); }
-  };
+  }, [userWalletAddress, code, router]);
 
-  // ── Derived ───────────────────────────────────────────────────────────────────
-  
-  
-  const myReady       = myPlayerEntry?.ready ?? false;
-  const myClaim       = pendingClaims.find(c => c.code === code);
-  const totalPool     = challenge ? (challenge.stake * 2).toFixed(2) : "0.00";
+  // ── Derived values (no hooks, safe after all hooks) ───────────────────────────
+  const myClaim   = pendingClaims.find(c => c.code === code);
+  const totalPool = challenge
+    ? (agreedStake ? (parseFloat(agreedStake) * 2).toFixed(2) : (challenge.stake * 2).toFixed(2))
+    : "0.00";
 
   // ─────────────────────────────────────────────────────────────────────────────
-  //  LOADING
+  //  RENDER — early returns AFTER all hooks
   // ─────────────────────────────────────────────────────────────────────────────
+
   if (phase === "loading") {
     return (
       <div className="flex flex-col min-h-screen bg-background">
@@ -975,25 +761,20 @@ const handleRematch = async () => {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  //  GAME OVER
-  // ─────────────────────────────────────────────────────────────────────────────
   if (phase === "game_over") {
     const sortedPlayers = Object.entries(finalScores).sort(([, a], [, b]) => b.points - a.points);
     const isTie = gameOutcome === "tie";
-
     return (
       <div className="fixed inset-0 bg-background flex flex-col overflow-auto">
         <Confetti active={showConfetti} />
         <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
           <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-            <button onClick={() => router.push("/challenge")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm font-bold transition-colors">
+            <button onClick={() => router.back()} className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm font-bold transition-colors">
               <ArrowLeft className="h-4 w-4" /> Back
             </button>
             <Badge variant="outline" className="font-mono">{code}</Badge>
           </div>
         </div>
-
         <div className="max-w-2xl mx-auto w-full px-4 py-8 pb-24 space-y-6">
           <div className="text-center space-y-2">
             <div className="text-6xl">{isTie ? "🤝" : winner === myWallet ? "🏆" : "🎯"}</div>
@@ -1002,7 +783,6 @@ const handleRematch = async () => {
             </h1>
             <p className="text-muted-foreground text-sm">{challenge?.topic}</p>
           </div>
-
           <div className="bg-card rounded-2xl border border-border overflow-hidden">
             <div className="px-4 py-3 border-b border-border">
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -1027,7 +807,6 @@ const handleRematch = async () => {
               })}
             </div>
           </div>
-
           {myClaim && (
             <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-4 space-y-3">
               <p className="font-bold text-yellow-700 dark:text-yellow-400 text-sm">🏆 Reward ready to claim!</p>
@@ -1037,7 +816,6 @@ const handleRematch = async () => {
               </Button>
             </div>
           )}
-
           <div className="flex flex-col gap-3">
             {canRematch && (
               <Button className="h-12 bg-primary text-primary-foreground font-bold border-0" onClick={handleRematch}>
@@ -1045,10 +823,10 @@ const handleRematch = async () => {
               </Button>
             )}
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/challenge")}>
+              <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/quiz")}>
                 <Home className="mr-2 h-4 w-4" /> Hub
               </Button>
-              <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/challenge/create")}>
+              <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/quiz/create")}>
                 <Plus className="mr-2 h-4 w-4" /> New
               </Button>
             </div>
@@ -1058,119 +836,12 @@ const handleRematch = async () => {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  //  PRE-JOIN — only shown to non-creator joiners in lobby
-  // ─────────────────────────────────────────────────────────────────────────────
-  const amCreator = challenge && userWalletAddress &&
-  challenge.creator?.toLowerCase() === userWalletAddress.toLowerCase();
-
-if (!hasJoined && !amCreator && phase === "lobby") {
-
-    if (!challenge) {
-      return (
-        <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-          <div className="w-full max-w-sm space-y-4 text-center animate-pulse">
-            <div className="h-28 bg-muted rounded-2xl" />
-            <div className="h-6 bg-muted rounded-xl w-3/4 mx-auto" />
-            <div className="h-4 bg-muted rounded-xl w-1/2 mx-auto" />
-            <div className="h-14 bg-muted rounded-2xl" />
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-8">
-        <div className="w-full max-w-sm space-y-6 text-center">
-
-          <div className="inline-flex flex-col items-center gap-1 bg-card border border-border rounded-2xl px-8 py-5 shadow-lg">
-            <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">Challenge Code</p>
-            <div className="text-5xl font-black tracking-[0.15em] text-foreground">{code}</div>
-          </div>
-
-          <div className="space-y-1">
-            <h2 className="text-2xl font-black text-foreground">{challenge.topic}</h2>
-            <p className="text-muted-foreground text-sm">
-              Stake: <span className="font-bold text-foreground">{challenge.stake} {challenge.token}</span>
-              {" · "}Creator: <span className="font-medium">{challenge.creatorName}</span>
-            </p>
-          </div>
-
-          {/* Pool summary */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-card border border-border rounded-xl p-3 text-center">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Your Stake</p>
-              <p className="font-black text-foreground text-lg">{challenge.stake} <span className="text-sm font-semibold text-muted-foreground">{challenge.token}</span></p>
-            </div>
-            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 text-center">
-              <p className="text-[10px] font-bold text-primary/70 uppercase tracking-wider mb-1">Total Pool</p>
-              <p className="font-black text-primary text-lg">{totalPool} <span className="text-sm font-semibold text-primary/70">{challenge.token}</span></p>
-            </div>
-          </div>
-
-          {!userWalletAddress ? (
-            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-xl px-4 py-3 text-amber-700 dark:text-amber-300 text-sm font-medium">
-              Connect your wallet to join
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3">
-                <Avatar className="h-10 w-10 shrink-0">
-                  <AvatarImage src={avatarUrl || undefined} />
-                  <AvatarFallback className="font-bold text-sm">{username?.slice(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="font-bold text-foreground text-sm">{username}</p>
-                  <p className="text-muted-foreground text-xs">{userWalletAddress?.slice(0, 8)}…</p>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 text-left text-xs text-blue-700 dark:text-blue-300 space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Automatic on-chain stake
-                </p>
-                <p>
-                  Clicking Join will open your wallet to approve{" "}
-                  <b>{challenge.stake} {challenge.token}</b> on Celo.
-                  The transaction is verified automatically.
-                </p>
-              </div>
-
-              <Button
-                className="w-full h-14 text-lg font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl"
-                onClick={handleStake}
-                disabled={isStaking}
-              >
-                {isStaking ? (
-                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Approving stake…</>
-                ) : (
-                  <><Zap className="mr-2 h-5 w-5" /> Join &amp; Stake {challenge.stake} {challenge.token}</>
-                )}
-              </Button>
-              <button
-                onClick={handleSyncStake}
-                disabled={isSyncing}
-                className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors py-1"
-              >
-                {isSyncing ? "Checking on-chain…" : "Already staked? Sync my stake"}
-             </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  //  COUNTDOWN
-  // ─────────────────────────────────────────────────────────────────────────────
   if (phase === "countdown") {
     return (
       <div className="fixed inset-0 bg-background flex items-center justify-center z-50">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground text-xl uppercase tracking-widest font-black">Round: {currentRoundName}</p>
-          <div key={countdownVal} className="text-[10rem] font-black text-primary leading-none"
-            style={{ animation: "zoomFade 0.9s ease-out forwards" }}>
+          <div key={countdownVal} className="text-[10rem] font-black text-primary leading-none" style={{ animation: "zoomFade 0.9s ease-out forwards" }}>
             {countdownVal}
           </div>
         </div>
@@ -1179,15 +850,11 @@ if (!hasJoined && !amCreator && phase === "lobby") {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  //  QUESTION / REVEAL
-  // ─────────────────────────────────────────────────────────────────────────────
   if ((phase === "question" || phase === "reveal") && currentQ) {
     const isReveal = phase === "reveal";
     return (
       <div className="fixed inset-0 bg-background flex flex-col overflow-hidden z-50">
         {!isReveal && <LinearTimer seconds={timeLeft} total={currentQ.timeLimit} />}
-
         <div className="flex items-center justify-between px-4 py-3 bg-card border-b border-border shrink-0">
           <Badge variant="outline" className="font-mono">Q{currentQ.questionIndex + 1}/{currentQ.totalQuestions}</Badge>
           <span className="text-xs font-bold text-muted-foreground capitalize">{currentRoundName} round</span>
@@ -1195,11 +862,9 @@ if (!hasJoined && !amCreator && phase === "lobby") {
             <Zap className="h-3.5 w-3.5" /> {myPlayerEntry?.points ?? 0}
           </div>
         </div>
-
         <div className="flex-1 flex items-center justify-center px-4 py-6 text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-foreground leading-snug max-w-xl">{currentQ.question}</h2>
         </div>
-
         {isReveal && selectedId && (
           <div className="flex justify-center px-4 pb-2 shrink-0">
             <div className={cn("px-8 py-3 rounded-full font-black text-lg border-2",
@@ -1211,7 +876,6 @@ if (!hasJoined && !amCreator && phase === "lobby") {
             </div>
           </div>
         )}
-
         <div className="w-full max-w-2xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 gap-3 pb-8 shrink-0">
           {currentQ.options.map(opt => {
             const style      = OPTION_STYLES[opt.id] ?? OPTION_STYLES.A;
@@ -1219,13 +883,8 @@ if (!hasJoined && !amCreator && phase === "lobby") {
             const isCorrect  = isReveal && opt.id === revealCorrectId;
             const isWrong    = isReveal && isSelected && opt.id !== revealCorrectId;
             return (
-              <button key={opt.id}
-                disabled={isReveal || timeLeft <= 0 || hasSubmitted}
-                onClick={() => handleSelectAnswer(opt.id)}
-                className={cn(
-                  "relative flex items-center justify-between px-6 py-5 rounded-2xl",
-                  "text-white font-bold text-lg transition-all duration-150 active:scale-[0.98] shadow-md",
-                  style.bg,
+              <button key={opt.id} disabled={isReveal || timeLeft <= 0 || hasSubmitted} onClick={() => handleSelectAnswer(opt.id)}
+                className={cn("relative flex items-center justify-between px-6 py-5 rounded-2xl text-white font-bold text-lg transition-all duration-150 active:scale-[0.98] shadow-md", style.bg,
                   isSelected && !isReveal && `ring-4 ${style.ring} ring-offset-2 ring-offset-background`,
                   isReveal && !isCorrect && !isWrong && "opacity-40 grayscale",
                   isCorrect && "ring-4 ring-white brightness-110",
@@ -1246,24 +905,11 @@ if (!hasJoined && !amCreator && phase === "lobby") {
             );
           })}
         </div>
-
-        {/* Floating chat is available in-game too */}
-        <FloatingChat
-          messages={chatMessages}
-          myWallet={myWallet}
-          chatInput={chatInput}
-          setChatInput={setChatInput}
-          onSend={handleSendChat}
-          chatBottomRef={chatBottomRef}
-          unreadCount={unreadCount}
-        />
+        <FloatingChat messages={chatMessages} myWallet={myWallet} chatInput={chatInput} setChatInput={setChatInput} onSend={handleSendChat} chatBottomRef={chatBottomRef} unreadCount={unreadCount} />
       </div>
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  //  ROUND END
-  // ─────────────────────────────────────────────────────────────────────────────
   if (phase === "round_end") {
     const sorted = Object.entries(roundScores).sort(([, a], [, b]) => b - a);
     return (
@@ -1294,22 +940,102 @@ if (!hasJoined && !amCreator && phase === "lobby") {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  //  LOBBY  (creator sees this immediately; joiner sees it after staking)
+  //  PRE-JOIN — only for non-creator joiners arriving directly (not from pre-lobby)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const amCreator = challenge && userWalletAddress &&
+    challenge.creator?.toLowerCase() === userWalletAddress.toLowerCase();
+
+  if (!hasJoined && !amCreator && phase === "lobby") {
+    // Coming from pre-lobby — optimistic effect hasn't fired yet, return null for one tick
+    if (cameFromPreLobby && agreedStake && userWalletAddress) {
+      return null;
+    }
+
+    if (!challenge) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+          <div className="w-full max-w-sm space-y-4 text-center animate-pulse">
+            <div className="h-28 bg-muted rounded-2xl" />
+            <div className="h-6 bg-muted rounded-xl w-3/4 mx-auto" />
+            <div className="h-4 bg-muted rounded-xl w-1/2 mx-auto" />
+            <div className="h-14 bg-muted rounded-2xl" />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm space-y-6 text-center">
+          <div className="inline-flex flex-col items-center gap-1 bg-card border border-border rounded-2xl px-8 py-5 shadow-lg">
+            <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">Challenge Code</p>
+            <div className="text-5xl font-black tracking-[0.15em] text-foreground">{code}</div>
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-2xl font-black text-foreground">{challenge.topic}</h2>
+            <p className="text-muted-foreground text-sm">
+              Stake: <span className="font-bold text-foreground">{challenge.stake} {challenge.token}</span>
+              {" · "}Creator: <span className="font-medium">{challenge.creatorName}</span>
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-card border border-border rounded-xl p-3 text-center">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Your Stake</p>
+              <p className="font-black text-foreground text-lg">{challenge.stake} <span className="text-sm font-semibold text-muted-foreground">{challenge.token}</span></p>
+            </div>
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 text-center">
+              <p className="text-[10px] font-bold text-primary/70 uppercase tracking-wider mb-1">Total Pool</p>
+              <p className="font-black text-primary text-lg">{totalPool} <span className="text-sm font-semibold text-primary/70">{challenge.token}</span></p>
+            </div>
+          </div>
+          {!userWalletAddress ? (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-xl px-4 py-3 text-amber-700 dark:text-amber-300 text-sm font-medium">
+              Connect your wallet to join
+              <WalletConnectButton/>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3">
+                <Avatar className="h-10 w-10 shrink-0">
+                  <AvatarImage src={avatarUrl || undefined} />
+                  <AvatarFallback className="font-bold text-sm">{username?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="font-bold text-foreground text-sm">{username}</p>
+                  <p className="text-muted-foreground text-xs">{userWalletAddress?.slice(0, 8)}…</p>
+                </div>
+              </div>
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 text-left text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Automatic on-chain stake
+                </p>
+                <p>Clicking Join will open your wallet to approve <b>{challenge.stake} {challenge.token}</b> on Celo. The transaction is verified automatically.</p>
+              </div>
+              <Button className="w-full h-14 text-lg font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl" onClick={handleStake} disabled={isStaking}>
+                {isStaking ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Approving stake…</> : <><Zap className="mr-2 h-5 w-5" /> Join &amp; Stake {challenge.stake} {challenge.token}</>}
+              </Button>
+              <button onClick={handleSyncStake} disabled={isSyncing} className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors py-1">
+                {isSyncing ? "Checking on-chain…" : "Already staked? Sync my stake"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  LOBBY
   // ─────────────────────────────────────────────────────────────────────────────
   const allVerified = players.length >= 2 && players.every(p => p.txVerified);
   const allReady    = allVerified && players.every(p => p.ready);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-
-      {/* ── Lobby Header with pool info ── */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/challenge")}
-              className="hover:bg-muted p-2 rounded-full transition-colors"
-            >
+            <button onClick={() => router.push("/quiz")} className="hover:bg-muted p-2 rounded-full transition-colors">
               <ArrowLeft className="h-5 w-5" />
             </button>
             <div>
@@ -1320,27 +1046,20 @@ if (!hasJoined && !amCreator && phase === "lobby") {
               <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{challenge?.topic}</p>
             </div>
           </div>
-
-          {/* Pool info */}
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
               <p className="text-[10px] font-bold text-muted-foreground uppercase">Per Player</p>
-              <p className="font-bold text-sm">{challenge?.stake} {challenge?.token}</p>
+              <p className="font-bold text-sm">{displayStake} {challenge?.token}</p>
             </div>
             <div className="bg-primary/10 border border-primary/20 px-4 py-2 rounded-2xl flex flex-col items-center min-w-[90px]">
               <p className="text-[9px] font-black text-primary uppercase leading-none mb-1">Total Pool</p>
-              <p className="text-xl font-black text-primary leading-none">
-                {totalPool} <span className="text-xs">{challenge?.token}</span>
-              </p>
+              <p className="text-xl font-black text-primary leading-none">{totalPool} <span className="text-xs">{challenge?.token}</span></p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Body ── */}
       <div className="max-w-4xl mx-auto w-full px-4 py-6 pb-32 space-y-5">
-
-        {/* Players grid */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <h2 className="font-bold text-foreground text-sm flex items-center gap-2">
@@ -1352,7 +1071,6 @@ if (!hasJoined && !amCreator && phase === "lobby") {
               </span>
             )}
           </div>
-
           {players.length === 0 ? (
             <div className="flex flex-col items-center py-12 text-center">
               <Users className="h-8 w-8 text-muted-foreground/20 mb-3" />
@@ -1365,19 +1083,14 @@ if (!hasJoined && !amCreator && phase === "lobby") {
                 const isMe   = p.walletAddress.toLowerCase() === myWallet;
                 const isHost = p.walletAddress.toLowerCase() === challenge?.creator?.toLowerCase();
                 const statusLabel = (() => {
-                  if (p.ready)      return { text: "Ready ✓",         cls: "text-emerald-500" };
-                  if (p.txVerified) return { text: "Stake verified",  cls: "text-blue-400" };
+                  if (p.ready)      return { text: "Ready ✓",        cls: "text-emerald-500" };
+                  if (p.txVerified) return { text: "Stake verified", cls: "text-blue-400" };
                   if (isHost)       return { text: "Awaiting stake…", cls: "text-yellow-500" };
-                  return              { text: "Awaiting stake…",      cls: "text-muted-foreground" };
+                  return              { text: "Awaiting stake…",     cls: "text-muted-foreground" };
                 })();
                 return (
-                  <div key={p.walletAddress} className={cn(
-                    "flex flex-col items-center gap-2 rounded-2xl p-4 border text-center transition-all",
-                    p.ready
-                      ? "border-emerald-400/40 bg-emerald-500/5"
-                      : p.txVerified
-                        ? "border-blue-400/30 bg-blue-500/5"
-                        : "border-border bg-muted/20"
+                  <div key={p.walletAddress} className={cn("flex flex-col items-center gap-2 rounded-2xl p-4 border text-center transition-all",
+                    p.ready ? "border-emerald-400/40 bg-emerald-500/5" : p.txVerified ? "border-blue-400/30 bg-blue-500/5" : "border-border bg-muted/20"
                   )}>
                     <Avatar className="h-14 w-14 border-2 border-border">
                       <AvatarFallback className="font-bold text-base">{p.username?.slice(0, 2).toUpperCase()}</AvatarFallback>
@@ -1391,8 +1104,6 @@ if (!hasJoined && !amCreator && phase === "lobby") {
                   </div>
                 );
               })}
-
-              {/* Empty slot while waiting for second player */}
               {players.length < 2 && (
                 <div className="flex flex-col items-center gap-2 rounded-2xl p-4 border border-dashed border-border text-center">
                   <div className="h-14 w-14 rounded-full border-2 border-dashed border-border flex items-center justify-center">
@@ -1406,51 +1117,38 @@ if (!hasJoined && !amCreator && phase === "lobby") {
           )}
         </div>
 
-        {/* Share invite link — shown when waiting for opponent */}
         {players.length < 2 && (
           <button
-            onClick={() => {
-              navigator.clipboard.writeText(`${window.location.origin}/challenge/${code}`);
-              toast.success("Invite link copied!");
-            }}
+            onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/challenge/${code}`); toast.success("Invite link copied!"); }}
             className="w-full h-11 rounded-2xl border border-border bg-card text-sm font-bold hover:bg-muted transition-all flex items-center justify-center gap-2 text-foreground"
           >
             <Share2 className="h-4 w-4" /> Copy invite link
           </button>
         )}
 
-        {/* ── Dynamic action button ── */}
         {hasJoined && (
           <div className="space-y-3 pt-2">
-
-            {/* State 1: Not yet staked — show Stake button (for both creator and joiner retries) */}
             {!myTxVerified && (
-             <>
-             <Button
-                className="w-full h-16 text-lg font-black bg-yellow-500 hover:bg-yellow-400 text-yellow-950 rounded-2xl shadow-[0_4px_0_rgb(161,120,0)] active:translate-y-1 active:shadow-none transition-all"
-                onClick={handleStake}
-                disabled={isStaking || stakeVerifying}
-              >
-                {isStaking ? (
-                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Confirming…</>
-                ) : stakeVerifying ? (
-                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Verifying on-chain…</>
-                ) : (
-                  <><Zap className="mr-2 h-6 w-6" /> Stake {challenge?.stake} {challenge?.token} to Play</>
-                )}
-              </Button>
-               <button
-                onClick={handleSyncStake}
-                disabled={isSyncing}
-                className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors py-1"
-              >
-                {isSyncing ? "Checking on-chain…" : "Already staked? Sync my stake"}
-             </button>
+              <>
+                <Button
+                  className="w-full h-16 text-lg font-black bg-yellow-500 hover:bg-yellow-400 text-yellow-950 rounded-2xl shadow-[0_4px_0_rgb(161,120,0)] active:translate-y-1 active:shadow-none transition-all"
+                  onClick={handleStake}
+                  disabled={isStaking || stakeVerifying}
+                >
+                  {isStaking ? (
+                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Confirming…</>
+                  ) : stakeVerifying ? (
+                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Verifying on-chain…</>
+                  ) : (
+                    <><Zap className="mr-2 h-6 w-6" /> Stake {displayStake} {challenge?.token} to Play</>
+                  )}
+                </Button>
+                <button onClick={handleSyncStake} disabled={isSyncing} className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors py-1">
+                  {isSyncing ? "Checking on-chain…" : "Already staked? Sync my stake"}
+                </button>
               </>
-              
             )}
 
-            {/* State 2: Staked, not yet ready */}
             {myTxVerified && !myReady && (
               <Button
                 className="w-full h-16 text-lg font-black bg-emerald-500 hover:bg-emerald-400 text-white rounded-2xl shadow-[0_4px_0_rgb(16,120,60)] active:translate-y-1 active:shadow-none transition-all"
@@ -1460,22 +1158,18 @@ if (!hasJoined && !amCreator && phase === "lobby") {
               </Button>
             )}
 
-            {/* State 3: Ready and waiting */}
             {myReady && (
               <div className="w-full h-16 flex items-center justify-center gap-3 rounded-2xl bg-muted/50 border-2 border-dashed border-border">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                <span className="font-bold text-muted-foreground uppercase tracking-widest text-sm">
-                  Waiting for Opponent…
-                </span>
+                <span className="font-bold text-muted-foreground uppercase tracking-widest text-sm">Waiting for Opponent…</span>
               </div>
             )}
 
-            {/* Stake info strip */}
             {!myTxVerified && (
               <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900">
                 <ShieldCheck className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-                  Your wallet will prompt you to approve <strong>{challenge?.stake} {challenge?.token}</strong> on Celo.
+                  Your wallet will prompt you to approve <strong>{displayStake} {challenge?.token}</strong> on Celo.
                   The contract holds funds until the game ends — winner takes the pool of <strong>{totalPool} {challenge?.token}</strong>.
                 </p>
               </div>
@@ -1484,17 +1178,8 @@ if (!hasJoined && !amCreator && phase === "lobby") {
         )}
       </div>
 
-      {/* ── Floating Chat ── */}
       {hasJoined && (
-        <FloatingChat
-          messages={chatMessages}
-          myWallet={myWallet}
-          chatInput={chatInput}
-          setChatInput={setChatInput}
-          onSend={handleSendChat}
-          chatBottomRef={chatBottomRef}
-          unreadCount={unreadCount}
-        />
+        <FloatingChat messages={chatMessages} myWallet={myWallet} chatInput={chatInput} setChatInput={setChatInput} onSend={handleSendChat} chatBottomRef={chatBottomRef} unreadCount={unreadCount} />
       )}
     </div>
   );

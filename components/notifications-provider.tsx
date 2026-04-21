@@ -12,7 +12,7 @@ function getWsNotifyUrl() {
   if (typeof window === "undefined") return "wss://127.0.0.1:8000/ws/notify";
   return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
     ? "ws://127.0.0.1:8000/ws/notify"
-    : "wss://identical-vivi-faucetdrops-41e9c56b.koyeb.app/ws/notify";
+    : "wss://faucetpay-backend.koyeb.app/ws/notify";
 }
 
 const POPUP_DURATION = 30; // seconds
@@ -320,7 +320,7 @@ export function NotificationBell() {
       prev.map((n) => (n.id === popup.notification.id ? { ...n, isRead: true } : n))
     );
     setPopup(null);
-    if (code) router.push(`/challenge/${code}`);
+    if (code) router.push(`/quiz/${code}/pre-lobby`);
   };
 
   const handleDecline = () => {
@@ -387,7 +387,13 @@ export function NotificationBell() {
                     key={n.id}
                     onClick={() => {
                       markOneRead(n.id);
-                      if (n.data?.code) router.push(`/challenge/${n.data.code}`);
+                      if (n.data?.code) {
+                        if (n.type === "public_challenge" || n.type === "challenge_invite") {
+                          router.push(`/quiz/${n.data.code}/pre-lobby`);  // ← negotiate first
+                        } else {
+                          router.push(`/quiz/${n.data.code}`);             // game_over, player_joined → straight to lobby
+                        }
+                      }
                     }}
                     className={cn(
                       "flex gap-3 px-4 py-3 border-b border-border cursor-pointer hover:bg-muted/50 transition-colors",

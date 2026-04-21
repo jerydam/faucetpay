@@ -240,7 +240,77 @@ export const ERC20_ABI = [
     type: "function",
   },
 ];
-export const QUIZ_HUB_ABI = [
+export const QUIZ_HUB_ABI =[
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "token",
+				"type": "address"
+			}
+		],
+		"name": "addToken",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "quizId",
+				"type": "bytes32"
+			}
+		],
+		"name": "claimReward",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "quizId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address",
+				"name": "token",
+				"type": "address"
+			}
+		],
+		"name": "createQuiz",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "quizId",
+				"type": "bytes32"
+			}
+		],
+		"name": "emergencyRefund",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "quizId",
+				"type": "bytes32"
+			}
+		],
+		"name": "refundQuiz",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
 	{
 		"inputs": [
 			{
@@ -292,6 +362,19 @@ export const QUIZ_HUB_ABI = [
 				"type": "address"
 			}
 		],
+		"name": "removeToken",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "token",
+				"type": "address"
+			}
+		],
 		"name": "SafeERC20FailedOperation",
 		"type": "error"
 	},
@@ -334,12 +417,6 @@ export const QUIZ_HUB_ABI = [
 				"internalType": "address",
 				"name": "token",
 				"type": "address"
-			},
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "stake",
-				"type": "uint256"
 			}
 		],
 		"name": "QuizCreated",
@@ -403,6 +480,13 @@ export const QUIZ_HUB_ABI = [
 		"type": "event"
 	},
 	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -441,6 +525,100 @@ export const QUIZ_HUB_ABI = [
 		"type": "event"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_recipient",
+				"type": "address"
+			}
+		],
+		"name": "setFeeRecipient",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_resolver",
+				"type": "address"
+			}
+		],
+		"name": "setResolver",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "quizId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "stakePerPlayer",
+				"type": "uint256"
+			}
+		],
+		"name": "setStakePerPlayer",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "quizId",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "address",
+				"name": "winner",
+				"type": "address"
+			}
+		],
+		"name": "setWinner",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "quizId",
+				"type": "bytes32"
+			}
+		],
+		"name": "stake",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "quizId",
+				"type": "bytes32"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "stakePerPlayer",
+				"type": "uint256"
+			}
+		],
+		"name": "StakeAgreed",
+		"type": "event"
+	},
+	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -467,6 +645,19 @@ export const QUIZ_HUB_ABI = [
 		"type": "event"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -484,6 +675,49 @@ export const QUIZ_HUB_ABI = [
 		],
 		"name": "WinnerSet",
 		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "withdrawNative",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "token",
+				"type": "address"
+			}
+		],
+		"name": "withdrawToken",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"stateMutability": "payable",
+		"type": "receive"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "allowedTokens",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
 	},
 	{
 		"inputs": [],
@@ -513,223 +747,12 @@ export const QUIZ_HUB_ABI = [
 	},
 	{
 		"inputs": [],
-		"name": "USDC",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "USDT",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "token",
-				"type": "address"
-			}
-		],
-		"name": "addToken",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"name": "allowedTokens",
-		"outputs": [
-			{
-				"internalType": "bool",
-				"name": "",
-				"type": "bool"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "quizId",
-				"type": "bytes32"
-			}
-		],
-		"name": "claimReward",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "quizId",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "address",
-				"name": "token",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "stakePerPlayer",
-				"type": "uint256"
-			}
-		],
-		"name": "createQuiz",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "quizId",
-				"type": "bytes32"
-			}
-		],
-		"name": "emergencyRefund",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [],
 		"name": "feeRecipient",
 		"outputs": [
 			{
 				"internalType": "address",
 				"name": "",
 				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"name": "feesAccrued",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address[]",
-				"name": "tokens",
-				"type": "address[]"
-			}
-		],
-		"name": "getBatchFees",
-		"outputs": [
-			{
-				"internalType": "address[]",
-				"name": "",
-				"type": "address[]"
-			},
-			{
-				"internalType": "uint256[]",
-				"name": "",
-				"type": "uint256[]"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "token",
-				"type": "address"
-			},
-			{
-				"internalType": "bytes32[]",
-				"name": "quizIds",
-				"type": "bytes32[]"
-			}
-		],
-		"name": "getContractStats",
-		"outputs": [
-			{
-				"components": [
-					{
-						"internalType": "uint256",
-						"name": "totalQuizzes",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "openQuizzes",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "activeQuizzes",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "resolvedQuizzes",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "pendingClaims",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "totalStaked",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "totalFeesAccrued",
-						"type": "uint256"
-					}
-				],
-				"internalType": "struct QuizHub.QuizStats",
-				"name": "stats",
-				"type": "tuple"
 			}
 		],
 		"stateMutability": "view",
@@ -756,49 +779,6 @@ export const QUIZ_HUB_ABI = [
 			}
 		],
 		"stateMutability": "pure",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "token",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "activelyStaked",
-				"type": "uint256"
-			}
-		],
-		"name": "getExcessFunds",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "token",
-				"type": "address"
-			}
-		],
-		"name": "getFeesAccrued",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -894,45 +874,16 @@ export const QUIZ_HUB_ABI = [
 						"internalType": "uint256",
 						"name": "createdAt",
 						"type": "uint256"
+					},
+					{
+						"internalType": "bool",
+						"name": "stakeAgreed",
+						"type": "bool"
 					}
 				],
 				"internalType": "struct QuizHub.Quiz",
 				"name": "",
 				"type": "tuple"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32[]",
-				"name": "quizIds",
-				"type": "bytes32[]"
-			}
-		],
-		"name": "getQuizCountByState",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "open",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "active",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "resolved",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "pendingClaim",
-				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -1067,42 +1018,14 @@ export const QUIZ_HUB_ABI = [
 				"internalType": "uint256",
 				"name": "createdAt",
 				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "stakeAgreed",
+				"type": "bool"
 			}
 		],
 		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "quizId",
-				"type": "bytes32"
-			}
-		],
-		"name": "refundQuiz",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "token",
-				"type": "address"
-			}
-		],
-		"name": "removeToken",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "renounceOwnership",
-		"outputs": [],
-		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
@@ -1119,110 +1042,29 @@ export const QUIZ_HUB_ABI = [
 		"type": "function"
 	},
 	{
-		"inputs": [
+		"inputs": [],
+		"name": "USDC",
+		"outputs": [
 			{
 				"internalType": "address",
-				"name": "_recipient",
+				"name": "",
 				"type": "address"
 			}
 		],
-		"name": "setFeeRecipient",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "_resolver",
-				"type": "address"
-			}
-		],
-		"name": "setResolver",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "quizId",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "address",
-				"name": "winner",
-				"type": "address"
-			}
-		],
-		"name": "setWinner",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "quizId",
-				"type": "bytes32"
-			}
-		],
-		"name": "stake",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "newOwner",
-				"type": "address"
-			}
-		],
-		"name": "transferOwnership",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "token",
-				"type": "address"
-			}
-		],
-		"name": "withdrawFees",
-		"outputs": [],
-		"stateMutability": "nonpayable",
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
 		"inputs": [],
-		"name": "withdrawNative",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
+		"name": "USDT",
+		"outputs": [
 			{
 				"internalType": "address",
-				"name": "token",
+				"name": "",
 				"type": "address"
 			}
 		],
-		"name": "withdrawToken",
-		"outputs": [],
-		"stateMutability": "nonpayable",
+		"stateMutability": "view",
 		"type": "function"
-	},
-	{
-		"stateMutability": "payable",
-		"type": "receive"
 	}
 ]

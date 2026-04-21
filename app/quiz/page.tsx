@@ -82,9 +82,11 @@ const STATUS_CONFIG = {
 function LobbyCard({
   challenge,
   onClick,
+  loading,
 }: {
   challenge: LobbyChallenge;
   onClick: () => void;
+  loading?: boolean;
 }) {
   const playerCount = 1; // lobby view doesn't expose player count; challenge has 1 slot taken (creator)
   const chainName   = CHAIN_NAMES[challenge.chain_id] ?? `Chain ${challenge.chain_id}`;
@@ -136,8 +138,11 @@ function LobbyCard({
             <Hash className="h-3 w-3" />{challenge.code}
           </span>
           <span className="text-xs font-bold text-blue-600 dark:text-blue-400 group-hover:text-blue-500 flex items-center gap-1">
-            Enter Lobby <ChevronRight className="h-3.5 w-3.5" />
-          </span>
+          {loading
+            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</>
+            : <>Enter Lobby <ChevronRight className="h-3.5 w-3.5" /></>
+          }
+        </span>
         </div>
       </div>
     </button>
@@ -146,6 +151,52 @@ function LobbyCard({
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function QuizListPage() {
+ async function resolveDestination(
+  code: string,
+  userWallet: string | null,
+  apiBase: string,
+): Promise<string> {
+  const r = await fetch(`${apiBase}/api/challenge/${code}`);
+  const d = await r.json();
+
+  if (!d.success) throw new Error("Challenge not found");
+
+  const c: ChallengeDetail = d.challenge;
+
+  // Already in progress or finished → straight to lobby regardless of who you are
+  if (c.status === "active" || c.status === "finished") {
+    return `/quiz/${code}`;
+  }
+
+  if (!userWallet) {
+    return `/quiz/${code}/pre-lobby`;
+  }
+
+  const wallet     = userWallet.toLowerCase();
+  const isCreator  = c.creator?.toLowerCase() === wallet;
+  const playerList = Object.keys(c.players ?? {}).map(w => w.toLowerCase());
+  const hasJoined  = playerList.includes(wallet);
+
+  if (isCreator) {
+    // Creator goes to pre-lobby UNLESS the challenger has already joined
+    // i.e. someone other than the creator is in the players list
+    const opponentHasJoined = playerList.some(w => w !== wallet);
+    if (opponentHasJoined) {
+      // Challenger is in the lobby and has staked — go straight to game lobby
+      return `/quiz/${code}`;
+    }
+    // Still waiting for a challenger to negotiate/join → pre-lobby
+    return `/quiz/${code}/pre-lobby`;
+  }
+
+  if (hasJoined) {
+    // Non-creator who already joined and staked → straight to lobby
+    return `/quiz/${code}`;
+  }
+
+  // New challenger → pre-lobby to negotiate
+  return `/quiz/${code}/pre-lobby`;
+}
   const router                                         = useRouter();
   const { address: userWalletAddress }                 = useWallet();
   const [lobbyChallenges, setLobbyChallenges]          = useState<LobbyChallenge[]>([]);
@@ -158,7 +209,20 @@ export default function QuizListPage() {
   const [isJumping, setIsJumping]                      = useState(false);
   const [lobbyPage, setLobbyPage]                      = useState(0);
   const PAGE_SIZE                                      = 20;
+  const [navigating, setNavigating] = useState<string | null>(null);
 
+  const handleLobbyCardClick = async (code: string) => {
+  if (navigating) return;
+  setNavigating(code);
+  try {
+    const dest = await resolveDestination(code, userWalletAddress, API_BASE_URL);
+    router.push(dest);
+  } catch {
+    toast.error("Could not open challenge");
+  } finally {
+    setNavigating(null);
+  }
+};
   // ── Fetch public lobby (GET /api/challenge/lobby) ──
   const fetchLobby = async (silent = false) => {
     if (!silent) setIsLoading(true); else setIsRefreshing(true);
@@ -176,7 +240,8 @@ export default function QuizListPage() {
       setIsRefreshing(false);
     }
   };
-
+  
+ 
   // ── Fetch player history (GET /api/challenge/{wallet}/history) ──
   const fetchHistory = async () => {
     if (!userWalletAddress) return;
@@ -206,23 +271,18 @@ export default function QuizListPage() {
 
   // ── Jump to code (GET /api/challenge/{code}) ──
   const handleJumpToCode = async () => {
-    const code = codeInput.trim().toUpperCase();
-    if (code.length < 4) { toast.error("Enter a valid challenge code"); return; }
-    setIsJumping(true);
-    try {
-      const r = await fetch(`${API_BASE_URL}/api/challenge/${code}`);
-      const d = await r.json();
-      if (d.success) {
-        router.push(`/quiz/${code}`);
-      } else {
-        toast.error("Challenge not found");
-      }
-    } catch {
-      toast.error("Failed to check code");
-    } finally {
-      setIsJumping(false);
-    }
-  };
+  const code = codeInput.trim().toUpperCase();
+  if (code.length < 4) { toast.error("Enter a valid challenge code"); return; }
+  setIsJumping(true);
+  try {
+    const dest = await resolveDestination(code, userWalletAddress, API_BASE_URL);
+    router.push(dest);
+  } catch {
+    toast.error("Challenge not found");
+  } finally {
+    setIsJumping(false);
+  }
+};
 
   // ── Filtered lobby list ──
   const filteredLobby = useMemo(() => {
@@ -383,9 +443,10 @@ export default function QuizListPage() {
                     className="animate-in fade-in slide-in-from-bottom-3"
                     style={{ animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}
                   >
-                    <LobbyCard
+                   <LobbyCard
                       challenge={challenge}
-                      onClick={() => router.push(`/quiz/${challenge.code}`)}
+                      onClick={() => handleLobbyCardClick(challenge.code)}
+                      loading={navigating === challenge.code}
                     />
                   </div>
                 ))}

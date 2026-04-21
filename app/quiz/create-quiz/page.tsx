@@ -34,7 +34,7 @@ const API_BASE_URL = "http://127.0.0.1:8000";
  * These must match the QUIZ_HUB_CONTRACT env var on the backend.
  */
 const QUIZ_HUB_ADDRESSES: Record<number, string> = {
-  42220: process.env.NEXT_PUBLIC_QUIZ_HUB_CELO  ?? "0x51fC56257f92FBd94DBC1B39330900285497dFF1",
+  42220: process.env.NEXT_PUBLIC_QUIZ_HUB_CELO  ?? "0xceDC56a09ae64563D3b04cCde4dC2A2E0667Ce8B",
 
 };
 
@@ -149,16 +149,14 @@ function WizardProgress({
 type TxPhase =
   | "idle"
   | "backend"      // POST /api/challenge/create
-  | "approving"    // waiting for ERC-20 approve tx
-  | "staking"      // waiting for QuizHub.stake tx
+  | "Creating"      // waiting for QuizHub.stake tx
   | "done";
 
 function TxStatusPill({ phase }: { phase: TxPhase }) {
   const labels: Record<TxPhase, string> = {
     idle:      "",
     backend:   "🤖 Generating questions…",
-    approving: "🔐 Approve token spend in wallet…",
-    staking:   "⛓️ Confirm stake transaction…",
+    Creating:   "⛓️ Confirm Create transaction…",
     done:      "✅ Challenge live!",
   };
   if (phase === "idle") return null;
@@ -256,7 +254,7 @@ export default function CreateChallengePage() {
     console.log("[createQuizOnChain] token address:", token.address);
 
     // ── Step: Create quiz on-chain (no approve, no fee, no transfer) ───────
-    setTxPhase("creating");
+    setTxPhase("Creating");
 
     toast.info("Confirm quiz creation in your wallet…");
 
@@ -266,7 +264,7 @@ export default function CreateChallengePage() {
       stakePerPlayer: amountBN.toString(),
     });
 
-    const createTx = await quizHub.createQuiz(quizId, token.address, amountBN);
+    const createTx = await quizHub.createQuiz(quizId, token.address);
     console.log("[createQuizOnChain] createTx hash:", createTx.hash);
 
     toast.loading("Waiting for creation confirmation…", { id: "create-confirm" });
@@ -337,7 +335,6 @@ export default function CreateChallengePage() {
       setTxPhase("done");
       setCreatedCode(code);
       toast.success(`🎉 Challenge live! Code: ${code}`);
-      setTimeout(() => router.push(`/quiz/${code}`), 1400);
 
     } catch (err: any) {
       setTxPhase("idle");
@@ -373,19 +370,14 @@ export default function CreateChallengePage() {
                 <p className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Challenge Code</p>
                 <div className="text-5xl font-black tracking-[0.15em] text-primary">{createdCode}</div>
               </div>
-              <Button
-                className="w-full h-12 rounded-2xl font-bold text-base"
-                onClick={() => { navigator.clipboard.writeText(createdCode); toast.success("Copied! 📋"); }}
-              >
-                <Copy className="mr-2 h-4 w-4" /> Copy Code
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full h-11 rounded-2xl border-2 font-bold"
-                onClick={() => router.push(`/quiz/${createdCode}`)}
-              >
-                Open Lobby <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
+              
+             <Button
+                  variant="outline"
+                  className="w-full h-11 rounded-2xl border-2 font-bold"
+                  onClick={() => router.push(`/quiz/${createdCode}/pre-lobby`)}  // ← was /quiz/${createdCode}
+                >
+                  Open Pre-Lobby <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
             </div>
           </div>
         </div>
@@ -650,16 +642,6 @@ export default function CreateChallengePage() {
         </div>
       </div>
 
-      {/* On-chain flow explanation */}
-      <div className="rounded-2xl border border-dashed border-border px-4 py-3 text-xs text-muted-foreground space-y-1.5">
-        <p className="font-bold text-foreground">What happens when you hit Launch</p>
-        <p>1. AI generates 3 rounds × 3 questions for your topic.</p>
-        <p>2. Your wallet signs an <strong>approve</strong> transaction (skip if already approved).</p>
-        <p>3. Your wallet signs a <strong>stake</strong> transaction — funds locked on-chain.</p>
-        <p>4. Share the 6-char code. Your opponent stakes when they join.</p>
-        <p>5. Quiz starts once both stakes are confirmed. Winner auto-receives payout via <code>claimReward()</code>.</p>
-      </div>
-
       <button
         onClick={handleCreate}
         disabled={isSubmitting || !userWalletAddress || !QUIZ_HUB_ADDRESSES[chainId]}
@@ -673,13 +655,13 @@ export default function CreateChallengePage() {
       >
         <span className="flex items-center justify-center gap-2">
           {isSubmitting ? (
-            <><Loader2 className="h-5 w-5 animate-spin" /> Working…</>
+            <><Loader2 className="h-5 w-5 animate-spin" /> Creating </>
           ) : !userWalletAddress ? (
             "⚠️ Connect Wallet"
           ) : !QUIZ_HUB_ADDRESSES[chainId] ? (
             "⚠️ Contract not configured"
           ) : (
-            <><Rocket className="h-5 w-5" /> Launch &amp; Stake 🚀</>
+            <><Rocket className="h-5 w-5" /> Launch Quiz 🚀</>
           )}
         </span>
       </button>
@@ -760,7 +742,7 @@ export default function CreateChallengePage() {
           </div>
         )}
       </div>
-
+        
       {/* Floating transaction status pill */}
       <TxStatusPill phase={txPhase} />
     </div>

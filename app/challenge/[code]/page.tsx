@@ -506,6 +506,7 @@ export default function ChallengePage() {
           break;
         }
         case "round_announce": {
+          console.log("Round starting:", msg.round);
           setCurrentRoundName(msg.round);
           setPhase("countdown");
           setCountdownVal(3);

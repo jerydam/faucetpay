@@ -60,83 +60,93 @@ function ChallengePopupOverlay({
   const topic = n.data?.topic || "a random topic";
 
   return (
+  <div
+    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
+    style={{
+      background: "radial-gradient(circle at center, var(--overlay-gradient-start, rgba(30, 41, 59, 0.7)) 0%, var(--overlay-gradient-end, rgba(15, 23, 42, 0.9)) 100%)",
+      backdropFilter: "blur(12px) saturate(180%)",
+    }}
+    onClick={onDecline}
+  >
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200"
-      style={{
-        background: "radial-gradient(circle at center, var(--overlay-gradient-start, rgba(30, 41, 59, 0.6)) 0%, var(--overlay-gradient-end, rgba(15, 23, 42, 0.8)) 100%)",
-        backdropFilter: "blur(12px) saturate(180%)",
-      }}
-      onClick={onDecline}
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        "relative w-full max-w-[380px] overflow-hidden rounded-[28px] sm:rounded-[32px]",
+        "border border-white/10 bg-slate-900 shadow-2xl",
+        "animate-in slide-in-from-bottom-8 duration-300",
+        "mx-auto mb-4 sm:mb-0" // Shifts it up slightly on mobile for better thumb reach
+      )}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[360px] overflow-hidden rounded-[32px] border border-white/10 bg-slate-900 shadow-2xl animate-in slide-in-from-bottom-4"
-      >
-        {/* Subtle decorative background */}
-        <div className="absolute inset-0 opacity-10 pointer-events-none" 
-             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} 
-        />
+      {/* Subtle decorative background - reduced opacity for better text contrast on small screens */}
+      <div className="absolute inset-0 opacity-[0.05] pointer-events-none" 
+           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} 
+      />
 
-        <div className="relative p-6 text-center">
-          {/* Avatar Icon */}
-          <div className="flex justify-center mb-4">
-            <div className="h-16 w-16 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold border-2 border-blue-500/30 text-xl shadow-[0_0_20px_rgba(59,130,246,0.2)]">
-              {creatorName.slice(0, 2).toUpperCase()}
-            </div>
+      <div className="relative p-5 sm:p-8 text-center">
+        {/* Avatar Icon - Scaled for mobile */}
+        <div className="flex justify-center mb-4 sm:mb-6">
+          <div className="h-14 w-14 sm:h-18 sm:w-18 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold border-2 border-blue-500/30 text-lg sm:text-xl shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+            {creatorName.slice(0, 2).toUpperCase()}
           </div>
+        </div>
 
-          {/* New Dynamic Text Content */}
-          <div className="space-y-2 mb-6">
-            <h3 className="text-white font-black text-xl leading-tight">
-              Challenge Issued!
-            </h3>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              <span className="text-blue-400 font-bold">{creatorName}</span> just challenged your knowledge on <span className="text-white font-bold">"{topic}"</span>
-            </p>
+        {/* Text Content */}
+        <div className="space-y-2 mb-5 sm:mb-6">
+          <h3 className="text-white font-black text-xl sm:text-2xl leading-tight">
+            Challenge Issued!
+          </h3>
+          <p className="text-slate-300 text-sm sm:text-base leading-relaxed px-2">
+            <span className="text-blue-400 font-bold">{creatorName}</span> just challenged you on <span className="text-white font-bold">"{topic}"</span>
+          </p>
+        </div>
+
+        {/* Stake Detail */}
+        {n.data?.stake && (
+          <div className="flex items-center justify-center gap-2 bg-amber-500/10 rounded-xl sm:rounded-2xl py-2 px-4 border border-amber-500/20 mb-6 w-fit mx-auto">
+            <Zap size={14} className="text-amber-500 fill-amber-500" />
+            <span className="text-[10px] sm:text-xs font-black text-amber-500 uppercase tracking-widest">
+              Stake: {n.data.stake} {n.data.token}
+            </span>
           </div>
+        )}
 
-          {/* Stake Detail */}
-          {n.data?.stake && (
-            <div className="flex items-center justify-center gap-2 bg-amber-500/10 rounded-2xl py-2 px-4 border border-amber-500/20 mb-6 w-fit mx-auto">
-              <Zap size={14} className="text-amber-500 fill-amber-500" />
-              <span className="text-xs font-black text-amber-500 uppercase tracking-widest">
-                Stake: {n.data.stake} {n.data.token}
-              </span>
-            </div>
-          )}
-
-          {/* Timer Section */}
-          <div className="mb-6 px-2">
-             <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  className={cn("h-full transition-all duration-1000 linear", isUrgent ? "bg-red-500" : "bg-blue-500")}
-                  style={{ width: `${pct}%` }}
-                />
-             </div>
-             <p className={cn("text-[10px] font-bold mt-2 tracking-widest uppercase", isUrgent ? "text-red-500" : "text-slate-500")}>
-               {isUrgent ? `Hurry! ${secondsLeft}s left` : `Expiring in ${secondsLeft} seconds`}
+        {/* Timer Section */}
+        <div className="mb-6 px-1 sm:px-4">
+           <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+              <div 
+                className={cn("h-full transition-all duration-1000 linear", isUrgent ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-blue-500")}
+                style={{ width: `${pct}%` }}
+              />
+           </div>
+           <div className="flex justify-between items-center mt-2">
+             <p className={cn("text-[9px] sm:text-[10px] font-bold tracking-widest uppercase", isUrgent ? "text-red-500" : "text-slate-500")}>
+               {isUrgent ? "Time is running out" : "Incoming Challenge"}
              </p>
-          </div>
+             <p className={cn("text-[10px] font-black", isUrgent ? "text-red-500" : "text-blue-400")}>
+               {secondsLeft}s
+             </p>
+           </div>
+        </div>
 
-          {/* Actions */}
-          <div className="grid grid-cols-2 gap-3">
-            <button 
-              onClick={onDecline}
-              className="py-3.5 rounded-2xl bg-slate-800 text-slate-300 font-bold text-sm hover:bg-slate-700 transition-colors active:scale-95"
-            >
-              Decline
-            </button>
-            <button 
-              onClick={onAccept}
-              className="py-3.5 rounded-2xl bg-blue-600 text-white font-black text-sm hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
-            >
-              Accept
-            </button>
-          </div>
+        {/* Actions - Larger tap areas for mobile */}
+        <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
+          <button 
+            onClick={onAccept}
+            className="order-1 sm:order-2 py-4 rounded-2xl bg-blue-600 text-white font-black text-base sm:text-sm hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+          >
+            Accept Challenge
+          </button>
+          <button 
+            onClick={onDecline}
+            className="order-2 sm:order-1 py-4 rounded-2xl bg-slate-800 text-slate-400 font-bold text-base sm:text-sm hover:bg-slate-700 transition-colors active:scale-95"
+          >
+            Decline
+          </button>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -148,7 +158,7 @@ export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const [popup, setPopup] = useState<ChallengePopup | null>(null);
-  const panelRef   = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const popupTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
@@ -156,7 +166,9 @@ export function NotificationBell() {
   // Close panel on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -174,7 +186,11 @@ export function NotificationBell() {
   }, [open, address]);
 
   // Clear popup timer on unmount
-  useEffect(() => () => { if (popupTimer.current) clearInterval(popupTimer.current); }, []);
+  useEffect(() => {
+    return () => {
+      if (popupTimer.current) clearInterval(popupTimer.current);
+    };
+  }, []);
 
   const dismissPopup = useCallback((notif: Notification) => {
     if (popupTimer.current) clearInterval(popupTimer.current);
@@ -215,17 +231,17 @@ export function NotificationBell() {
       if (data.type === "unread_count") return;
 
       const notif: Notification = {
-        id:        data.id ?? String(Date.now()),
-        type:      data.type,
-        title:     data.title,
-        body:      data.body,
-        data:      data.data,
-        isRead:    false,
+        id: data.id ?? String(Date.now()),
+        type: data.type,
+        title: data.title,
+        body: data.body,
+        data: data.data,
+        isRead: false,
         createdAt: new Date().toISOString(),
       };
 
       // Public challenge invite → show popup
-      if (data.type === "public_challenge" || data.type === "friend_invite") {
+      if (data.type === "public_challenge" || data.type === "friend_invite" || data.type === "rematch_request") {
         showChallengePopup(notif);
       } else {
         // Other notifications → sonner toast + inbox
@@ -241,11 +257,13 @@ export function NotificationBell() {
     if (!popup) return;
     const code = popup.notification.data?.code;
     if (popupTimer.current) clearInterval(popupTimer.current);
-    // Mark as read
+    
+    // Mark as read immediately
     setNotifications((prev) =>
       prev.map((n) => (n.id === popup.notification.id ? { ...n, isRead: true } : n))
     );
     setPopup(null);
+    
     if (code) router.push(`/challenge/${code}/pre-lobby`);
   };
 
@@ -262,8 +280,9 @@ export function NotificationBell() {
 
   const markOneRead = async (id: string) => {
     if (!address) return;
-    await fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}/read/${id}`, { method: "POST" });
+    // Optimistic UI update
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    await fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}/read/${id}`, { method: "POST" }).catch(() => {});
   };
 
   return (
@@ -273,7 +292,7 @@ export function NotificationBell() {
       <div className="relative" ref={panelRef}>
         <button
           onClick={() => setOpen((o) => !o)}
-          className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95"
         >
           <Bell className="h-5 w-5 text-slate-600 dark:text-slate-300" />
           {unreadCount > 0 && (
@@ -283,16 +302,16 @@ export function NotificationBell() {
           )}
         </button>
 
-        {/* RESPONSIVE DROPDOWN: Fixed center on mobile, absolute on desktop */}
+        {/* RESPONSIVE DROPDOWN: Fixed center on mobile, absolute on desktop. High z-index to stay above game UI */}
         {open && (
           <div className={cn(
-            "fixed inset-x-4 top-20 bottom-auto z-50 rounded-3xl border border-border bg-background shadow-2xl overflow-hidden sm:absolute sm:inset-auto sm:right-0 sm:top-12 sm:w-80 sm:max-h-[480px]",
+            "fixed inset-x-4 top-20 bottom-auto z-[100] rounded-3xl border border-border bg-background shadow-2xl overflow-hidden sm:absolute sm:inset-auto sm:right-0 sm:top-12 sm:w-[360px] sm:max-h-[480px]",
             "animate-in fade-in zoom-in-95 duration-200"
           )}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
               <span className="text-sm font-black text-foreground">Activity</span>
               {unreadCount > 0 && (
-                <button onClick={markAllRead} className="text-xs font-bold text-blue-500 hover:text-blue-600">
+                <button onClick={markAllRead} className="text-xs font-bold text-blue-500 hover:text-blue-600 transition-colors">
                   Clear All
                 </button>
               )}
@@ -312,28 +331,61 @@ export function NotificationBell() {
                   <p className="text-xs text-muted-foreground mt-1">We'll notify you when someone challenges you.</p>
                 </div>
               ) : (
-                notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    onClick={() => {
-                       // ... (your existing click logic)
-                    }}
-                    className={cn(
-                      "group flex gap-3 px-5 py-4 border-b border-border/50 cursor-pointer transition-colors",
-                      !n.isRead ? "bg-blue-500/[0.03]" : "hover:bg-muted/50"
-                    )}
-                  >
-                    <div className={cn(
-                      "mt-1.5 h-2 w-2 rounded-full shrink-0 transition-transform group-hover:scale-125",
-                      n.isRead ? "bg-transparent" : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-                    )} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-foreground truncate leading-none mb-1">{n.title}</p>
-                      <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed">{n.body}</p>
-                      <p className="text-[10px] font-medium text-muted-foreground/50 mt-2 uppercase tracking-tight">{timeAgo(n.createdAt)}</p>
+                notifications.map((n) => {
+                  const challengeCode = n.data?.code;
+                  const isInteractive = !!challengeCode;
+
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => {
+                        if (!n.isRead) markOneRead(n.id);
+                        
+                        if (isInteractive) {
+                          setOpen(false); // Close dropdown
+                          // Route based on type
+                          if (n.type === "public_challenge" || n.type === "friend_invite" || n.type === "rematch_request") {
+                            router.push(`/challenge/${challengeCode}/pre-lobby`);
+                          } else {
+                            router.push(`/challenge/${challengeCode}`);
+                          }
+                        }
+                      }}
+                      className={cn(
+                        "group flex gap-3 px-5 py-4 border-b border-border/50 transition-colors",
+                        isInteractive ? "cursor-pointer" : "cursor-default",
+                        !n.isRead ? "bg-blue-500/[0.04]" : "hover:bg-muted/50"
+                      )}
+                    >
+                      <div className={cn(
+                        "mt-1.5 h-2 w-2 rounded-full shrink-0 transition-transform group-hover:scale-125",
+                        n.isRead ? "bg-transparent" : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+                      )} />
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="text-[13px] font-bold text-foreground truncate leading-none pt-0.5">
+                            {n.title}
+                          </p>
+                          {/* Visual indicator that this notification is actionable */}
+                          {isInteractive && (
+                            <div className="shrink-0 text-[9px] bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded flex items-center font-black uppercase tracking-tighter">
+                              Join
+                            </div>
+                          )}
+                        </div>
+                        
+                        <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed">
+                          {n.body}
+                        </p>
+                        
+                        <p className="text-[10px] font-medium text-muted-foreground/50 mt-2 uppercase tracking-tight">
+                          {timeAgo(n.createdAt)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

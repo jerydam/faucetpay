@@ -134,11 +134,53 @@ return (
 
   useEffect(() => { fetchLobby(); }, []);
 
-  const handleJoinAction = (code: string) => {
-    if (code.length < 4) return;
-    setNavigating(code);
+  const handleJoinAction = async (code: string) => {
+  if (code.length < 4) return;
+  setNavigating(code);
+
+  // If no wallet is connected, they definitely haven't joined yet.
+  if (!userWalletAddress) {
     router.push(`/challenge/${code}/pre-lobby`);
-  };
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/challenge/${code}`);
+    const data = await res.json();
+
+    if (data.success && data.challenge) {
+      const challenge = data.challenge;
+      const myWallet = userWalletAddress.toLowerCase();
+
+      const isCreator = challenge.creator?.toLowerCase() === myWallet;
+      const isPlayer = challenge.players && Object.keys(challenge.players).some(w => w.toLowerCase() === myWallet);
+      const playerCount = Object.keys(challenge.players || {}).length;
+
+      if (isCreator) {
+        // Creator logic: Only go to active lobby if a challenger has joined (making 2 total)
+        if (playerCount >= 2) {
+          router.push(`/challenge/${code}`);
+        } else {
+          router.push(`/challenge/${code}/pre-lobby`);
+        }
+      } else {
+        // Challenger logic: If they are already in the player list, go to lobby. Else, pre-lobby to negotiate/stake.
+        if (isPlayer) {
+          router.push(`/challenge/${code}`);
+        } else {
+          router.push(`/challenge/${code}/pre-lobby`);
+        }
+      }
+    } else {
+      // Fallback if the fetch fails but the code is valid
+      router.push(`/challenge/${code}/pre-lobby`);
+    }
+  } catch (error) {
+    console.error("Failed to verify player status:", error);
+    // Fallback on network error
+    router.push(`/challenge/${code}/pre-lobby`);
+  }
+};
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">

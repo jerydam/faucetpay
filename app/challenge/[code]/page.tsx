@@ -207,9 +207,15 @@ function FloatingChat({ messages, myWallet, chatInput, setChatInput, onSend, cha
   }, [unreadCount, isOpen]);
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
-      {isOpen && (
-        <div className="w-80 flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden" style={{ height: "360px", animation: "slideUpFade 0.2s ease-out" }}>
+      <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-3">
+        {isOpen && (
+        <div 
+            className="w-[calc(100vw-48px)] sm:w-80 flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden" 
+            style={{ 
+              height: "min(400px, 60vh)", // Use relative height for mobile
+              animation: "slideUpFade 0.2s ease-out" 
+            }}
+          >
           <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30 shrink-0">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-primary" />
@@ -241,14 +247,26 @@ function FloatingChat({ messages, myWallet, chatInput, setChatInput, onSend, cha
             <div ref={chatBottomRef} />
           </div>
           <div className="flex gap-2 px-3 py-3 border-t border-border shrink-0">
-            <input
-              type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && onSend()} placeholder="Say something…" maxLength={200}
-              className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-xs text-foreground outline-none focus:border-primary/50 transition-colors"
-            />
-            <button onClick={onSend} disabled={!chatInput.trim()} className="w-8 h-8 rounded-xl bg-primary disabled:bg-muted/50 disabled:text-muted-foreground text-primary-foreground flex items-center justify-center transition-all active:scale-95 shrink-0">
-              <Send className="h-3.5 w-3.5" />
-            </button>
+            <form 
+              onSubmit={(e) => { e.preventDefault(); onSend(); }} 
+              className="flex gap-2 px-3 py-3 border-t border-border shrink-0"
+            >
+              <input
+                type="text" 
+                value={chatInput} 
+                onChange={e => setChatInput(e.target.value)}
+                placeholder="Say something…" 
+                maxLength={200}
+                className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-xs text-foreground outline-none focus:border-primary/50 transition-colors"
+              />
+              <button 
+                type="submit" // Ensure this is type="submit"
+                disabled={!chatInput.trim()} 
+                className="w-8 h-8 rounded-xl bg-primary disabled:bg-muted/50 disabled:text-muted-foreground text-primary-foreground flex items-center justify-center transition-all active:scale-95 shrink-0"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -506,10 +524,20 @@ export default function ChallengePage() {
           break;
         }
         case "round_announce": {
-          console.log("Round starting:", msg.round);
           setCurrentRoundName(msg.round);
           setPhase("countdown");
           setCountdownVal(3);
+          
+          // Local interval to handle 2 and 1
+          const cdInterval = setInterval(() => {
+            setCountdownVal((prev) => {
+              if (prev <= 1) {
+                clearInterval(cdInterval);
+                return prev;
+              }
+              return prev - 1;
+            });
+          }, 1000);
           break;
         }
         case "question": {
@@ -626,18 +654,26 @@ export default function ChallengePage() {
     wsRef.current?.send(JSON.stringify({ type: "ready", walletAddress: userWalletAddress }));
   }, [userWalletAddress]);
 
-  const handleSelectAnswer = useCallback((optId: string) => {
-    if (!currentQ || timeLeft <= 0 || hasSubmitted) return;
-    const timeTaken = currentQ.timeLimit - timeLeft;
-    wsRef.current?.send(JSON.stringify({
-      type: "submit_answer", walletAddress: userWalletAddress,
-      roundIndex: currentQ.roundIndex, questionIndex: currentQ.questionIndex,
-      answerId: optId, timeTaken,
-    }));
-    setSelectedId(optId);
-    setHasSubmitted(true);
-  }, [currentQ, timeLeft, hasSubmitted, userWalletAddress]);
+ const handleSelectAnswer = useCallback((optId: string) => {
+  // We still block selection if the timer is out or we are in the reveal phase
+  if (!currentQ || timeLeft <= 0 || phase === "reveal") return;
 
+  const timeTaken = currentQ.timeLimit - timeLeft;
+
+  // Send the update to the backend
+  wsRef.current?.send(JSON.stringify({
+    type: "submit_answer", 
+    walletAddress: userWalletAddress,
+    roundIndex: currentQ.roundIndex, 
+    questionIndex: currentQ.questionIndex,
+    answerId: optId, 
+    timeTaken,
+  }));
+
+  // Update local UI state
+  setSelectedId(optId);
+  setHasSubmitted(true); // This now acts as a "user has interacted" flag rather than a lock
+}, [currentQ, timeLeft, phase, userWalletAddress]);
   const handleSendChat = useCallback(() => {
     const text = chatInput.trim();
     if (!text || wsRef.current?.readyState !== WebSocket.OPEN) return;
@@ -852,64 +888,118 @@ export default function ChallengePage() {
   }
 
   if ((phase === "question" || phase === "reveal") && currentQ) {
-    const isReveal = phase === "reveal";
-    return (
-      <div className="fixed inset-0 bg-background flex flex-col overflow-hidden z-50">
-        {!isReveal && <LinearTimer seconds={timeLeft} total={currentQ.timeLimit} />}
-        <div className="flex items-center justify-between px-4 py-3 bg-card border-b border-border shrink-0">
-          <Badge variant="outline" className="font-mono">Q{currentQ.questionIndex + 1}/{currentQ.totalQuestions}</Badge>
-          <span className="text-xs font-bold text-muted-foreground capitalize">{currentRoundName} round</span>
-          <div className="flex items-center gap-1 font-bold text-primary bg-primary/10 px-3 py-1 rounded-full text-sm">
-            <Zap className="h-3.5 w-3.5" /> {myPlayerEntry?.points ?? 0}
-          </div>
+  const isReveal = phase === "reveal";
+  return (
+    <div className="fixed inset-0 bg-background flex flex-col overflow-hidden z-50">
+      {!isReveal && <LinearTimer seconds={timeLeft} total={currentQ.timeLimit} />}
+      
+      <div className="flex items-center justify-between px-4 py-3 bg-card border-b border-border shrink-0">
+        <Badge variant="outline" className="font-mono">Q{currentQ.questionIndex + 1}/{currentQ.totalQuestions}</Badge>
+        <span className="text-xs font-bold text-muted-foreground capitalize">{currentRoundName} round</span>
+        <div className="flex items-center gap-1 font-bold text-primary bg-primary/10 px-3 py-1 rounded-full text-sm">
+          <Zap className="h-3.5 w-3.5" /> {myPlayerEntry?.points ?? 0}
         </div>
-        <div className="flex-1 flex items-center justify-center px-4 py-6 text-center">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground leading-snug max-w-xl">{currentQ.question}</h2>
-        </div>
-        {isReveal && selectedId && (
-          <div className="flex justify-center px-4 pb-2 shrink-0">
-            <div className={cn("px-8 py-3 rounded-full font-black text-lg border-2",
-              selectedId === revealCorrectId
-                ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-400"
-                : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-400"
-            )}>
-              {selectedId === revealCorrectId ? `✓ Correct! +${questionScores[myWallet] ?? 0}` : "✗ Incorrect"}
-            </div>
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center px-4 overflow-y-auto">
+        {/* Question Text */}
+        <h2 className={cn(
+          "font-bold text-foreground leading-snug max-w-xl transition-all duration-500",
+          isReveal ? "text-xl mb-6" : "text-2xl md:text-3xl"
+        )}>
+          {currentQ.question}
+        </h2>
+
+        {/* Mini Leaderboard during Reveal Phase */}
+        {isReveal && (
+          <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xl mb-6">
+                <div className="bg-muted/50 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-border">
+                  Current Standings
+                </div>
+                <div className="divide-y divide-border">
+                  {players.sort((a, b) => b.points - a.points).map((p, i) => (
+                    <div key={p.walletAddress} className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-muted-foreground w-4">{i + 1}</span>
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-[8px]">{p.username.slice(0,2)}</AvatarFallback>
+                        </Avatar>
+                        <span className={cn("text-sm font-bold", p.walletAddress.toLowerCase() === myWallet ? "text-primary" : "text-foreground")}>
+                          {p.username}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                         {/* Show point gain for this specific question */}
+                         {questionScores[p.walletAddress] > 0 && (
+                           <span className="text-[10px] font-black text-emerald-500 animate-bounce">
+                             +{questionScores[p.walletAddress]}
+                           </span>
+                         )}
+                         <span className="font-black text-sm">{p.points}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+             </div>
           </div>
         )}
-        <div className="w-full max-w-2xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 gap-3 pb-8 shrink-0">
-          {currentQ.options.map(opt => {
-            const style      = OPTION_STYLES[opt.id] ?? OPTION_STYLES.A;
-            const isSelected = selectedId === opt.id;
-            const isCorrect  = isReveal && opt.id === revealCorrectId;
-            const isWrong    = isReveal && isSelected && opt.id !== revealCorrectId;
-            return (
-              <button key={opt.id} disabled={isReveal || timeLeft <= 0 || hasSubmitted} onClick={() => handleSelectAnswer(opt.id)}
-                className={cn("relative flex items-center justify-between px-6 py-5 rounded-2xl text-white font-bold text-lg transition-all duration-150 active:scale-[0.98] shadow-md", style.bg,
-                  isSelected && !isReveal && `ring-4 ${style.ring} ring-offset-2 ring-offset-background`,
-                  isReveal && !isCorrect && !isWrong && "opacity-40 grayscale",
-                  isCorrect && "ring-4 ring-white brightness-110",
-                  isWrong   && "opacity-70 ring-4 ring-red-400",
-                )}>
-                <div className="flex items-center gap-4">
-                  <span className="text-2xl opacity-90">{style.shape}</span>
-                  <span className="leading-snug">{opt.text}</span>
-                </div>
-                {isCorrect  && <Check className="h-6 w-6 shrink-0" />}
-                {isWrong    && <X     className="h-6 w-6 shrink-0" />}
-                {isSelected && !isReveal && (
-                  <div className="w-7 h-7 rounded-full bg-white/30 flex items-center justify-center shrink-0">
-                    <Check className="h-4 w-4" />
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <FloatingChat messages={chatMessages} myWallet={myWallet} chatInput={chatInput} setChatInput={setChatInput} onSend={handleSendChat} chatBottomRef={chatBottomRef} unreadCount={unreadCount} />
       </div>
-    );
-  }
+
+      {/* Answer Feedback Banner */}
+      {isReveal && (
+        <div className="flex justify-center px-4 pb-4 shrink-0">
+          <div className={cn("px-8 py-3 rounded-full font-black text-lg border-2 shadow-lg animate-in zoom-in duration-300",
+            selectedId === revealCorrectId
+              ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-400"
+              : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-400"
+          )}>
+            {selectedId === revealCorrectId ? "✓ Correct!" : "✗ Incorrect"}
+          </div>
+        </div>
+      )}
+
+      {/* Options Grid */}
+      <div className={cn(
+        "w-full max-w-2xl mx-auto px-4 grid gap-3 pb-8 shrink-0",
+        isReveal ? "grid-cols-2" : "grid-cols-1 md:grid-cols-2"
+      )}>
+        {currentQ.options.map(opt => {
+          const style = OPTION_STYLES[opt.id] ?? OPTION_STYLES.A;
+          const isSelected = selectedId === opt.id;
+          const isCorrect = isReveal && opt.id === revealCorrectId;
+          const isWrong = isReveal && isSelected && opt.id !== revealCorrectId;
+          
+          return (
+            <button 
+              key={opt.id} 
+              disabled={isReveal || timeLeft <= 0} 
+              onClick={() => handleSelectAnswer(opt.id)}
+              className={cn(
+                "relative flex items-center justify-between rounded-2xl text-white font-bold transition-all duration-150 shadow-md",
+                isSelected && !isReveal ? "ring-4 ring-white scale-[1.02] z-10" : "scale-100",
+                style.bg,
+                isSelected && !isReveal && `ring-4 ${style.ring} ring-offset-2 ring-offset-background`,
+                isReveal && !isCorrect && !isWrong && "opacity-40 grayscale",
+                isCorrect && "ring-4 ring-white brightness-110",
+                isWrong && "opacity-70 ring-4 ring-red-400",
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <span className={cn("opacity-90", isReveal ? "text-sm" : "text-2xl")}>{style.shape}</span>
+                <span className="leading-tight text-left">{opt.text}</span>
+              </div>
+              {isCorrect && <Check className="h-4 w-4 shrink-0" />}
+              {isWrong && <X className="h-4 w-4 shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+      
+        <FloatingChat messages={chatMessages} myWallet={myWallet} chatInput={chatInput} setChatInput={setChatInput} onSend={handleSendChat} chatBottomRef={chatBottomRef} unreadCount={unreadCount} />
+    </div>
+  );
+}
 
   if (phase === "round_end") {
     const sorted = Object.entries(roundScores).sort(([, a], [, b]) => b - a);

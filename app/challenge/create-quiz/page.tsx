@@ -27,7 +27,7 @@ import { QUIZ_HUB_ABI, ERC20_ABI } from "@/lib/abis";
 // Config
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "https://faucetpay-backend.koyeb.app/";
 
 /**
  * Fill in the deployed QuizHub address for each chain.

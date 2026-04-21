@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import Loading from "../loading/page";
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "https://faucetpay-backend.koyeb.app/";
 
 // ── Types matching backend's public_lobby VIEW ──────────────────────────────
 // Schema: code, topic, stake_amount, token_symbol, chain_id,

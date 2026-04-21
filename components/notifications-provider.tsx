@@ -61,99 +61,81 @@ function ChallengePopupOverlay({
 
   return (
     <div
-  className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-300"
-  style={{
-    // Adaptive Web3 Background: 
-    // Dark mode: Deep Slate/Blue radial
-    // Light mode: Soft Blue/Lavender radial
-    background: "radial-gradient(circle at center, var(--overlay-gradient-start, rgba(30, 41, 59, 0.6)) 0%, var(--overlay-gradient-end, rgba(15, 23, 42, 0.8)) 100%)",
-    backdropFilter: "blur(12px) saturate(180%)",
-  }}
-  onClick={onDecline}
->
-  <div
-    onClick={(e) => e.stopPropagation()}
-    className={cn(
-      "relative w-full max-w-[360px] overflow-hidden rounded-[32px] border shadow-2xl animate-in slide-in-from-bottom-8 duration-500",
-      // Adaptive Card Styling:
-      "bg-white dark:bg-slate-900",
-      "border-slate-200 dark:border-white/10"
-    )}
-  >
-    {/* Dynamic "Glass" Effect Layer */}
-    <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.1] pointer-events-none" 
-         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23475569' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} 
-    />
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200"
+      style={{
+        background: "radial-gradient(circle at center, var(--overlay-gradient-start, rgba(30, 41, 59, 0.6)) 0%, var(--overlay-gradient-end, rgba(15, 23, 42, 0.8)) 100%)",
+        backdropFilter: "blur(12px) saturate(180%)",
+      }}
+      onClick={onDecline}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-[360px] overflow-hidden rounded-[32px] border border-white/10 bg-slate-900 shadow-2xl animate-in slide-in-from-bottom-4"
+      >
+        {/* Subtle decorative background */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none" 
+             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} 
+        />
 
-    <div className="relative p-7 text-center">
-      {/* Icon/Avatar Section */}
-      <div className="flex justify-center mb-5">
-        <div className="h-20 w-20 rounded-full flex items-center justify-center font-black text-2xl transition-transform hover:scale-110 duration-300
-          bg-blue-500/10 dark:bg-blue-500/20 
-          text-blue-600 dark:text-blue-400 
-          border-2 border-blue-500/20 dark:border-blue-500/30 
-          shadow-xl">
-          {creatorName.slice(0, 2).toUpperCase()}
+        <div className="relative p-6 text-center">
+          {/* Avatar Icon */}
+          <div className="flex justify-center mb-4">
+            <div className="h-16 w-16 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold border-2 border-blue-500/30 text-xl shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+              {creatorName.slice(0, 2).toUpperCase()}
+            </div>
+          </div>
+
+          {/* New Dynamic Text Content */}
+          <div className="space-y-2 mb-6">
+            <h3 className="text-white font-black text-xl leading-tight">
+              Challenge Issued!
+            </h3>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              <span className="text-blue-400 font-bold">{creatorName}</span> just challenged your knowledge on <span className="text-white font-bold">"{topic}"</span>
+            </p>
+          </div>
+
+          {/* Stake Detail */}
+          {n.data?.stake && (
+            <div className="flex items-center justify-center gap-2 bg-amber-500/10 rounded-2xl py-2 px-4 border border-amber-500/20 mb-6 w-fit mx-auto">
+              <Zap size={14} className="text-amber-500 fill-amber-500" />
+              <span className="text-xs font-black text-amber-500 uppercase tracking-widest">
+                Stake: {n.data.stake} {n.data.token}
+              </span>
+            </div>
+          )}
+
+          {/* Timer Section */}
+          <div className="mb-6 px-2">
+             <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div 
+                  className={cn("h-full transition-all duration-1000 linear", isUrgent ? "bg-red-500" : "bg-blue-500")}
+                  style={{ width: `${pct}%` }}
+                />
+             </div>
+             <p className={cn("text-[10px] font-bold mt-2 tracking-widest uppercase", isUrgent ? "text-red-500" : "text-slate-500")}>
+               {isUrgent ? `Hurry! ${secondsLeft}s left` : `Expiring in ${secondsLeft} seconds`}
+             </p>
+          </div>
+
+          {/* Actions */}
+          <div className="grid grid-cols-2 gap-3">
+            <button 
+              onClick={onDecline}
+              className="py-3.5 rounded-2xl bg-slate-800 text-slate-300 font-bold text-sm hover:bg-slate-700 transition-colors active:scale-95"
+            >
+              Decline
+            </button>
+            <button 
+              onClick={onAccept}
+              className="py-3.5 rounded-2xl bg-blue-600 text-white font-black text-sm hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              Accept
+            </button>
+          </div>
         </div>
-      </div>
-
-      {/* Text Content */}
-      <div className="space-y-3 mb-8">
-        <h3 className="text-slate-900 dark:text-white font-black text-2xl leading-tight">
-          Challenge Issued!
-        </h3>
-        <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed px-2">
-          <span className="text-blue-600 dark:text-blue-400 font-bold">{creatorName}</span> just challenged your knowledge on <span className="text-slate-900 dark:text-white font-black italic">"{topic}"</span>
-        </p>
-      </div>
-
-      {/* Stake Badge */}
-      {n.data?.stake && (
-        <div className="inline-flex items-center gap-2 bg-amber-500/10 rounded-full py-2 px-5 border border-amber-500/20 mb-8 shadow-sm">
-          <Zap size={16} className="text-amber-500 fill-amber-500" />
-          <span className="text-xs font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.1em]">
-            Stake: {n.data.stake} {n.data.token}
-          </span>
-        </div>
-      )}
-
-      {/* Timer UI */}
-      <div className="mb-8 px-4">
-         <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-            <div 
-              className={cn("h-full transition-all duration-1000 linear", isUrgent ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : "bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]")}
-              style={{ width: `${pct}%` }}
-            />
-         </div>
-         <p className={cn("text-[11px] font-black mt-3 tracking-[0.2em] uppercase", isUrgent ? "text-red-500 animate-pulse" : "text-slate-400")}>
-           {isUrgent ? `HURRY! ${secondsLeft}S REMAINING` : `Expiring in ${secondsLeft}s`}
-         </p>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="grid grid-cols-2 gap-4">
-        <button 
-          onClick={onDecline}
-          className="py-4 rounded-2xl font-bold text-sm transition-all active:scale-95
-            bg-slate-100 dark:bg-slate-800 
-            text-slate-600 dark:text-slate-300 
-            hover:bg-slate-200 dark:hover:bg-slate-700"
-        >
-          Decline
-        </button>
-        <button 
-          onClick={onAccept}
-          className="py-4 rounded-2xl font-black text-sm transition-all active:scale-95 shadow-lg
-            bg-blue-600 text-white 
-            hover:bg-blue-500 hover:shadow-blue-600/30 
-            flex items-center justify-center gap-2"
-        >
-          Accept
-        </button>
       </div>
     </div>
-  </div>
-</div>
   );
 }
 

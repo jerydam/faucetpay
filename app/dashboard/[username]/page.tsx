@@ -82,7 +82,7 @@ interface UserProfileData {
 }
 
 export default function DashboardPage() {
-  const backendUrl = "https://faucetpay-backend.koyeb.app/"
+  const backendUrl = "https://faucetpay-backend.koyeb.app"
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()

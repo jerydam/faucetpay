@@ -189,7 +189,7 @@ export default function CreateChallengePage() {
   const [creatorUsername, setCreatorUsername] = useState("");
   const [isPublic, setIsPublic]            = useState(true);
   const [inviteWallet, setInviteWallet]    = useState("");
-
+  const [questionCount, setQuestionCount] = useState(9);
   // Step 1 — Stake
   const [stakeAmount, setStakeAmount]      = useState("");
   const [tokenSymbol, setTokenSymbol]      = useState(availableTokens[0]?.symbol ?? "CELO");
@@ -309,10 +309,11 @@ export default function CreateChallengePage() {
 
       // ── 2. Backend creates challenge + generates questions ─────────────────
       const res = await fetch(`${API_BASE_URL}/api/challenge/create`, {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          topic:           topic.trim(),
+          topic: topic.trim(),
+          questionCount,
           creatorAddress:  userWalletAddress,
           creatorUsername: creatorUsername || userWalletAddress.slice(0, 8),
           stakeAmount:     parseFloat(stakeAmount),
@@ -423,7 +424,28 @@ export default function CreateChallengePage() {
           className="h-11 rounded-xl border-2"
         />
       </div>
-
+      <div className="space-y-2">
+      <Label className="text-sm font-bold text-foreground">Number of Questions</Label>
+      <div className="grid grid-cols-4 gap-2">
+        {[15, 18, 21, 24, 27, 30].map((num) => (
+          <button
+            key={num}
+            onClick={() => setQuestionCount(num)}
+            className={cn(
+              "py-2 rounded-xl border-2 text-xs font-bold transition-all",
+              questionCount === num 
+                ? "border-primary bg-primary/10 text-primary" 
+                : "border-border bg-card text-muted-foreground"
+            )}
+          >
+            {num}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Questions are split equally across Easy, Medium, and Hard rounds.
+      </p>
+    </div>
       <div className="space-y-2">
         <Label className="text-sm font-bold text-foreground">Visibility</Label>
         <div className="grid grid-cols-2 gap-2">

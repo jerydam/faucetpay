@@ -28,12 +28,12 @@ interface WalletConnectButtonProps {
 export function WalletConnectButton({ className }: WalletConnectButtonProps) {
   const { address, isConnected, isConnecting, connect, disconnect } = useWallet()
 
-  const [dbUsername, setDbUsername] = useState<string | null>(null)
+  const [dbUsername, setDbUsername]   = useState<string | null>(null)
   const [dbAvatarUrl, setDbAvatarUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]         = useState(false)
   const hasSyncedRef = useRef(false)
 
-  // 1. Fetch or create profile when wallet connects
+  // ── Fetch or create profile when wallet connects ──────────────────────
   useEffect(() => {
     if (!isConnected || !address) {
       setDbUsername(null)
@@ -47,49 +47,46 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
 
     const fetchOrSyncProfile = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/users/${address.toLowerCase()}`)
+        // Use the same endpoint the rest of the app uses
+        const res  = await fetch(`${API_BASE_URL}/api/profile/${address.toLowerCase()}`)
+        const data = await res.json()
 
-        if (response.ok) {
-          const data = await response.json()
-          const profile = data.profile || (data.username ? data : null)
+        const profile = data.profile ?? null
 
-          if (profile?.username && profile.username !== "New User") {
-            if (isMounted) {
-              setDbUsername(profile.username)
-              setDbAvatarUrl(profile.avatar_url || profile.avatarUrl || "")
-            }
-            return
+        if (profile?.username && profile.username !== "New User") {
+          if (isMounted) {
+            setDbUsername(profile.username)
+            setDbAvatarUrl(profile.avatar_url || "")
           }
+          return
         }
 
+        // No profile yet — create a stub
         if (!hasSyncedRef.current) {
           hasSyncedRef.current = true
           const fallbackUsername = `user_${address.slice(-4)}`
 
-          const syncRes = await fetch(`${API_BASE_URL}/api/profile/sync`, {
+          const syncRes  = await fetch(`${API_BASE_URL}/api/profile/sync`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               wallet_address: address,
-              username: fallbackUsername,
+              username:   fallbackUsername,
               avatar_url: "",
-              email: "",
+              email:      "",
             }),
           })
-
           const syncData = await syncRes.json()
+
           if (syncData.success && syncData.profile && isMounted) {
             setDbUsername(syncData.profile.username)
-            setDbAvatarUrl(syncData.profile.avatar_url)
-
-            window.dispatchEvent(
-              new CustomEvent("profileUpdated", {
-                detail: {
-                  username: syncData.profile.username,
-                  avatarUrl: syncData.profile.avatar_url,
-                },
-              })
-            )
+            setDbAvatarUrl(syncData.profile.avatar_url || "")
+            window.dispatchEvent(new CustomEvent("profileUpdated", {
+              detail: {
+                username:  syncData.profile.username,
+                avatarUrl: syncData.profile.avatar_url,
+              },
+            }))
           }
         }
       } catch (err) {
@@ -103,41 +100,43 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
     return () => { isMounted = false }
   }, [address, isConnected])
 
+  // ── Listen for profile updates (e.g. after editing in the modal) ──────
   useEffect(() => {
-    const handleProfileUpdate = (event: CustomEvent) => {
-      const { username, avatarUrl } = event.detail
-      if (username) setDbUsername(username)
+    const handleUpdate = (e: CustomEvent) => {
+      const { username, avatarUrl } = e.detail
+      if (username)  setDbUsername(username)
       if (avatarUrl) setDbAvatarUrl(avatarUrl)
     }
-    window.addEventListener("profileUpdated" as any, handleProfileUpdate)
-    return () => window.removeEventListener("profileUpdated" as any, handleProfileUpdate)
+    window.addEventListener("profileUpdated" as any, handleUpdate)
+    return () => window.removeEventListener("profileUpdated" as any, handleUpdate)
   }, [])
 
-  const displayName = dbUsername || "Anonymous"
+  // Always resolvable — fall back to address slug if username not yet loaded
+  const displayName   = dbUsername || (address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—")
   const displayAvatar = dbAvatarUrl || ""
+  // Link is always valid: username path when available, address path otherwise
   const dashboardLink = dbUsername
     ? `/dashboard/${dbUsername}`
-    : `/dashboard/${address?.toLowerCase() || ""}`
+    : `/dashboard/${address?.toLowerCase() ?? ""}`
 
-  // --- RENDERING LOGIC ---
-
+  // ── Connecting state ──────────────────────────────────────────────────
   if (isConnecting) {
     return (
       <Button
-        size="sm"
-        disabled
-        variant="outline"
-        className={cn("text-xs font-bold uppercase tracking-widest px-6 opacity-50 border-border animate-pulse", className)}
+        size="sm" disabled variant="outline"
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest px-6 opacity-50 border-border animate-pulse",
+          className,
+        )}
       >
-        Connecting...
+        Connecting…
       </Button>
     )
   }
 
+  // ── Not connected ─────────────────────────────────────────────────────
   if (!isConnected) {
-    // Check if any wallet is available (MetaMask, MiniPay, etc.)
     const hasWallet = typeof window !== "undefined" && !!window.ethereum
-
     return (
       <Button
         onClick={connect}
@@ -146,7 +145,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
         variant="default"
         className={cn(
           "text-xs font-bold uppercase tracking-widest px-6 shadow-md hover:scale-105 transition-all bg-blue-600 hover:bg-blue-500 text-white",
-          className
+          className,
         )}
       >
         <Wallet className="mr-2 h-4 w-4" />
@@ -155,22 +154,29 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
     )
   }
 
+  // ── Connected ─────────────────────────────────────────────────────────
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
           size="sm"
-          className={cn("flex items-center gap-2 p-1 sm:pr-3 border-primary/20 hover:bg-primary/5 transition-all rounded-full h-9", className)}
+          className={cn(
+            "flex items-center gap-2 p-1 sm:pr-3 border-primary/20 hover:bg-primary/5 transition-all rounded-full h-9",
+            className,
+          )}
         >
           <Avatar className="h-7 w-7 border border-background shadow-sm">
             <AvatarImage src={displayAvatar} className="object-cover" />
             <AvatarFallback className="bg-primary/10 text-primary text-[10px]">
-              {loading ? <span className="animate-pulse">...</span> : displayName.charAt(0).toUpperCase()}
+              {loading
+                ? <span className="animate-pulse">…</span>
+                : displayName.charAt(0).toUpperCase()
+              }
             </AvatarFallback>
           </Avatar>
           <span className="hidden sm:block text-xs sm:text-sm font-medium max-w-[100px] truncate">
-            {loading ? "..." : displayName}
+            {loading ? "…" : displayName}
           </span>
           <ChevronDown className="hidden sm:block h-3 w-3 opacity-50" />
         </Button>
@@ -182,7 +188,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
             <p className="text-sm font-bold leading-none truncate">{displayName}</p>
             {address && (
               <p className="text-[10px] leading-none text-muted-foreground font-mono">
-                {address.slice(0, 6)}...{address.slice(-4)}
+                {address.slice(0, 6)}…{address.slice(-4)}
               </p>
             )}
           </div>
@@ -191,23 +197,25 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
         <DropdownMenuSeparator />
 
         <DropdownMenuGroup>
+          {/* Profile link — always active once connected; dims only while loading */}
           <DropdownMenuItem asChild>
             <Link
               href={dashboardLink}
               className={cn(
                 "cursor-pointer flex items-center gap-2",
-                (loading || !dbUsername) && "pointer-events-none opacity-50"
+                loading && "opacity-50 pointer-events-none",
               )}
             >
               <LayoutDashboard className="h-4 w-4" />
               <span>Profile</span>
             </Link>
           </DropdownMenuItem>
+
           <DropdownMenuItem
-            onClick={() => { 
+            onClick={() => {
               if (address) {
-                navigator.clipboard.writeText(address); 
-                toast.success("Address copied!");
+                navigator.clipboard.writeText(address)
+                toast.success("Address copied!")
               }
             }}
             className="cursor-pointer flex items-center gap-2"
@@ -218,7 +226,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
         </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
-        
+
         <DropdownMenuItem
           onClick={disconnect}
           className="cursor-pointer flex items-center gap-2 text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"

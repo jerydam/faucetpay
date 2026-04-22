@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /app/page.tsx — Arena MiniPay Landing
+ * /app/page.tsx — DropDuel MiniPay Landing
  * Minimal. Mobile-first. Strict palette: #020617 + #2563eb + white.
  * Font: Big Shoulders Display (display) + Figtree (body)
  */
@@ -139,7 +139,7 @@ export default function LandingPage() {
               <Zap className="h-4 w-4 text-white fill-white" />
             </div>
             <span className="d font-black text-xl tracking-tight text-white" style={{ letterSpacing: "-.01em" }}>
-              ARENA
+              DropDuel
             </span>
           </div>
 
@@ -206,7 +206,7 @@ export default function LandingPage() {
 
         {/* ── Mode cards ───────────────────────────────────────────────────── */}
         <section className="r r5 px-6 pt-8 pb-10 space-y-4">
-          <p className="tag mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>Choose your arena</p>
+          <p className="tag mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>Choose your DropDuel</p>
 
           {/* 1v1 Duel */}
           <div
@@ -274,7 +274,7 @@ export default function LandingPage() {
 
         {/* ── Footer ───────────────────────────────────────────────────────── */}
         <footer className="px-6 pb-8 flex items-center justify-between">
-          <span className="tag" style={{ color: "rgba(255,255,255,0.15)" }}>Arena v2.0 // Celo</span>
+          <span className="tag" style={{ color: "rgba(255,255,255,0.15)" }}>DropDuel v2.0 // Celo</span>
           {!isMiniPay && (
             <button
               onClick={() => router.push("/challenge")}

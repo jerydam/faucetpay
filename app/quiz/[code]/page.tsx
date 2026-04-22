@@ -2689,56 +2689,132 @@
             SHARE MODAL (Dynamic QR Code + Text)
             ════════════════════════════════════════ */}
         {showShareModal && (
-          <div 
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" 
-            onClick={() => setShowShareModal(false)}
-          >
-            <div 
-              className="bg-surface-card border border-surface rounded-3xl p-6 sm:p-8 shadow-2xl max-w-sm w-full text-center space-y-6" 
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-surface-primary font-black text-xl">Invite Players</h3>
-                <button 
-                  onClick={() => setShowShareModal(false)} 
-                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-surface-muted hover:text-surface-primary transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+  <div
+    className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    onClick={() => setShowShareModal(false)}
+  >
+    <div
+      className="bg-surface-card border border-surface rounded-3xl p-6 sm:p-8 shadow-2xl max-w-sm w-full text-center space-y-5"
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h3 className="text-surface-primary font-black text-xl">Invite Players</h3>
+        <button
+          onClick={() => setShowShareModal(false)}
+          className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-surface-muted hover:text-surface-primary transition-colors"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* QR Code — creator only */}
+      {isCreator && (() => {
+        const quizUrl = typeof window !== "undefined"
+          ? `${window.location.origin}/quiz/${code}`
+          : "";
+
+        const downloadQR = () => {
+          // Grab the SVG node rendered by QRCodeSVG
+          const svgEl = document.getElementById("share-qr-svg");
+          if (!svgEl) return;
+
+          const serialized = new XMLSerializer().serializeToString(svgEl);
+          const blob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+
+          // Draw onto canvas → PNG download
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const SIZE = 400;
+            canvas.width = SIZE;
+            canvas.height = SIZE;
+            const ctx = canvas.getContext("2d")!;
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, SIZE, SIZE);
+            ctx.drawImage(img, 0, 0, SIZE, SIZE);
+            URL.revokeObjectURL(url);
+
+            canvas.toBlob(pngBlob => {
+              if (!pngBlob) return;
+              const pngUrl = URL.createObjectURL(pngBlob);
+              const a = document.createElement("a");
+              a.href = pngUrl;
+              a.download = `quiz-${code}-qr.png`;
+              a.click();
+              URL.revokeObjectURL(pngUrl);
+            }, "image/png");
+          };
+          img.src = url;
+        };
+
+        return (
+          <div className="space-y-3">
+            {/* QR frame */}
+            <div className="relative group mx-auto w-max">
+              <div className="bg-white p-4 rounded-2xl shadow-inner">
+                <QRCodeSVG
+                  id="share-qr-svg"
+                  value={quizUrl}
+                  size={180}
+                  level="H"
+                  includeMargin={true}
+                />
               </div>
-
-              {/* ONLY show QR Code if the user is the creator */}
-              {isCreator && (
-                <div className="bg-white p-4 rounded-2xl mx-auto w-max shadow-inner">
-                  <QRCodeSVG 
-                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/quiz/${code}`} 
-                    size={200} 
-                    level="H"
-                    includeMargin={true}
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <p className="text-surface-secondary text-xs font-bold uppercase tracking-widest">Quiz Code</p>
-                <div className="text-4xl font-black tracking-widest text-[#072474] dark:text-blue-400 bg-[#072474]/5 dark:bg-[#072474]/20 py-3 rounded-xl border border-[#072474]/20">
-                  {code}
-                </div>
-              </div>
-
-              <Button
-                className="w-full h-12 font-bold bg-[#072474] hover:bg-[#0a32a0] text-white rounded-xl shadow-md border-0 transition-all active:scale-95"
-                onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/quiz/${code}`);
-                  toast.success("Link copied to clipboard!");
-                  setShowShareModal(false);
-                }}
+              {/* Hover overlay */}
+              <button
+                onClick={downloadQR}
+                className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"
               >
-                <Copy className="mr-2 h-4 w-4" /> Copy Invite Link
-              </Button>
+                <div className="bg-white text-slate-900 rounded-xl px-4 py-2 font-bold text-sm flex items-center gap-2 shadow-lg">
+                  {/* download icon inline — no extra import needed */}
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                    <path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Download PNG
+                </div>
+              </button>
             </div>
+
+            {/* Download button below QR for mobile (no hover) */}
+            <button
+              onClick={downloadQR}
+              className="w-full h-10 rounded-xl border border-surface bg-surface-card-2 text-surface-secondary hover:text-surface-primary hover:bg-surface-card text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 sm:hidden"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Download QR Code
+            </button>
           </div>
-        )}
+        );
+      })()}
+
+      {/* Code pill */}
+      <div className="space-y-1.5">
+        <p className="text-surface-secondary text-xs font-bold uppercase tracking-widest">Quiz Code</p>
+        <div className="text-4xl font-black tracking-widest text-[#072474] dark:text-blue-400 bg-[#072474]/5 dark:bg-[#072474]/20 py-3 rounded-xl border border-[#072474]/20">
+          {code}
+        </div>
+      </div>
+
+      {/* Copy link */}
+      <Button
+        className="w-full h-12 font-bold bg-[#072474] hover:bg-[#0a32a0] text-white rounded-xl shadow-md border-0 transition-all active:scale-95"
+        onClick={() => {
+          navigator.clipboard.writeText(
+            `${typeof window !== "undefined" ? window.location.origin : ""}/quiz/${code}`
+          );
+          toast.success("Link copied to clipboard!");
+          setShowShareModal(false);
+        }}
+      >
+        <Copy className="mr-2 h-4 w-4" /> Copy Invite Link
+      </Button>
+    </div>
+  </div>
+)}
 
           {/* ════════════════════════════════════════
               FLOATING CHAT BUBBLE + DRAWER

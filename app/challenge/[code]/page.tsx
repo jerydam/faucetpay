@@ -21,7 +21,19 @@ import { ERC20_ABI, QUIZ_HUB_ABI } from "@/lib/abis";
 import { BrowserProvider, Contract, parseUnits, keccak256, toUtf8Bytes } from "ethers";
 import { useSearchParams } from "next/navigation";
 import { WalletConnectButton } from "@/components/wallet-connect";
+import { toast as sonnerToast } from "sonner";
+import { RematchPopup, RematchInvite } from "@/components/RematchPopup";
+ 
 
+
+ 
+const CREATE_QUIZ_FRAGMENT = [{
+  inputs: [
+    { internalType: "bytes32", name: "quizId",       type: "bytes32" },
+    { internalType: "address", name: "tokenAddress", type: "address" },
+  ],
+  name: "createQuiz", outputs: [], stateMutability: "nonpayable", type: "function",
+}];
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
@@ -38,7 +50,7 @@ const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_STAKE_CONTRACT ?? "0xceDC56a09a
 
 const TOKEN_ADDRESSES: Record<string, string> = {
   cUSD: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
-  USDC: "0xef4229c8c3250C675F21BCefa42f58EfbfF6002a",
+  USDC: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
   USDT: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e",
 };
 
@@ -194,7 +206,7 @@ interface FloatingChatProps {
   chatInput: string;
   setChatInput: (v: string) => void;
   onSend: () => void;
-  chatBottomRef: React.RefObject<HTMLDivElement>;
+  chatBottomRef: React.RefObject<HTMLDivElement | null>;
   unreadCount: number;
 }
 
@@ -287,7 +299,83 @@ function FloatingChat({ messages, myWallet, chatInput, setChatInput, onSend, cha
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-
+export async function sendRematchInvite(params: {
+  code:              string;
+  userWalletAddress: string;
+  setRematchPending: (v: boolean) => void;
+}) {
+  const { code, userWalletAddress, setRematchPending } = params;
+  if (!userWalletAddress) return;
+ 
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/rematch-invite`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ requesterWallet: userWalletAddress }),
+    });
+    const d = await res.json();
+    if (!d.success) throw new Error(d.detail ?? "Could not send invite");
+ 
+    setRematchPending(true);
+    sonnerToast.info("Rematch invite sent — waiting for opponent…");
+  } catch (err: any) {
+    sonnerToast.error(err?.message ?? "Could not send rematch invite");
+  }
+}
+ 
+/**
+ * Step 3 — called automatically when WS receives "rematch_invite_accepted".
+ * Creates the challenge in DB, signs createQuiz on-chain, then routes requester.
+ */
+export async function handleRematchCreate(params: {
+  code:              string;
+  userWalletAddress: string;
+  challenge:         any;
+  router:            ReturnType<typeof useRouter>;
+  setIsRequesting:   (v: boolean) => void;
+}) {
+  const { code, userWalletAddress, challenge, router, setIsRequesting } = params;
+  setIsRequesting(true);
+ 
+  try {
+    // 1. Create DB record + questions
+    const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/rematch`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ requesterWallet: userWalletAddress }),
+    });
+    const d = await res.json();
+    if (!d.success) throw new Error(d.detail ?? "Rematch creation failed");
+ 
+    const newCode: string = d.newCode;
+ 
+    // 2. Create quiz on-chain (requester only)
+    if (!window.ethereum) throw new Error("No wallet detected");
+    const provider = new BrowserProvider(window.ethereum);
+    const signer   = await provider.getSigner();
+    const contract = new Contract(CONTRACT_ADDRESS, CREATE_QUIZ_FRAGMENT, signer);
+    const quizId   = keccak256(toUtf8Bytes(newCode));
+    const tokenAddr =
+      TOKEN_ADDRESSES[(challenge?.token ?? "cUSD").toUpperCase()] ??
+      TOKEN_ADDRESSES.cUSD;
+ 
+    sonnerToast.info("Confirm quiz creation in your wallet…");
+    const tx = await contract.createQuiz(quizId, tokenAddr);
+    await tx.wait();
+    sonnerToast.success("Challenge created! Heading to pre-lobby…");
+ 
+    // 3. Route requester to pre-lobby as creator
+    router.push(`/challenge/${newCode}/pre-lobby`);
+  } catch (err: any) {
+    if (err?.code === 4001 || err?.code === "ACTION_REJECTED") {
+      sonnerToast.error("Transaction rejected.");
+    } else {
+      sonnerToast.error(err?.message ?? "Could not create rematch.");
+    }
+  } finally {
+    setIsRequesting(false);
+  }
+}
 export default function ChallengePage() {
   const params  = useParams();
   const router  = useRouter();
@@ -348,7 +436,9 @@ export default function ChallengePage() {
   const reconnectAttempts = useRef(0);
   const creatorStakedRef  = useRef(false);
   const joinCalledRef     = useRef(false); // prevents double /join call from pre-lobby
-
+  const [rematchInvite, setRematchInvite]             = useState<RematchInvite | null>(null);
+  const [isRequestingRematch, setIsRequestingRematch] = useState(false);
+  const [rematchPending, setRematchPending]           = useState(false);
   // ── Derived (safe to compute here — no hooks) ────────────────────────────────
   const myPlayerEntry = players.find(p => p.walletAddress.toLowerCase() === myWallet);
   const myTxVerified  = myPlayerEntry?.txVerified ?? false;
@@ -466,7 +556,7 @@ export default function ChallengePage() {
     wsRef.current = ws;
     ws.onopen = () => { reconnectAttempts.current = 0; };
 
-    ws.onmessage = (ev) => {
+    ws.onmessage = async (ev) => {
       let msg: any;
       try { msg = JSON.parse(ev.data); } catch { return; }
 
@@ -585,7 +675,46 @@ export default function ChallengePage() {
           setUnreadCount(prev => prev + 1);
           break;
         }
-      }
+        case "rematch_invite": {
+          // Only show popup to the opponent, not the requester
+          if (msg.requesterWallet?.toLowerCase() !== myWallet) {
+            setRematchInvite({
+              originalCode:    msg.originalCode,
+              topic:           msg.topic,
+              stakeAmount:     msg.stakeAmount,
+              tokenSymbol:     msg.tokenSymbol,
+              requesterWallet: msg.requesterWallet,
+              requesterName:   msg.requesterName,
+            });
+          }
+          break;
+        }
+
+        case "rematch_invite_accepted": {
+          // Only the requester acts on this
+          if (msg.acceptorWallet?.toLowerCase() !== myWallet) {
+            setRematchPending(false);
+            toast.success(`${msg.acceptorName} accepted! Creating the challenge…`);
+            await handleRematchCreate({
+              code,
+              userWalletAddress: userWalletAddress!,
+              challenge,
+              router,
+              setIsRequesting: setIsRequestingRematch,
+            });
+          }
+          break;
+        }
+
+        case "rematch_ready": {
+          // Route the opponent (requester already navigates inside handleRematchCreate)
+          if (msg.requesterWallet?.toLowerCase() !== myWallet) {
+            toast.success("Rematch ready! Heading to pre-lobby…");
+            router.push(`/challenge/${msg.newCode}/pre-lobby`);
+          }
+          break;
+        }
+        }
     };
 
     ws.onclose = (ev) => {
@@ -766,19 +895,6 @@ export default function ChallengePage() {
     }
   }, [userWalletAddress, challenge, code, username, hasJoined]);
 
-  const handleRematch = useCallback(async () => {
-    if (!userWalletAddress) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/rematch`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requesterWallet: userWalletAddress }),
-      });
-      const d = await res.json();
-      if (d.success) { toast.success(`Rematch! Code: ${d.newCode}`); router.push(`/challenge/${d.newCode}`); }
-      else toast.error(d.detail || "Rematch failed");
-    } catch { toast.error("Could not start rematch"); }
-  }, [userWalletAddress, code, router]);
-
   // ── Derived values (no hooks, safe after all hooks) ───────────────────────────
   const myClaim   = pendingClaims.find(c => c.code === code);
   const totalPool = challenge
@@ -797,11 +913,24 @@ export default function ChallengePage() {
       </div>
     );
   }
+  const globalOverlays = (
+  <>
+    {rematchInvite && (
+      <RematchPopup
+        invite={rematchInvite}
+        myWallet={myWallet}
+        onDismiss={() => setRematchInvite(null)}
+      />
+    )}
+  </>
+);
 
   if (phase === "game_over") {
     const sortedPlayers = Object.entries(finalScores).sort(([, a], [, b]) => b.points - a.points);
     const isTie = gameOutcome === "tie";
     return (
+      <>
+      {globalOverlays}
       <div className="fixed inset-0 bg-background flex flex-col overflow-auto">
         <Confetti active={showConfetti} />
         <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
@@ -855,10 +984,29 @@ export default function ChallengePage() {
           )}
           <div className="flex flex-col gap-3">
             {canRematch && (
-              <Button className="h-12 bg-primary text-primary-foreground font-bold border-0" onClick={handleRematch}>
-                🔁 Request Rematch
-              </Button>
+              <button
+                onClick={() => sendRematchInvite({
+                  code,
+                  userWalletAddress: userWalletAddress!,
+                  setRematchPending,
+                })}
+                disabled={isRequestingRematch || rematchPending}
+                className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-black text-base
+                          hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center
+                          gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {rematchPending ? (
+                  <><Loader2 className="h-5 w-5 animate-spin" /> Waiting for opponent…</>
+                ) : isRequestingRematch ? (
+                  <><Loader2 className="h-5 w-5 animate-spin" /> Creating challenge…</>
+                ) : (
+                  <>🔁 Request Rematch</>
+                )}
+              </button>
             )}
+            
+            
+
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/challenge")}>
                 <Home className="mr-2 h-4 w-4" /> Hub
@@ -870,11 +1018,14 @@ export default function ChallengePage() {
           </div>
         </div>
       </div>
+      </>
     );
   }
 
   if (phase === "countdown") {
     return (
+      <>
+      {globalOverlays}
       <div className="fixed inset-0 bg-background flex items-center justify-center z-50">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground text-xl uppercase tracking-widest font-black">Round: {currentRoundName}</p>
@@ -884,6 +1035,7 @@ export default function ChallengePage() {
         </div>
         <style>{`@keyframes zoomFade{0%{transform:scale(1.5);opacity:0}30%{transform:scale(1);opacity:1}80%{opacity:1}100%{transform:scale(0.8);opacity:0}}`}</style>
       </div>
+      </>
     );
   }
 
@@ -1122,6 +1274,14 @@ export default function ChallengePage() {
   const allReady    = allVerified && players.every(p => p.ready);
 
   return (
+    <>
+    {rematchInvite && (
+      <RematchPopup
+        invite={rematchInvite}
+        myWallet={myWallet}
+        onDismiss={() => setRematchInvite(null)}
+      />
+    )}
     <div className="min-h-screen bg-background flex flex-col">
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -1278,5 +1438,6 @@ export default function ChallengePage() {
         <FloatingChat messages={chatMessages} myWallet={myWallet} chatInput={chatInput} setChatInput={setChatInput} onSend={handleSendChat} chatBottomRef={chatBottomRef} unreadCount={unreadCount} />
       )}
     </div>
+    </>
   );
 }

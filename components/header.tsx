@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { WalletConnectButton } from "@/components/wallet-connect";
 import Link from "next/link";
-import { Menu, X, ChevronLeft, Plus, RefreshCw } from "lucide-react"; // Added RefreshCw icon
+import { Menu, X, ChevronLeft, Plus, RefreshCw } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useWallet } from "@/hooks/use-wallet";
 import { cn } from "@/lib/utils";
@@ -15,22 +15,28 @@ export function Header({
   pageTitle, 
   hideAction = false,
   isDashboard = false,
-  onRefresh, // 💡 Added
-  loading = false // 💡 Added
+  onRefresh,
+  loading = false
 }: { 
   pageTitle: string; 
   hideAction?: boolean; 
   isDashboard?: boolean;
-  onRefresh?: () => void | Promise<void>; // 💡 Added type
-  loading?: boolean; // 💡 Added type
+  onRefresh?: () => void | Promise<void>;
+  loading?: boolean;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMiniPay, setIsMiniPay] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const router = useRouter();
   const pathname = usePathname();
   const { isConnected } = useWallet();
+
+  // Detect MiniPay once on mount — same flag used in WalletProvider
+  useEffect(() => {
+    setIsMiniPay(!!(window.ethereum as any)?.isMiniPay);
+  }, []);
 
   const isDashboardPage = isDashboard || 
     pageTitle.includes('Dashboard') || 
@@ -39,7 +45,7 @@ export function Header({
 
   const getActionConfig = () => {
     if (pathname.includes('/quest')) return { label: "Create Quest", path: "/quest/create-quest" };
-    if (pathname.includes('/quiz')) return { label: "Create Quiz", path: "/quiz/create-quiz" };
+    if (pathname.includes('/quiz'))  return { label: "Create Quiz",  path: "/quiz/create-quiz"  };
     return { label: "Create Faucet", path: "/faucet/create-faucet" };
   };
 
@@ -79,7 +85,6 @@ export function Header({
               </Link>
             </h1>
 
-            {/* 💡 Visual Feedback for Refreshing */}
             {onRefresh && (
               <Button
                 variant="ghost"
@@ -98,36 +103,34 @@ export function Header({
         
           {/* Desktop Actions */}
           <div className="hidden lg:flex items-center gap-4">
-            <ThemeToggle/>
-            <NotificationBell/>
-            {isConnected && (
-              <>
-                {!hideAction && (
-                  <Button
-                      onClick={() => router.push(action.path)}
-                      variant="default"
-                      className="text-xs font-bold uppercase tracking-widest px-6 shadow-md hover:scale-105 transition-transform"
-                  >
-                      <Plus className="mr-2 h-4 w-4" />
-                      {action.label}
-                  </Button>
-                )}
-              </>
+            <ThemeToggle />
+            <NotificationBell />
+            {isConnected && !hideAction && (
+              <Button
+                onClick={() => router.push(action.path)}
+                variant="default"
+                className="text-xs font-bold uppercase tracking-widest px-6 shadow-md hover:scale-105 transition-transform"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {action.label}
+              </Button>
             )}
-            <div className="border-l border-border pl-4">
-               <WalletConnectButton />
-            </div>
+            {/* Hide wallet connect button inside MiniPay — wallet is auto-connected */}
+            {!isMiniPay && (
+              <div className="border-l border-border pl-4">
+                <WalletConnectButton />
+              </div>
+            )}
           </div>
 
           {/* Mobile Actions */}
           <div className="lg:hidden flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
-              <NotificationBell/>
-            <WalletConnectButton />
+            <NotificationBell />
+            {/* Hide wallet connect button inside MiniPay — wallet is auto-connected */}
+            {!isMiniPay && <WalletConnectButton />}
 
-        
-
-            {!isDashboardPage && isConnected && 
+            {!isDashboardPage && isConnected && (
               <Button
                 ref={buttonRef}
                 variant="outline"
@@ -137,7 +140,7 @@ export function Header({
               >
                 {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
-            }
+            )}
           </div>
         </div>
 
@@ -147,7 +150,6 @@ export function Header({
             ref={menuRef}
             className="lg:hidden absolute top-[79px] left-0 w-full bg-background border-b border-border p-6 flex flex-col gap-4 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200"
           >
-            {/* 💡 Mobile Refresh Option */}
             {onRefresh && (
               <Button 
                 variant="outline" 
@@ -162,10 +164,7 @@ export function Header({
 
             {isConnected && !hideAction && (
               <Button
-                onClick={() => {
-                  router.push(action.path);
-                  setIsMenuOpen(false);
-                }}
+                onClick={() => { router.push(action.path); setIsMenuOpen(false); }}
                 variant="default"
                 className="w-full text-xs font-bold uppercase tracking-widest py-6"
               >

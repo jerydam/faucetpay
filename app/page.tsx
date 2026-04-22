@@ -1,158 +1,292 @@
 "use client";
 
 /**
- * /app/page.tsx — High-Stakes Entry Point
- * Rebranded for Professional Competition & Reward Tiers.
- * Palette: Strict Blue (#2563eb) and Deep Slate (#020617).
+ * /app/page.tsx — Arena MiniPay Landing
+ * Minimal. Mobile-first. Strict palette: #020617 + #2563eb + white.
+ * Font: Big Shoulders Display (display) + Figtree (body)
  */
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { 
-  Trophy, 
-  Zap, 
-  ArrowRight,
-  Target,
-  Users,
-  ShieldCheck,
-  TrendingUp,
-  Gavel
-} from "lucide-react";
+import { Zap, Trophy, Gavel, ArrowUpRight, ShieldCheck, Users } from "lucide-react";
 
 export default function LandingPage() {
   const router = useRouter();
+  const [ready, setReady] = useState(false);
+  const [isMiniPay, setIsMiniPay] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 60);
+    // Detect MiniPay — same flag used in WalletProvider
+    setIsMiniPay(!!(window.ethereum as any)?.isMiniPay);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white selection:bg-blue-500/30">
-      
-      {/* --- Minimalist Header --- */}
-      <nav className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 flex items-center justify-center">
-            <Zap className="h-6 w-6 text-white fill-white" />
-          </div>
-          <span className="font-black text-2xl tracking-tighter uppercase italic">Arena</span>
-        </div>
-        <div className="hidden md:flex gap-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
-          <a href="#mechanics" className="hover:text-blue-500 transition-colors">Mechanics</a>
-          <a href="#security" className="hover:text-blue-500 transition-colors">Security</a>
-        </div>
-        <Button 
-          onClick={() => router.push("/challenge")}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-black px-8 rounded-none uppercase tracking-widest text-xs h-12"
-        >
-          Connect Wallet
-        </Button>
-      </nav>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@400;700;900&family=Figtree:wght@400;500;600;700&display=swap');
 
-      {/* --- Hero: The Value Proposition --- */}
-      <section className="relative pt-20 pb-32 px-6 overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-blue-600/5 blur-[120px] rounded-full -z-10" />
-        
-        <div className="max-w-5xl mx-auto text-center space-y-8">
-          <div className="inline-flex items-center gap-3 px-4 py-2 bg-slate-900 border border-white/10 text-blue-400 text-[10px] font-black uppercase tracking-[0.3em]">
-            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-            Live on Celo Mainnet
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+          --bg:    #020617;
+          --blue:  #2563eb;
+          --blue2: #1d4ed8;
+          --white: #ffffff;
+          --dim:   rgba(255,255,255,0.45);
+          --line:  rgba(255,255,255,0.07);
+        }
+
+        body { background: var(--bg); }
+
+        .d  { font-family: 'Big Shoulders Display', sans-serif; }
+        .b  { font-family: 'Figtree', sans-serif; }
+
+        /* ── page load ── */
+        @keyframes up {
+          from { opacity: 0; transform: translateY(24px); }
+          to   { opacity: 1; transform: translateY(0);    }
+        }
+        .r  { opacity: 0; animation: up .55s ease forwards; }
+        .r1 { animation-delay: .05s; }
+        .r2 { animation-delay: .15s; }
+        .r3 { animation-delay: .25s; }
+        .r4 { animation-delay: .38s; }
+        .r5 { animation-delay: .50s; }
+
+        /* ── blue accent pulse ── */
+        @keyframes bpulse {
+          0%,100% { opacity:.9; }
+          50%      { opacity:.5; }
+        }
+        .live-dot { animation: bpulse 1.8s ease-in-out infinite; }
+
+        /* ── card hover ── */
+        .mode-card {
+          transition: transform .22s ease, border-color .22s ease;
+          cursor: pointer;
+        }
+        .mode-card:hover {
+          transform: translateY(-3px);
+          border-color: var(--blue) !important;
+        }
+
+        /* ── btn ── */
+        .btn-blue {
+          background: var(--blue);
+          transition: background .2s, transform .15s;
+        }
+        .btn-blue:hover  { background: var(--blue2); }
+        .btn-blue:active { transform: scale(.97); }
+
+        .btn-ghost {
+          border: 1.5px solid var(--line);
+          transition: border-color .2s, background .2s, transform .15s;
+        }
+        .btn-ghost:hover  { border-color: rgba(37,99,235,.5); background: rgba(37,99,235,.06); }
+        .btn-ghost:active { transform: scale(.97); }
+
+        /* ── stat divider ── */
+        .stat-row {
+          border-top: 1px solid var(--line);
+          border-bottom: 1px solid var(--line);
+        }
+
+        /* ── blue bar on card ── */
+        .blue-bar::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 2px;
+          background: var(--blue);
+          transform: scaleX(0);
+          transform-origin: left;
+          transition: transform .3s ease;
+        }
+        .mode-card:hover .blue-bar::before { transform: scaleX(1); }
+
+        /* ── number highlight ── */
+        .num {
+          font-family: 'Big Shoulders Display', sans-serif;
+          font-weight: 900;
+          line-height: 1;
+          color: var(--white);
+        }
+
+        /* ── vertical rule ── */
+        .vr { width: 1px; background: var(--line); align-self: stretch; }
+
+        /* ── tag ── */
+        .tag {
+          font-family: 'Figtree', sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: .18em;
+          text-transform: uppercase;
+        }
+      `}</style>
+
+      <div
+        className={`b min-h-screen bg-[#020617] text-white flex flex-col transition-opacity duration-500 ${ready ? "opacity-100" : "opacity-0"}`}
+        style={{ maxWidth: 480, margin: "0 auto" }}
+      >
+
+        {/* ── Nav ──────────────────────────────────────────────────────────── */}
+        <nav className="r r1 flex items-center justify-between px-6 pt-8 pb-6">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-[#2563eb] flex items-center justify-center" style={{ borderRadius: 6 }}>
+              <Zap className="h-4 w-4 text-white fill-white" />
+            </div>
+            <span className="d font-black text-xl tracking-tight text-white" style={{ letterSpacing: "-.01em" }}>
+              ARENA
+            </span>
           </div>
+
+          {/* live badge */}
+          <div className="flex items-center gap-2 px-3 py-1.5" style={{ border: "1px solid rgba(37,99,235,.3)", borderRadius: 20, background: "rgba(37,99,235,.08)" }}>
+            <span className="live-dot w-1.5 h-1.5 rounded-full bg-[#2563eb]" />
+            <span className="tag text-[#2563eb]">Live</span>
+          </div>
+        </nav>
+
+        {/* ── Hero ─────────────────────────────────────────────────────────── */}
+        <section className="px-6 pb-10 flex-1 flex flex-col justify-center">
+
           
-          <h1 className="text-6xl md:text-8xl font-black leading-[0.85] tracking-tighter uppercase italic">
-            Win the <span className="text-blue-600">Pool.</span> <br />
-            Claim the <span className="text-blue-600">Rank.</span>
+          {/* headline */}
+          <h1 className="r r2 d font-black text-white leading-none mb-5" style={{ fontSize: "clamp(3.4rem, 14vw, 5rem)", letterSpacing: "-.01em" }}>
+            STAKE.<br />
+            <span style={{ color: "#2563eb" }}>PLAY.</span><br />
+            EARN.
           </h1>
-          
-          <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto font-medium leading-relaxed">
-            The premier decentralized arena for skill-based competition. Participate in global tournaments for rewards or initiate high-stakes 1v1 duels.
+
+          <p className="r r3 b text-white/50 font-medium leading-relaxed mb-8" style={{ fontSize: 15, maxWidth: 320 }}>
+            Challenge anyone on any topic. Negotiate the stake, answer faster, take the pool — secured on Celo.
           </p>
-        </div>
-      </section>
 
-      {/* --- Two Core Modes: High Contrast --- */}
-      <section className="max-w-7xl mx-auto px-6 pb-32 grid grid-cols-1 md:grid-cols-2 gap-px bg-white/5 border border-white/5">
-        
-        {/* Tournament / Quiz Mode */}
-        <div className="bg-[#020617] p-10 lg:p-16 space-y-8 group hover:bg-slate-950/50 transition-colors">
-          <div className="space-y-4">
-            <div className="w-12 h-12 border border-blue-600/30 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-blue-600" />
-            </div>
-            <h2 className="text-3xl font-black uppercase tracking-tighter">Global Tournaments</h2>
-            <p className="text-slate-400 leading-relaxed font-medium">
-              Join time-limited quiz events. Top performers on the leaderboard split the designated Celo reward pool. Your knowledge determines your payout.
-            </p>
+          {/* CTAs */}
+          <div className="r r4 flex flex-col gap-3">
+            <button
+              onClick={() => router.push("/challenge")}
+              className="btn-blue w-full h-14 text-white font-bold text-sm tracking-wide flex items-center justify-center gap-2"
+              style={{ borderRadius: 12 }}
+            >
+              <Gavel className="h-4 w-4" />
+              Start a Duel
+            </button>
+            <button
+              onClick={() => router.push("/quiz")}
+              className="btn-ghost w-full h-14 text-white font-bold text-sm tracking-wide flex items-center justify-center gap-2"
+              style={{ borderRadius: 12 }}
+            >
+              <Trophy className="h-4 w-4" />
+              Browse Tournaments
+            </button>
           </div>
-          
-          <ul className="space-y-3 text-xs font-bold text-slate-500 uppercase tracking-widest">
-            <li className="flex items-center gap-3"><Target className="h-4 w-4 text-blue-600" /> Tiered Reward Structure</li>
-            <li className="flex items-center gap-3"><Users className="h-4 w-4 text-blue-600" /> Multi-player Competition</li>
-          </ul>
+        </section>
 
-          <Button 
-            onClick={() => router.push("/quiz")}
-            className="w-full h-16 bg-transparent border-2 border-white text-white hover:bg-white hover:text-black font-black text-sm uppercase tracking-[0.2em] transition-all"
-          >
-            Enter Tournament
-          </Button>
-        </div>
-
-        {/* Challenge / Duel Mode */}
-        <div className="bg-[#020617] p-10 lg:p-16 space-y-8 group hover:bg-slate-950/50 transition-colors border-l border-white/5">
-          <div className="space-y-4">
-            <div className="w-12 h-12 border border-blue-600/30 flex items-center justify-center">
-              <Gavel className="h-6 w-6 text-blue-600" />
-            </div>
-            <h2 className="text-3xl font-black uppercase tracking-tighter">1v1 Staked Duels</h2>
-            <p className="text-slate-400 leading-relaxed font-medium">
-              Direct peer-to-peer challenges. Choose a topic, set the stake, and lock the pool. The winner takes the entire sum, minus a protocol fee.
-            </p>
-          </div>
-
-          <ul className="space-y-3 text-xs font-bold text-slate-500 uppercase tracking-widest">
-            <li className="flex items-center gap-3"><ShieldCheck className="h-4 w-4 text-blue-600" /> Escrowed Pool Security</li>
-            <li className="flex items-center gap-3"><Zap className="h-4 w-4 text-blue-600" /> Instant Payouts</li>
-          </ul>
-
-          <Button 
-            onClick={() => router.push("/challenge")}
-            className="w-full h-16 bg-blue-600 text-white hover:bg-blue-700 font-black text-sm uppercase tracking-[0.2em] transition-all border-none"
-          >
-            Initiate Duel
-          </Button>
-        </div>
-      </section>
-
-      {/* --- Protocol Stats --- */}
-      <section className="border-t border-white/5 bg-slate-950/30">
-        <div className="max-w-7xl mx-auto py-16 px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
+        {/* ── Stats ────────────────────────────────────────────────────────── */}
+        <div className="r r4 stat-row mx-6 grid grid-cols-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
           {[
-            { label: "Total Stakes", val: "500K+ CELO" },
-            { label: "Active Duels", val: "1,240" },
-            { label: "Global Players", val: "12,000+" },
-            { label: "Uptime", val: "99.9%" },
-          ].map((stat, i) => (
-            <div key={i} className="text-center md:text-left">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{stat.label}</p>
-              <p className="text-xl font-black text-white italic">{stat.val}</p>
+            { n: "500K+", l: "Total staked" },
+            { n: "12K+",  l: "Players" },
+            { n: "99.9%", l: "Uptime" },
+          ].map((s, i) => (
+            <div
+              key={s.l}
+              className="py-5 text-center"
+              style={i > 0 ? { borderLeft: "1px solid rgba(255,255,255,0.07)" } : undefined}
+            >
+              <p className="num mb-1" style={{ fontSize: 22 }}>{s.n}</p>
+              <p className="tag" style={{ color: "rgba(255,255,255,0.35)" }}>{s.l}</p>
             </div>
           ))}
         </div>
-      </section>
 
-      {/* --- Final CTA --- */}
-      <section className="py-32 px-6 text-center border-t border-white/5">
-        <div className="max-w-3xl mx-auto space-y-10">
-          <h2 className="text-5xl md:text-6xl font-black uppercase tracking-tighter italic">Ready to settle the score?</h2>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button 
-              onClick={() => router.push("/challenge/create-quiz")}
-              className="h-16 px-12 bg-white text-black hover:bg-blue-600 hover:text-white font-black uppercase tracking-widest transition-all"
-            >
-              Launch Challenge
-            </Button>
+        {/* ── Mode cards ───────────────────────────────────────────────────── */}
+        <section className="r r5 px-6 pt-8 pb-10 space-y-4">
+          <p className="tag mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>Choose your arena</p>
+
+          {/* 1v1 Duel */}
+          <div
+            className="mode-card blue-bar relative p-6"
+            style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, background: "rgba(255,255,255,0.02)" }}
+            onClick={() => router.push("/challenge")}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="w-10 h-10 flex items-center justify-center" style={{ background: "rgba(37,99,235,.15)", borderRadius: 10 }}>
+                <Gavel className="h-5 w-5 text-[#2563eb]" />
+              </div>
+              <ArrowUpRight className="h-4 w-4 text-white/20" />
+            </div>
+            <h3 className="d font-black text-white text-2xl uppercase tracking-tight mb-2">1v1 Staked Duel</h3>
+            <p className="b text-white/40 font-medium leading-relaxed" style={{ fontSize: 14 }}>
+              Pick a topic. Negotiate the stake live. Winner takes the entire escrow.
+            </p>
+            <div className="flex items-center gap-3 mt-4">
+              {["Negotiation", "On-chain Escrow", "Instant Payout"].map(tag => (
+                <span key={tag} className="tag" style={{ color: "#2563eb", fontSize: 9 }}>{tag}</span>
+              ))}
+            </div>
           </div>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em]">Protocol Version 2.0 // Secured by Celo</p>
+
+          {/* Tournament */}
+          <div
+            className="mode-card blue-bar relative p-6"
+            style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, background: "rgba(255,255,255,0.02)" }}
+            onClick={() => router.push("/quiz")}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="w-10 h-10 flex items-center justify-center" style={{ background: "rgba(37,99,235,.15)", borderRadius: 10 }}>
+                <Trophy className="h-5 w-5 text-[#2563eb]" />
+              </div>
+              <ArrowUpRight className="h-4 w-4 text-white/20" />
+            </div>
+            <h3 className="d font-black text-white text-2xl uppercase tracking-tight mb-2">Global Tournament</h3>
+            <p className="b text-white/40 font-medium leading-relaxed" style={{ fontSize: 14 }}>
+              Compete with hundreds. Climb the leaderboard. Top players split the pool.
+            </p>
+            <div className="flex items-center gap-3 mt-4">
+              {["Leaderboard", "Tiered Rewards", "Multi-player"].map(tag => (
+                <span key={tag} className="tag" style={{ color: "#2563eb", fontSize: 9 }}>{tag}</span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Trust row ────────────────────────────────────────────────────── */}
+        <div className="px-6 pb-10 flex items-center gap-5" style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 24 }}>
+          {[
+            { icon: <ShieldCheck className="h-4 w-4 text-[#2563eb]" />, label: "Secured by Celo" },
+            { icon: <Zap className="h-4 w-4 text-[#2563eb]" />, label: "Instant payouts" },
+            { icon: <Users className="h-4 w-4 text-[#2563eb]" />, label: "12K+ players" },
+          ].map((t, i) => (
+            <React.Fragment key={t.label}>
+              <div className="flex items-center gap-1.5 flex-1">
+                {t.icon}
+                <span className="tag" style={{ color: "rgba(255,255,255,0.3)", fontSize: 9 }}>{t.label}</span>
+              </div>
+              {i < 2 && <div className="vr h-4" />}
+            </React.Fragment>
+          ))}
         </div>
-      </section>
-    </div>
+
+        {/* ── Footer ───────────────────────────────────────────────────────── */}
+        <footer className="px-6 pb-8 flex items-center justify-between">
+          <span className="tag" style={{ color: "rgba(255,255,255,0.15)" }}>Arena v2.0 // Celo</span>
+          {!isMiniPay && (
+            <button
+              onClick={() => router.push("/challenge")}
+              className="btn-blue flex items-center gap-1.5 px-4 h-8 font-bold text-white"
+              style={{ borderRadius: 8, fontSize: 11, letterSpacing: ".06em" }}
+            >
+              Connect <ArrowUpRight className="h-3 w-3" />
+            </button>
+          )}
+        </footer>
+
+      </div>
+    </>
   );
 }

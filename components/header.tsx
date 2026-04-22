@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { WalletConnectButton } from "@/components/wallet-connect";
 import Link from "next/link";
 import { Menu, X, ChevronLeft, Plus, RefreshCw } from "lucide-react";
@@ -10,6 +11,8 @@ import { useWallet } from "@/hooks/use-wallet";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme";
 import { NotificationBell } from "./notifications-provider";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
 
 export function Header({ 
   pageTitle, 
@@ -26,26 +29,53 @@ export function Header({
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMiniPay, setIsMiniPay] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [username, setUsername] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const router = useRouter();
   const pathname = usePathname();
-  const { isConnected } = useWallet();
+  const { isConnected, address } = useWallet();
 
-  // Detect MiniPay once on mount — same flag used in WalletProvider
+  // Detect MiniPay once on mount
   useEffect(() => {
     setIsMiniPay(!!(window.ethereum as any)?.isMiniPay);
   }, []);
 
+  // Fetch profile for avatar — only when in MiniPay (wallet auto-connected)
+  useEffect(() => {
+    if (!isMiniPay || !address) return;
+    fetch(`${API_BASE_URL}/api/profile/${address.toLowerCase()}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.profile) {
+          setAvatarUrl(d.profile.avatar_url || "");
+          setUsername(d.profile.username || "");
+        }
+      })
+      .catch(() => {});
+  }, [isMiniPay, address]);
+
+  // Re-fetch when profile is updated
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail?.avatarUrl) setAvatarUrl(e.detail.avatarUrl);
+      if (e.detail?.username)  setUsername(e.detail.username);
+    };
+    window.addEventListener("profileUpdated", handler);
+    return () => window.removeEventListener("profileUpdated", handler);
+  }, []);
+
   const isDashboardPage = isDashboard || 
-    pageTitle.includes('Dashboard') || 
-    pageTitle.includes('Space') || 
-    pathname.includes('/dashboard');
+    pageTitle.includes("Dashboard") || 
+    pageTitle.includes("Space") || 
+    pathname.includes("/dashboard");
 
   const getActionConfig = () => {
-    if (pathname.includes('/quest')) return { label: "Create Quest", path: "/quest/create-quest" };
-    if (pathname.includes('/quiz'))  return { label: "Create Quiz",  path: "/quiz/create-quiz"  };
+    if (pathname.includes("/quest"))     return { label: "Create Quest",     path: "/quest/create-quest"         };
+    if (pathname.includes("/quiz"))      return { label: "Create Quiz",      path: "/quiz/create-quiz"           };
+    if (pathname.includes("/challenge")) return { label: "Create Challenge", path: "/challenge/create-challenge" };
     return { label: "Create Faucet", path: "/faucet/create-faucet" };
   };
 
@@ -53,14 +83,55 @@ export function Header({
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node) &&
-          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
+      if (
+        menuRef.current   && !menuRef.current.contains(event.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(event.target as Node)
+      ) {
         setIsMenuOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Initials fallback for avatar
+  const initials = username
+    ? username.slice(0, 2).toUpperCase()
+    : address
+    ? address.slice(2, 4).toUpperCase()
+    : "?";
+
+  // Navigate to own dashboard profile
+  const goToProfile = () => {
+    if (username) {
+      router.push(`/dashboard/${username}`);
+    } else if (address) {
+      router.push(`/dashboard/${address.toLowerCase()}`);
+    }
+  };
+
+  // Profile button — shown only inside MiniPay when wallet is connected
+  const ProfileButton = () => {
+    if (!isMiniPay || !isConnected) return null;
+    return (
+      <button
+        onClick={goToProfile}
+        title="My Profile"
+        className={cn(
+          "relative flex items-center justify-center rounded-full",
+          "ring-2 ring-border hover:ring-primary/50 transition-all duration-150",
+          "active:scale-95 hover:scale-105",
+        )}
+      >
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={avatarUrl} className="object-cover" />
+          <AvatarFallback className="text-xs font-black bg-primary/10 text-primary">
+            {initials}
+          </AvatarFallback>
+        </Avatar>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -105,6 +176,7 @@ export function Header({
           <div className="hidden lg:flex items-center gap-4">
             <ThemeToggle />
             <NotificationBell />
+
             {isConnected && !hideAction && (
               <Button
                 onClick={() => router.push(action.path)}
@@ -115,8 +187,11 @@ export function Header({
                 {action.label}
               </Button>
             )}
-            {/* Hide wallet connect button inside MiniPay — wallet is auto-connected */}
-            {!isMiniPay && (
+
+            {/* MiniPay: show profile avatar instead of wallet connect button */}
+            {isMiniPay ? (
+              <ProfileButton />
+            ) : (
               <div className="border-l border-border pl-4">
                 <WalletConnectButton />
               </div>
@@ -127,8 +202,13 @@ export function Header({
           <div className="lg:hidden flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
             <NotificationBell />
-            {/* Hide wallet connect button inside MiniPay — wallet is auto-connected */}
-            {!isMiniPay && <WalletConnectButton />}
+
+            {/* MiniPay: profile avatar replaces wallet connect */}
+            {isMiniPay ? (
+              <ProfileButton />
+            ) : (
+              <WalletConnectButton />
+            )}
 
             {!isDashboardPage && isConnected && (
               <Button

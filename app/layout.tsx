@@ -75,8 +75,8 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider 
           attribute="class" 
-          defaultTheme="system" 
-          enableSystem 
+          defaultTheme="light" 
+          enableSystem ={false}
           disableTransitionOnChange
         >
           {/* SINGLE PROVIDER WRAPPER - handles Privy, Wagmi, and QueryClient */}

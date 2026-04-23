@@ -1,26 +1,13 @@
 "use client";
 
-/**
- * RematchPopup.tsx
- *
- * Shown to the OPPONENT when the requester sends a rematch invite.
- * Opponent just clicks Accept/Decline — no on-chain tx.
- *
- * On Accept  → POST /rematch-accept-invite → dismiss
- *              Requester gets notified and does the on-chain work.
- *              Opponent waits for "rematch_ready" WS event → routes to pre-lobby.
- *
- * On Decline → dismiss silently
- */
-
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Swords, Check, X, Trophy } from "lucide-react";
+import { Loader2, Swords, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
-const POPUP_TTL    = 60; // seconds
+const POPUP_TTL    = 60;
 
 function fmt(n: number) {
   return n % 1 === 0 ? n.toString() : n.toFixed(n < 1 ? 2 : 1);
@@ -36,19 +23,21 @@ export interface RematchInvite {
 }
 
 interface Props {
-  invite:    RematchInvite;
-  myWallet:  string;
-  onDismiss: () => void;
+  invite:     RematchInvite;
+  myWallet:   string;
+  onDismiss:  () => void;
+  countdown?: number | null; // external countdown from parent (inviteCountdown)
 }
 
-export function RematchPopup({ invite, myWallet, onDismiss }: Props) {
-  const router             = useRouter();
-  const [ttl, setTtl]      = useState(POPUP_TTL);
-  const [busy, setBusy]    = useState(false);
-  const [accepted, setAccepted] = useState(false);
-  const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
+export function RematchPopup({ invite, myWallet, onDismiss, countdown }: Props) {
+  const router                      = useRouter();
+  const [ttl, setTtl]               = useState(POPUP_TTL);
+  const [busy, setBusy]             = useState(false);
+  const [accepted, setAccepted]     = useState(false);
+  const [declining, setDeclining]   = useState(false);
+  const timerRef                    = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Start countdown
+  // Internal TTL countdown (auto-dismiss safety net)
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setTtl(prev => {
@@ -63,7 +52,15 @@ export function RematchPopup({ invite, myWallet, onDismiss }: Props) {
     return () => clearInterval(timerRef.current!);
   }, [onDismiss]);
 
-  // ── Accept ───────────────────────────────────────────────────────────────
+  // If parent passes an external countdown that hits 0, auto-dismiss
+  useEffect(() => {
+    if (countdown !== null && countdown !== undefined && countdown <= 0) {
+      clearInterval(timerRef.current!);
+      onDismiss();
+    }
+  }, [countdown, onDismiss]);
+
+  // ── Accept ──────────────────────────────────────────────────────────────────
   const handleAccept = useCallback(async () => {
     if (busy) return;
     clearInterval(timerRef.current!);
@@ -84,14 +81,11 @@ export function RematchPopup({ invite, myWallet, onDismiss }: Props) {
       if (!d.success) throw new Error(d.detail ?? "Accept failed");
 
       setAccepted(true);
-      // Opponent now waits for "rematch_ready" WS event (sent when
-      // requester finishes on-chain). The NotificationBell/provider
-      // handles that event and routes them to pre-lobby.
       toast.success("Rematch accepted! Waiting for opponent to set up…");
     } catch (err: any) {
       toast.error(err?.message ?? "Could not accept rematch");
       setBusy(false);
-      // Restart countdown
+      // Restart internal countdown
       timerRef.current = setInterval(() => {
         setTtl(prev => {
           if (prev <= 1) { clearInterval(timerRef.current!); onDismiss(); return 0; }
@@ -101,13 +95,34 @@ export function RematchPopup({ invite, myWallet, onDismiss }: Props) {
     }
   }, [busy, invite, myWallet, onDismiss]);
 
-  const handleDecline = useCallback(() => {
+  // ── Decline ─────────────────────────────────────────────────────────────────
+  const handleDecline = useCallback(async () => {
+    if (busy || declining) return;
     clearInterval(timerRef.current!);
-    onDismiss();
-  }, [onDismiss]);
+    setDeclining(true);
+    try {
+      await fetch(
+        `${API_BASE_URL}/api/challenge/${invite.originalCode}/rematch-decline`,
+        {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({
+            declinerWallet:  myWallet,
+            requesterWallet: invite.requesterWallet,
+          }),
+        }
+      );
+    } catch {
+      // fire and forget — don't block UI
+    } finally {
+      onDismiss();
+    }
+  }, [busy, declining, invite, myWallet, onDismiss]);
 
-  const pct    = (ttl / POPUP_TTL) * 100;
-  const urgent = ttl <= 15;
+  // Use external countdown for display if provided, else fall back to internal ttl
+  const displaySeconds = countdown !== null && countdown !== undefined ? countdown : ttl;
+  const pct    = (displaySeconds / POPUP_TTL) * 100;
+  const urgent = displaySeconds <= 15;
   const pool   = fmt(invite.stakeAmount * 2);
 
   return (
@@ -147,6 +162,7 @@ export function RematchPopup({ invite, myWallet, onDismiss }: Props) {
             {!accepted && (
               <button
                 onClick={handleDecline}
+                disabled={declining}
                 className="w-7 h-7 rounded-full hover:bg-muted flex items-center justify-center shrink-0"
               >
                 <X className="h-3.5 w-3.5 text-muted-foreground" />
@@ -198,19 +214,21 @@ export function RematchPopup({ invite, myWallet, onDismiss }: Props) {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={handleDecline}
-                  disabled={busy}
-                  className="py-3 rounded-2xl border-2 border-border bg-card text-foreground font-black text-sm hover:bg-muted transition-all active:scale-[0.98] disabled:opacity-50"
+                  disabled={busy || declining}
+                  className="py-3 rounded-2xl border-2 border-border bg-card text-foreground font-black text-sm hover:bg-muted transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
-                  Decline
+                  {declining
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : "Decline"}
                 </button>
                 <button
                   onClick={handleAccept}
-                  disabled={busy}
+                  disabled={busy || declining}
                   className="py-3 rounded-2xl bg-primary text-primary-foreground font-black text-sm hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   {busy
                     ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <><Check className="h-4 w-4" /> Accept</>}
+                    : <><Check className="h-4 w-4" /> Accept ({displaySeconds}s)</>}
                 </button>
               </div>
 
@@ -218,7 +236,7 @@ export function RematchPopup({ invite, myWallet, onDismiss }: Props) {
                 "text-center text-[11px] font-bold tabular-nums",
                 urgent ? "text-red-500" : "text-muted-foreground/50",
               )}>
-                Auto-dismisses in {ttl}s
+                Auto-dismisses in {displaySeconds}s
               </p>
             </>
           )}

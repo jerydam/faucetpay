@@ -90,7 +90,7 @@ interface FinalScore { username: string; points: number }
 const OPTION_STYLES: Record<string, { bg: string; shape: string; ring: string }> = {
   A: { bg: "bg-red-500 hover:bg-red-600",       shape: "▲", ring: "ring-red-400" },
   B: { bg: "bg-blue-500 hover:bg-blue-600",     shape: "◆", ring: "ring-blue-400" },
-  C: { bg: "bg-yellow-500 hover:bg-yellow-600", shape: "●", ring: "ring-yellow-400" },
+  C: { bg: "dd-btn hover:bg-yellow-600", shape: "●", ring: "ring-yellow-400" },
   D: { bg: "bg-green-500 hover:bg-green-600",   shape: "■", ring: "ring-green-400" },
 };
 
@@ -98,7 +98,7 @@ const OPTION_STYLES: Record<string, { bg: string; shape: string; ring: string }>
 
 function LinearTimer({ seconds, total }: { seconds: number; total: number }) {
   const pct   = Math.max(0, (seconds / total) * 100);
-  const color = pct > 50 ? "bg-green-500" : pct > 25 ? "bg-yellow-500" : "bg-red-500";
+  const color = pct > 50 ? "bg-green-500" : pct > 25 ? "dd-btn" : "bg-red-500";
   return (
     <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 overflow-hidden shrink-0">
       <div className={cn("h-full transition-all duration-300 ease-linear", color)} style={{ width: `${pct}%` }} />
@@ -300,13 +300,19 @@ function FloatingChat({ messages, myWallet, chatInput, setChatInput, onSend, cha
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export async function sendRematchInvite(params: {
-  code:              string;
-  userWalletAddress: string;
-  setRematchPending: (v: boolean) => void;
+  code:                string;
+  userWalletAddress:   string;
+  setRematchPending:   (v: boolean) => void;
+  setRematchCountdown: React.Dispatch<React.SetStateAction<number | null>>; // ← fix
+  rematchTimerRef:     React.MutableRefObject<ReturnType<typeof setInterval> | null>;
+  rematchTimeoutRef:   React.MutableRefObject<ReturnType<typeof setTimeout>  | null>;
 }) {
-  const { code, userWalletAddress, setRematchPending } = params;
+  const {
+    code, userWalletAddress, setRematchPending,
+    setRematchCountdown, rematchTimerRef, rematchTimeoutRef,
+  } = params;
   if (!userWalletAddress) return;
- 
+
   try {
     const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/rematch-invite`, {
       method:  "POST",
@@ -315,9 +321,32 @@ export async function sendRematchInvite(params: {
     });
     const d = await res.json();
     if (!d.success) throw new Error(d.detail ?? "Could not send invite");
- 
+
     setRematchPending(true);
     sonnerToast.info("Rematch invite sent — waiting for opponent…");
+
+    // ── Start 30s countdown ──
+    const TIMEOUT = 30;
+    setRematchCountdown(TIMEOUT);
+
+    rematchTimerRef.current = setInterval(() => {
+      setRematchCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(rematchTimerRef.current!);
+          rematchTimerRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Client-side safety net (backend also fires rematch_timeout)
+    rematchTimeoutRef.current = setTimeout(() => {
+      setRematchPending(false);
+      setRematchCountdown(null);
+      sonnerToast.info("Rematch request timed out.");
+    }, (TIMEOUT + 1) * 1000);
+
   } catch (err: any) {
     sonnerToast.error(err?.message ?? "Could not send rematch invite");
   }
@@ -444,7 +473,26 @@ export default function ChallengePage() {
   const myTxVerified  = myPlayerEntry?.txVerified ?? false;
   const myReady       = myPlayerEntry?.ready ?? false;
   const displayStake  = agreedStake ?? challenge?.stake;
+  const [inviteCountdown, setInviteCountdown] = useState<number | null>(null);
+  const inviteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [rematchCountdown, setRematchCountdown] = useState<number | null>(null);
+  const rematchTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rematchTimeoutRef  = useRef<ReturnType<typeof setTimeout>  | null>(null);
 
+  const clearRematchTimers = useCallback(() => {
+  if (rematchTimerRef.current)   clearInterval(rematchTimerRef.current);
+  if (rematchTimeoutRef.current) clearTimeout(rematchTimeoutRef.current);
+  rematchTimerRef.current   = null;
+  rematchTimeoutRef.current = null;
+}, []);
+
+useEffect(() => {
+  return () => {
+    if (inviteTimerRef.current) clearInterval(inviteTimerRef.current);
+  };
+}, []);
+// Clean up on unmount
+useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
   // ─────────────────────────────────────────────────────────────────────────────
   //  ALL useEffect / useCallback HOOKS — must be above any early returns
   // ─────────────────────────────────────────────────────────────────────────────
@@ -526,6 +574,13 @@ export default function ChallengePage() {
       })
       .catch(err => console.error("[auto-join] fetch failed:", err));
   }, [cameFromPreLobby, agreedStake, userWalletAddress, challenge, code, username]);
+
+  const handleInviteDismiss = useCallback(() => {
+  if (inviteTimerRef.current) clearInterval(inviteTimerRef.current);
+  inviteTimerRef.current = null;
+  setInviteCountdown(null);
+  setRematchInvite(null);
+}, []);
 
   // ── Timer ─────────────────────────────────────────────────────────────────────
   const startTimer = useCallback((startedAt: number, limit: number) => {
@@ -670,30 +725,73 @@ export default function ChallengePage() {
           if (msg.winner === myWallet) { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 6000); }
           break;
         }
+        case "rematch_declined": {
+          clearRematchTimers();
+          setRematchPending(false);
+          setRematchCountdown(null);
+          toast.error(`${msg.declinerName ?? "Opponent"} declined the rematch.`);
+          break;
+        }
+
+        case "rematch_timeout": {
+          clearRematchTimers();
+          setRematchPending(false);
+          setRematchCountdown(null);
+          // Only show toast to the requester
+          if (msg.requesterWallet?.toLowerCase() === myWallet) {
+            toast.info("Rematch request expired — opponent didn't respond.");
+          }
+          break;
+        }
+
+        case "player_left": {
+          clearRematchTimers();
+          setRematchPending(false);
+          setRematchCountdown(null);
+          setRematchInvite(null);
+          toast.error(`${msg.username ?? "Opponent"} has left the game.`);
+          break;
+        }
         case "chat": {
           setChatMessages(prev => [...prev, msg]);
           setUnreadCount(prev => prev + 1);
           break;
         }
-        case "rematch_invite": {
-          // Only show popup to the opponent, not the requester
-          if (msg.requesterWallet?.toLowerCase() !== myWallet) {
-            setRematchInvite({
-              originalCode:    msg.originalCode,
-              topic:           msg.topic,
-              stakeAmount:     msg.stakeAmount,
-              tokenSymbol:     msg.tokenSymbol,
-              requesterWallet: msg.requesterWallet,
-              requesterName:   msg.requesterName,
-            });
-          }
-          break;
+       case "rematch_invite": {
+  if (msg.requesterWallet?.toLowerCase() !== myWallet) {
+    setRematchInvite({
+      originalCode:    msg.originalCode,
+      topic:           msg.topic,
+      stakeAmount:     msg.stakeAmount,
+      tokenSymbol:     msg.tokenSymbol,
+      requesterWallet: msg.requesterWallet,
+      requesterName:   msg.requesterName,
+    });
+
+    // Start 30s countdown for the receiver
+    setInviteCountdown(30);
+    if (inviteTimerRef.current) clearInterval(inviteTimerRef.current);
+    inviteTimerRef.current = setInterval(() => {
+      setInviteCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(inviteTimerRef.current!);
+          inviteTimerRef.current = null;
+          setRematchInvite(null);
+          return null;
         }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+  break;
+}
 
         case "rematch_invite_accepted": {
           // Only the requester acts on this
           if (msg.acceptorWallet?.toLowerCase() !== myWallet) {
+            clearRematchTimers();          // ← add
             setRematchPending(false);
+            setRematchCountdown(null); 
             toast.success(`${msg.acceptorName} accepted! Creating the challenge…`);
             await handleRematchCreate({
               code,
@@ -745,7 +843,7 @@ export default function ChallengePage() {
   }, [phase, myWallet]);
 
   // ── Actions ───────────────────────────────────────────────────────────────────
-
+  
   const handleStake = useCallback(async () => {
     if (!userWalletAddress || !challenge) return;
     setIsStaking(true);
@@ -915,11 +1013,12 @@ export default function ChallengePage() {
   }
   const globalOverlays = (
   <>
-    {rematchInvite && (
+        {rematchInvite && (
       <RematchPopup
         invite={rematchInvite}
         myWallet={myWallet}
-        onDismiss={() => setRematchInvite(null)}
+        onDismiss={handleInviteDismiss}   // ← was: () => setRematchInvite(null)
+        countdown={inviteCountdown}        // ← add
       />
     )}
   </>
@@ -938,7 +1037,7 @@ export default function ChallengePage() {
             <button onClick={() => router.back()} className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm font-bold transition-colors">
               <ArrowLeft className="h-4 w-4" /> Back
             </button>
-            <Badge variant="outline" className="font-mono">{code}</Badge>
+            <Badge dd-btn-ghost dd-btn-sm className="font-mono">{code}</Badge>
           </div>
         </div>
         <div className="max-w-2xl mx-auto w-full px-4 py-8 pb-24 space-y-6">
@@ -977,7 +1076,7 @@ export default function ChallengePage() {
             <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-4 space-y-3">
               <p className="font-bold text-yellow-700 dark:text-yellow-400 text-sm">🏆 Reward ready to claim!</p>
               <p className="text-xs text-yellow-600 dark:text-yellow-500">{myClaim.win_amount} {myClaim.token_symbol}</p>
-              <Button className="w-full h-11 bg-yellow-500 hover:bg-yellow-400 text-yellow-950 font-bold border-0" onClick={() => handleClaim(code)} disabled={isClaiming}>
+              <Button className="w-full h-11 dd-btn font-bold border-0" onClick={() => handleClaim(code)} disabled={isClaiming}>
                 {isClaiming ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Claiming…</> : "Claim Reward"}
               </Button>
             </div>
@@ -989,6 +1088,9 @@ export default function ChallengePage() {
                   code,
                   userWalletAddress: userWalletAddress!,
                   setRematchPending,
+                  setRematchCountdown,
+                  rematchTimerRef,
+                  rematchTimeoutRef,
                 })}
                 disabled={isRequestingRematch || rematchPending}
                 className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-black text-base
@@ -996,7 +1098,10 @@ export default function ChallengePage() {
                           gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {rematchPending ? (
-                  <><Loader2 className="h-5 w-5 animate-spin" /> Waiting for opponent…</>
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Waiting{rematchCountdown !== null && rematchCountdown > 0 ? ` (${rematchCountdown}s)` : "…"}
+                  </>
                 ) : isRequestingRematch ? (
                   <><Loader2 className="h-5 w-5 animate-spin" /> Creating challenge…</>
                 ) : (
@@ -1254,7 +1359,7 @@ export default function ChallengePage() {
                 </p>
                 <p>Clicking Join will open your wallet to approve <b>{challenge.stake} {challenge.token}</b> on Celo. The transaction is verified automatically.</p>
               </div>
-              <Button className="w-full h-14 text-lg font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl" onClick={handleStake} disabled={isStaking}>
+              <Button className="w-full h-14 text-lg font-bold dd-btn text-primary-foreground rounded-2xl" onClick={handleStake} disabled={isStaking}>
                 {isStaking ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Approving stake…</> : <><Zap className="mr-2 h-5 w-5" /> Join &amp; Stake {challenge.stake} {challenge.token}</>}
               </Button>
               <button onClick={handleSyncStake} disabled={isSyncing} className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors py-1">
@@ -1276,12 +1381,13 @@ export default function ChallengePage() {
   return (
     <>
     {rematchInvite && (
-      <RematchPopup
-        invite={rematchInvite}
-        myWallet={myWallet}
-        onDismiss={() => setRematchInvite(null)}
-      />
-    )}
+  <RematchPopup
+    invite={rematchInvite}
+    myWallet={myWallet}
+    onDismiss={handleInviteDismiss}        // ← was: () => setRematchInvite(null)
+    countdown={inviteCountdown}             // ← add
+  />
+)}
     <div className="min-h-screen bg-background flex flex-col">
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -1341,7 +1447,7 @@ export default function ChallengePage() {
                 })();
                 return (
                   <div key={p.walletAddress} className={cn("flex flex-col items-center gap-2 rounded-2xl p-4 border text-center transition-all",
-                    p.ready ? "border-emerald-400/40 bg-emerald-500/5" : p.txVerified ? "border-blue-400/30 bg-blue-500/5" : "border-border bg-muted/20"
+                    p.ready ? "border-emerald-400/40 dd-btn" : p.txVerified ? "border-blue-400/30 bg-blue-500/5" : "border-border bg-muted/20"
                   )}>
                     <Avatar className="h-14 w-14 border-2 border-border">
                       <AvatarFallback className="font-bold text-base">{p.username?.slice(0, 2).toUpperCase()}</AvatarFallback>
@@ -1382,7 +1488,7 @@ export default function ChallengePage() {
             {!myTxVerified && (
               <>
                 <Button
-                  className="w-full h-16 text-lg font-black bg-yellow-500 hover:bg-yellow-400 text-yellow-950 rounded-2xl shadow-[0_4px_0_rgb(161,120,0)] active:translate-y-1 active:shadow-none transition-all"
+                  className="w-full h-16 text-lg font-black dd-btn rounded-2xl shadow-[0_4px_0_rgb(161,120,0)] active:translate-y-1 active:shadow-none transition-all"
                   onClick={handleStake}
                   disabled={isStaking || stakeVerifying}
                 >
@@ -1402,7 +1508,7 @@ export default function ChallengePage() {
 
             {myTxVerified && !myReady && (
               <Button
-                className="w-full h-16 text-lg font-black bg-emerald-500 hover:bg-emerald-400 text-white rounded-2xl shadow-[0_4px_0_rgb(16,120,60)] active:translate-y-1 active:shadow-none transition-all"
+                className="w-full h-16 text-lg font-black dd-btn rounded-2xl shadow-[0_4px_0_rgb(16,120,60)] active:translate-y-1 active:shadow-none transition-all"
                 onClick={handleReady}
               >
                 <Check className="mr-2 h-6 w-6" /> I'm Ready

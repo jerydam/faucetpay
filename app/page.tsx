@@ -9,6 +9,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Zap, Trophy, Gavel, ArrowUpRight, ShieldCheck, Users } from "lucide-react";
+import { ThemeToggle } from "@/components/theme";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -134,6 +135,7 @@ export default function LandingPage() {
 
         {/* ── Nav ──────────────────────────────────────────────────────────── */}
         <nav className="r r1 flex items-center justify-between px-6 pt-8 pb-6">
+
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-[#2563eb] flex items-center justify-center" style={{ borderRadius: 6 }}>
               <Zap className="h-4 w-4 text-white fill-white" />
@@ -141,13 +143,10 @@ export default function LandingPage() {
             <span className="d font-black text-xl tracking-tight text-white" style={{ letterSpacing: "-.01em" }}>
               DropDuel
             </span>
+             <ThemeToggle />
           </div>
 
-          {/* live badge */}
-          <div className="flex items-center gap-2 px-3 py-1.5" style={{ border: "1px solid rgba(37,99,235,.3)", borderRadius: 20, background: "rgba(37,99,235,.08)" }}>
-            <span className="live-dot w-1.5 h-1.5 rounded-full bg-[#2563eb]" />
-            <span className="tag text-[#2563eb]">Live</span>
-          </div>
+          
         </nav>
 
         {/* ── Hero ─────────────────────────────────────────────────────────── */}
@@ -187,22 +186,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── Stats ────────────────────────────────────────────────────────── */}
-        <div className="r r4 stat-row mx-6 grid grid-cols-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-          {[
-            { n: "500K+", l: "Total staked" },
-            { n: "12K+",  l: "Players" },
-            { n: "99.9%", l: "Uptime" },
-          ].map((s, i) => (
-            <div
-              key={s.l}
-              className="py-5 text-center"
-              style={i > 0 ? { borderLeft: "1px solid rgba(255,255,255,0.07)" } : undefined}
-            >
-              <p className="num mb-1" style={{ fontSize: 22 }}>{s.n}</p>
-              <p className="tag" style={{ color: "rgba(255,255,255,0.35)" }}>{s.l}</p>
-            </div>
-          ))}
-        </div>
+        
 
         {/* ── Mode cards ───────────────────────────────────────────────────── */}
         <section className="r r5 px-6 pt-8 pb-10 space-y-4">

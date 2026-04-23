@@ -633,6 +633,7 @@ export default function PreLobbyPage() {
             <Clock className="h-3.5 w-3.5" />
             {String(countdownMin).padStart(2, "0")}:{String(countdownSec).padStart(2, "0")}
           </div>
+          
         </div>
       </div>
 

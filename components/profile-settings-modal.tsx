@@ -158,20 +158,43 @@ export function ProfileSettingsModal({
 
   // ── Avatar upload ─────────────────────────────────────────────────────
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    try {
-      const fd = new FormData()
-      fd.append("file", file)
-      const res  = await fetch(`${API_BASE_URL}/upload-image`, { method: "POST", body: fd })
-      const data = await res.json()
-      if (data.success) { setAvatarUrl(data.imageUrl); toast.success("Photo uploaded!") }
-      else throw new Error(data.message)
-    } catch (err: any) {
-      toast.error(err.message || "Upload failed")
-    } finally { setUploading(false) }
+  const file = e.target.files?.[0]
+  if (!file) return
+
+  // Validate size (2MB limit)
+  if (file.size > 2 * 1024 * 1024) {
+    toast.error("Image must be under 2MB")
+    return
   }
+
+  setUploading(true)
+  try {
+    const fd = new FormData()
+    fd.append("file", file)
+    const res = await fetch(`${API_BASE_URL}/upload-image`, { method: "POST", body: fd })
+
+    if (!res.ok) {
+      const text = await res.text()
+      console.error("Upload error:", res.status, text)
+      throw new Error(`Server error ${res.status}`)
+    }
+
+    const data = await res.json()
+    if (data.success) {
+      setAvatarUrl(data.imageUrl)
+      toast.success("Photo uploaded!")
+    } else {
+      throw new Error(data.message || "Upload failed")
+    }
+  } catch (err: any) {
+    console.error("Upload failed:", err)
+    toast.error(err.message || "Upload failed — check your connection")
+  } finally {
+    setUploading(false)
+    // Reset input so same file can be re-selected
+    e.target.value = ""
+  }
+}
 
   // ── Save ──────────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -327,22 +350,27 @@ export function ProfileSettingsModal({
               {/* Upload area */}
               {avatarMode === "upload" && (
                 <label className="w-full cursor-pointer">
-                  <div className="relative flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-7 hover:bg-muted/40 transition-colors">
-                    {uploading
-                      ? <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                      : <Upload className="h-8 w-8 text-muted-foreground" />
-                    }
-                    <p className="text-xs text-muted-foreground font-medium text-center">
-                      {uploading ? "Uploading…" : "Tap to choose a photo"}
-                    </p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleUpload}
-                      disabled={uploading}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                  </div>
+                  <div className="w-full space-y-2">
+  <label htmlFor="avatar-upload" className="w-full cursor-pointer">
+    <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-7 hover:bg-muted/40 transition-colors">
+      {uploading
+        ? <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        : <Upload className="h-8 w-8 text-muted-foreground" />
+      }
+      <p className="text-xs text-muted-foreground font-medium text-center">
+        {uploading ? "Uploading…" : "Tap to choose a photo"}
+      </p>
+    </div>
+  </label>
+  <input
+    id="avatar-upload"
+    type="file"
+    accept="image/*"
+    onChange={handleUpload}
+    disabled={uploading}
+    className="hidden"
+  />
+</div>
                 </label>
               )}
             </div>

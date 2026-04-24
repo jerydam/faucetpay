@@ -64,6 +64,48 @@ export function BottomNav() {
         borderTop:   "1px solid var(--dd-line)",
       }}
     >
+      {/* Centre Play button */}
+<div className="relative flex flex-col items-center">
+  {open && (
+    <div
+      className="absolute bottom-[52px] left-1/2 -translate-x-1/2 rounded-2xl overflow-hidden"
+      style={{
+        background: "var(--dd-bg)",
+        border:     "1px solid var(--dd-line)",
+        minWidth:   160,
+        boxShadow:  "0 8px 32px rgba(0,0,0,0.18)",
+      }}
+    >
+      <button
+        onClick={() => { router.push("/challenge"); setOpen(false); }}
+        className="flex items-center gap-3 w-full px-4 py-3 text-sm font-bold transition-colors"
+        style={{ color: "var(--dd-text)" }}
+        onMouseEnter={e => (e.currentTarget.style.background = "var(--dd-line)")}
+        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+      >
+        <Gavel size={16} color="var(--dd-blue)" /> 1v1 Duel
+      </button>
+      <div style={{ height: 1, background: "var(--dd-line)", margin: "0 12px" }} />
+      <button
+        onClick={() => { router.push("/quiz"); setOpen(false); }}
+        className="flex items-center gap-3 w-full px-4 py-3 text-sm font-bold transition-colors"
+        style={{ color: "var(--dd-text)" }}
+        onMouseEnter={e => (e.currentTarget.style.background = "var(--dd-line)")}
+        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+      >
+        <Trophy size={16} color="var(--dd-blue)" /> Tournament
+      </button>
+    </div>
+  )}
+  <button
+    onClick={() => setOpen(o => !o)}
+    className="flex items-center justify-center px-3 py-1"
+    style={{ background: "none", border: "none", color: open ? "var(--dd-blue)" : "var(--dd-dim)" }}
+  >
+    {open ? <X size={22} strokeWidth={1.8} /> : <Swords size={22} strokeWidth={1.8} />}
+  </button>
+  <span style={{ fontSize: 11, fontWeight: 500, color: open ? "var(--dd-blue)" : "var(--dd-dim)" }}>Play</span>
+</div>
       {resolvedTabs.slice(0, 2).map(t => (
         <button
           key={t.id}
@@ -76,48 +118,7 @@ export function BottomNav() {
         </button>
       ))}
 
-      {/* Centre Play button */}
-      <div className="relative flex flex-col items-center" style={{ marginBottom: 6 }}>
-        {open && (
-          <div
-            className="absolute bottom-[74px] left-1/2 -translate-x-1/2 rounded-2xl overflow-hidden"
-            style={{
-              background: "var(--dd-bg)",
-              border:     "1px solid var(--dd-line)",
-              minWidth:   160,
-              boxShadow:  "0 8px 32px rgba(0,0,0,0.18)",
-            }}
-          >
-            <button
-              onClick={() => { router.push("/challenge"); setOpen(false); }}
-              className="flex items-center gap-3 w-full px-4 py-3 text-sm font-bold transition-colors"
-              style={{ color: "var(--dd-text)" }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--dd-line)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-            >
-              <Gavel size={16} color="var(--dd-blue)" /> 1v1 Duel
-            </button>
-            <div style={{ height: 1, background: "var(--dd-line)", margin: "0 12px" }} />
-            <button
-              onClick={() => { router.push("/quiz"); setOpen(false); }}
-              className="flex items-center gap-3 w-full px-4 py-3 text-sm font-bold transition-colors"
-              style={{ color: "var(--dd-text)" }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--dd-line)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-            >
-              <Trophy size={16} color="var(--dd-blue)" /> Tournament
-            </button>
-          </div>
-        )}
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="flex items-center justify-center"
-          style={{ width: 62, height: 62, borderRadius: 18, background: "var(--dd-blue)", border: "none" }}
-        >
-          {open ? <X size={24} color="white" /> : <Swords size={24} color="white" />}
-        </button>
-        <span style={{ fontSize: 11, fontWeight: 500, color: "var(--dd-blue)", marginTop: 5 }}>Play</span>
-      </div>
+      
 
       {resolvedTabs.slice(2).map(t => (
         <button

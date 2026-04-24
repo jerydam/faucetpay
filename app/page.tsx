@@ -182,7 +182,6 @@ export default function LandingPage() {
               className="d font-black text-xl tracking-tight"
               style={{ color: "var(--dd-text)", letterSpacing: "-.01em" }}
             >
-              DropDuel
             </span>
           </div>
 
@@ -238,7 +237,7 @@ export default function LandingPage() {
 
         {/* ── Mode cards ── */}
         <section className="r r5 px-6 pt-8 pb-10 space-y-4">
-          <p className="tag mb-1" style={{ color: "var(--dd-text-mute)" }}>Choose your DropDuel</p>
+          <p className="tag mb-1" style={{ color: "var(--dd-text-mute)" }}>Choose your Duel</p>
 
           {/* 1v1 Duel */}
           <div

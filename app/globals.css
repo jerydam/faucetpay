@@ -40,16 +40,28 @@
     --ring: 217 91% 50%;
     --radius: 0.75rem;
 
-    /* ── Semantic surface tokens (used by quiz / lobby / game pages) ── */
-    --surface-base:   255 255 255;      /* page background  */
-    --surface-card:   248 250 252;      /* card / panel bg  */
-    --surface-card-2: 241 245 249;      /* nested card bg   */
-    --surface-header: 248 250 252;      /* sticky header bg */
+    /* ── Semantic surface tokens ── */
+    --surface-base:   255 255 255;
+    --surface-card:   248 250 252;
+    --surface-card-2: 241 245 249;
+    --surface-header: 248 250 252;
     --surface-header-opacity: 0.97;
-    --text-primary:   15 23 42;         /* slate-900         */
-    --text-secondary: 100 116 139;      /* slate-500         */
-    --text-muted:     148 163 184;      /* slate-400         */
-    --border-subtle:  226 232 240;      /* slate-200         */
+    --text-primary:   15 23 42;
+    --text-secondary: 100 116 139;
+    --text-muted:     148 163 184;
+    --border-subtle:  226 232 240;
+
+    /* ── DD design tokens (light) ── */
+    --dd-bg:         #ffffff;
+    --dd-bg-card:    #f8fafc;
+    --dd-blue:       #2563eb;
+    --dd-blue2:      #1d4ed8;
+    --dd-text:       #0f172a;
+    --dd-text-muted: rgba(15, 23, 42, 0.4);
+    --dd-dim:        rgba(15, 23, 42, 0.45);
+    --dd-line:       rgba(15, 23, 42, 0.08);
+    --dd-card:       rgba(15, 23, 42, 0.03);
+    --dd-white:      #0f172a;
 
     /* ── Privy modal ── */
     --privy-color-background: #ffffff !important;
@@ -92,15 +104,27 @@
     --ring: 217 91% 60%;
 
     /* ── Semantic surface tokens (dark) ── */
-    --surface-base:   8 13 25;          /* #080d19            */
-    --surface-card:   13 21 38;         /* #0d1526            */
-    --surface-card-2: 17 24 39;         /* #111827            */
+    --surface-base:   8 13 25;
+    --surface-card:   13 21 38;
+    --surface-card-2: 17 24 39;
     --surface-header: 13 21 38;
     --surface-header-opacity: 0.95;
-    --text-primary:   248 250 252;      /* slate-50           */
-    --text-secondary: 148 163 184;      /* slate-400          */
-    --text-muted:     100 116 139;      /* slate-500          */
-    --border-subtle:  30 41 59;         /* slate-800          */
+    --text-primary:   248 250 252;
+    --text-secondary: 148 163 184;
+    --text-muted:     100 116 139;
+    --border-subtle:  30 41 59;
+
+    /* ── DD design tokens (dark) ── */
+    --dd-bg:         #020617;
+    --dd-bg-card:    #080d19;
+    --dd-blue:       #2563eb;
+    --dd-blue2:      #1d4ed8;
+    --dd-text:       #ffffff;
+    --dd-text-muted: rgba(255, 255, 255, 0.35);
+    --dd-dim:        rgba(255, 255, 255, 0.45);
+    --dd-line:       rgba(255, 255, 255, 0.07);
+    --dd-card:       rgba(255, 255, 255, 0.03);
+    --dd-white:      #ffffff;
 
     /* ── Privy modal ── */
     --privy-color-background: #080d19 !important;
@@ -111,21 +135,26 @@
   }
 }
 
-:root {
-  --dd-bg:    #020617;
-  --dd-blue:  #2563eb;
-  --dd-blue2: #1d4ed8;
-  --dd-white: #ffffff;
-  --dd-dim:   rgba(255,255,255,0.45);
-  --dd-line:  rgba(255,255,255,0.07);
+/* ══════════════════════════════════════
+   BASE BODY
+   ══════════════════════════════════════ */
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
-/* Primary action — solid blue */
+/* ══════════════════════════════════════
+   DD BUTTON SYSTEM
+   ══════════════════════════════════════ */
 .dd-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   height: 56px; padding: 0 24px; width: 100%;
   background: var(--dd-blue);
-  color: var(--dd-white);
+  color: #ffffff;
   font-family: 'Figtree', sans-serif;
   font-weight: 700; font-size: 14px; letter-spacing: 0.04em;
   border: none; border-radius: 12px; cursor: pointer;
@@ -135,92 +164,51 @@
 .dd-btn:active { transform: scale(0.97); }
 .dd-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
-/* Secondary action — ghost */
 .dd-btn-ghost {
   background: transparent;
-  border: 1.5px solid rgba(255,255,255,0.12);
-  color: var(--dd-white);
+  border: 1.5px solid var(--dd-line);
+  color: var(--dd-text);
 }
 .dd-btn-ghost:hover {
-  background: rgba(37,99,235,0.08);
-  border-color: rgba(37,99,235,0.5);
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.5);
 }
 
-/* Small variant */
 .dd-btn-sm { height: 40px; font-size: 12px; border-radius: 8px; }
 
-/* Destructive (decline/X) — ghost with red tint */
 .dd-btn-danger {
   background: transparent;
-  border: 1.5px solid rgba(239,68,68,0.35);
+  border: 1.5px solid rgba(239, 68, 68, 0.35);
   color: #f87171;
 }
-.dd-btn-danger:hover { background: rgba(239,68,68,0.08); }
-/* ══════════════════════════════════════
-   BASE BODY — uses CSS variables, never
-   a hardcoded hex colour
-   ══════════════════════════════════════ */
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-    /* DO NOT add background-color: #hex here — it overrides the variable */
-  }
-}
+.dd-btn-danger:hover { background: rgba(239, 68, 68, 0.08); }
 
 /* ══════════════════════════════════════
    SEMANTIC SURFACE UTILITY CLASSES
-   Replace every hardcoded hex in the quiz
-   page with these.
    ══════════════════════════════════════ */
-
-/* Full-page background */
-.bg-surface-base {
-  background-color: rgb(var(--surface-base));
-}
-
-/* Card / panel */
-.bg-surface-card {
-  background-color: rgb(var(--surface-card));
-}
-
-/* Nested card (darker in dark, lighter in light) */
-.bg-surface-card-2 {
-  background-color: rgb(var(--surface-card-2));
-}
-
-/* Sticky headers with blur */
-.bg-surface-header {
+.bg-surface-base    { background-color: rgb(var(--surface-base)); }
+.bg-surface-card    { background-color: rgb(var(--surface-card)); }
+.bg-surface-card-2  { background-color: rgb(var(--surface-card-2)); }
+.bg-surface-header  {
   background-color: rgba(var(--surface-header), var(--surface-header-opacity));
   backdrop-filter: blur(12px);
 }
-
-/* Borders */
-.border-surface {
-  border-color: rgb(var(--border-subtle));
-}
-
-/* Text helpers */
+.border-surface         { border-color: rgb(var(--border-subtle)); }
 .text-surface-primary   { color: rgb(var(--text-primary)); }
 .text-surface-secondary { color: rgb(var(--text-secondary)); }
 .text-surface-muted     { color: rgb(var(--text-muted)); }
 
 /* ══════════════════════════════════════
-   QUIZ PAGE OVERRIDES (theme-aware)
-   These replace the old hardcoded classes.
+   QUIZ PAGE OVERRIDES
    ══════════════════════════════════════ */
 .quiz-surface {
   background-color: rgb(var(--surface-base));
   border-color: rgb(var(--border-subtle));
 }
-
 .quiz-card {
   background-color: rgb(var(--surface-card));
   border: 1px solid rgb(var(--border-subtle));
 }
-
 .quiz-header {
   background-color: rgba(var(--surface-header), var(--surface-header-opacity));
   border-bottom: 1px solid rgb(var(--border-subtle));
@@ -234,9 +222,7 @@
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
-.animate-marquee {
-  animation: marquee 18s linear infinite;
-}
+.animate-marquee { animation: marquee 18s linear infinite; }
 
 @keyframes marqueeScroll {
   0%   { transform: translateX(0); }

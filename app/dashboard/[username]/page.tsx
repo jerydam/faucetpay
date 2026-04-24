@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useWallet } from "@/components/wallet-provider"
-import { useNetwork } from "@/hooks/use-network"
+import { Star } from "lucide-react"
 import { Header } from "@/components/header"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -63,19 +63,17 @@ function timeAgo(iso: string) {
 
 // ── Stat pill ─────────────────────────────────────────────────────────────────
 
-function StatPill({
-  icon: Icon, label, value, accent,
-}: {
+function StatPill({ icon: Icon, label, value, accent }: {
   icon: React.ElementType
   label: string
   value: string | number
   accent?: string
 }) {
   return (
-    <div className="flex flex-col items-center gap-1 px-4 py-3 rounded-2xl bg-muted/40 border border-border min-w-[80px]">
-      <Icon className={cn("h-4 w-4", accent ?? "text-muted-foreground")} />
-      <span className="text-xl font-black text-foreground tabular-nums">{value}</span>
-      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider leading-none">
+    <div className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-2xl bg-muted/40 border border-border">
+      <Icon className={cn("h-3.5 w-3.5", accent ?? "text-muted-foreground")} />
+      <span className="text-sm font-black text-foreground tabular-nums">{value}</span>
+      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider leading-none text-center">
         {label}
       </span>
     </div>
@@ -173,6 +171,21 @@ function ChallengeRow({
   )
 }
 
+
+const TIERS = [
+  { label: "Rookie",   minWins: 0,  stars: 1, color: "#9ca3af" },
+  { label: "Hustler",  minWins: 3,  stars: 2, color: "#60a5fa" },
+  { label: "Duelist",  minWins: 8,  stars: 3, color: "#34d399" },
+  { label: "Veteran",  minWins: 20, stars: 4, color: "#fbbf24" },
+  { label: "Champion", minWins: 50, stars: 5, color: "#f87171" },
+]
+
+function getTier(wins: number) {
+  for (let i = TIERS.length - 1; i >= 0; i--) {
+    if (wins >= TIERS[i].minWins) return TIERS[i]
+  }
+  return TIERS[0]
+}
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -443,34 +456,52 @@ export default function DashboardPage() {
             )}
 
             {/* Stats row */}
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              <StatPill
-                icon={Swords}
-                label="Played"
-                value={history.length}
-                accent="text-blue-500"
-              />
-              <StatPill
-                icon={Trophy}
-                label="Won"
-                value={won.length}
-                accent="text-amber-500"
-              />
-              <StatPill
-                icon={CheckCircle2}
-                label="Win rate"
-                value={`${winRate}%`}
-                accent="text-emerald-500"
-              />
-              {active.length > 0 && (
-                <StatPill
-                  icon={Zap}
-                  label="Active"
-                  value={active.length}
-                  accent="text-primary"
-                />
-              )}
-            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+  <StatPill
+    icon={Swords}
+    label="Played"
+    value={history.length}
+    accent="text-blue-500"
+  />
+  <StatPill
+    icon={Trophy}
+    label="Won"
+    value={won.length}
+    accent="text-amber-500"
+  />
+  <StatPill
+    icon={CheckCircle2}
+    label="Win rate"
+    value={`${winRate}%`}
+    accent="text-emerald-500"
+  />
+
+  {/* Tier pill */}
+  {(() => {
+    const tier = getTier(won.length)
+    return (
+      <div className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-2xl bg-muted/40 border border-border">
+        <div className="flex gap-px">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <svg key={i} width={10} height={10} viewBox="0 0 24 24"
+              fill={i < tier.stars ? tier.color : "none"}
+              stroke={i < tier.stars ? tier.color : "rgba(255,255,255,0.15)"}
+              strokeWidth={1.5}
+            >
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+          ))}
+        </div>
+        <span className="text-sm font-black tabular-nums" style={{ color: tier.color }}>
+          {tier.label}
+        </span>
+        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider leading-none">
+          Tier
+        </span>
+      </div>
+    )
+  })()}
+</div>
           </CardContent>
         </Card>
 

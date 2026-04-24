@@ -683,7 +683,7 @@ export default function CreateChallengePage() {
           ) : !QUIZ_HUB_ADDRESSES[chainId] ? (
             "⚠️ Contract not configured"
           ) : (
-            <><Rocket className="h-5 w-5" /> Launch Quiz 🚀</>
+            <><Rocket className="h-5 w-5" /> Launch Duel</>
           )}
         </span>
       </button>

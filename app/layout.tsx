@@ -77,7 +77,7 @@ export default function RootLayout({
                 <main className="flex-1">
                   {children}
                 </main>
-                <Footer />
+                <Footer className="pb-20" />
               </div>
               
               {/* BottomNav sits outside the flex column so it overlays everything */}

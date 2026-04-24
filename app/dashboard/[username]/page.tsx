@@ -20,7 +20,7 @@ import { usePrivy } from "@privy-io/react-auth"
 import Loading from "@/app/loading"
 import { cn } from "@/lib/utils"
 
-const BACKEND_URL = "https://faucetpay-backend.koyeb.app"
+const BACKEND_URL = "http://127.0.0.1:8000"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -244,7 +244,7 @@ export default function DashboardPage() {
   }
 
   const getDisplayName = () => {
-    if (profile?.username && profile.username !== "New User") return profile.username
+    if (profile?.username && profile.username !== "Dropee") return profile.username
     if (isOwner && privyUser) {
       if (privyUser.google?.name) return (privyUser.google.name as string).replace(/\s+/g, "")
       if (privyUser.email?.address) return privyUser.email.address.split("@")[0]
@@ -278,7 +278,7 @@ export default function DashboardPage() {
 
       setProfile({
         wallet_address: p?.wallet_address || targetUsernameOrAddress.toLowerCase(),
-        username:       p?.username || "New User",
+        username:       p?.username || "Dropee",
         email:          p?.email,
         phone:          p?.phone,
         bio:            p?.bio,

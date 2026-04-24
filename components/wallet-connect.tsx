@@ -53,7 +53,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
 
         const profile = data.profile ?? null
 
-        if (profile?.username && profile.username !== "New User") {
+        if (profile?.username && profile.username !== "Dropee") {
           if (isMounted) {
             setDbUsername(profile.username)
             setDbAvatarUrl(profile.avatar_url || "")

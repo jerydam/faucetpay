@@ -33,7 +33,7 @@ export function BottomNav() {
       .then(r => r.json())
       .then(data => {
         const username = data.profile?.username;
-        if (username && username !== "New User") setDbUsername(username);
+        if (username && username !== "Dropee") setDbUsername(username);
       })
       .catch(() => {});
   }, [address, isConnected]);

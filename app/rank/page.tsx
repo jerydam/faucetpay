@@ -20,11 +20,11 @@ interface Tier {
 }
 
 const TIERS: Tier[] = [
-  { label: "Rookie",   minWins: 0,   maxWins: 100,      stars: 1, color: "#9ca3af", glow: "rgba(156,163,175,0.25)", badge: "🥉" },
-  { label: "Hustler",  minWins: 101, maxWins: 200,      stars: 2, color: "#60a5fa", glow: "rgba(96,165,250,0.25)",  badge: "🔵" },
-  { label: "Duelist",  minWins: 201, maxWins: 300,      stars: 3, color: "#34d399", glow: "rgba(52,211,153,0.25)",  badge: "🟢" },
-  { label: "Veteran",  minWins: 301, maxWins: 400,      stars: 4, color: "#fbbf24", glow: "rgba(251,191,36,0.25)",  badge: "🌟" },
-  { label: "Champion", minWins: 401, maxWins: Infinity,  stars: 5, color: "#f87171", glow: "rgba(248,113,113,0.30)", badge: "🏆" },
+  { label: "Droplet",   minWins: 0,   maxWins: 100,     stars: 1, color: "#9ca3af", glow: "rgba(156,163,175,0.25)", badge: "💧" },
+  { label: "Drizzle",   minWins: 101, maxWins: 200,     stars: 2, color: "#60a5fa", glow: "rgba(96,165,250,0.25)",  badge: "🌧️" },
+  { label: "Downpour",  minWins: 201, maxWins: 300,     stars: 3, color: "#34d399", glow: "rgba(52,211,153,0.25)",  badge: "⛈️" },
+  { label: "Torrent",   minWins: 301, maxWins: 400,     stars: 4, color: "#fbbf24", glow: "rgba(251,191,36,0.25)",  badge: "🌊" },
+  { label: "Flood",     minWins: 401, maxWins: Infinity, stars: 5, color: "#f87171", glow: "rgba(248,113,113,0.30)", badge: "🏆" },
 ];
 
 function getTier(wins: number): Tier {

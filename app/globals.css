@@ -13,6 +13,7 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 222 47% 8%;
+    --bottom-nav-height: 70px;
 
     --card: 0 0% 98%;
     --card-foreground: 222 47% 8%;

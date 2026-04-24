@@ -346,17 +346,10 @@ export default function QuizListPage() {
             >
               {navigating === codeInput
                 ? <Loader2 className="h-5 w-5 animate-spin" />
-                : "JOIN"}
+                : "DUEL"}
             </Button>
           </div>
 
-          {/* ADD THIS ↓ */}
-          <Button
-            onClick={() => router.push("/challenge/create-challenge")}
-            className="w-full h-11 mt-3 bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold"
-          >
-            <Plus className="mr-2 h-4 w-4" /> Create Challenge
-          </Button>
         </div>
         </div>
 

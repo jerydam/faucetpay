@@ -314,21 +314,7 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-        </section>
-
-        {/* ── Trust row ── */}
-        <div
-          className="px-6 pb-10 flex items-center gap-5"
-          style={{
-            borderTop: "1px solid var(--dd-line-soft)",
-            paddingTop: 24,
-          }}
-        >
-          
-        </div>
-
-        
-
+        </section>     
       </div>
     </>
   );

@@ -8,7 +8,6 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
 import { NetworkProvider } from "@/hooks/use-network"
 import { WalletProvider } from "@/components/wallet-provider"
-import { Footer } from "@/components/footer"
 import { BottomNav } from "@/components/bottom-nav"  // ← add this
 
 import sdk from "@farcaster/miniapp-sdk"

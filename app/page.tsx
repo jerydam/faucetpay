@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { Zap, Trophy, Gavel, ArrowUpRight, ShieldCheck, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
 import Image from "next/image";
+import { Footer } from "@/components/footer";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -316,6 +317,7 @@ export default function LandingPage() {
           </div>
         </section>     
       </div>
+      <Footer className="pb-20" />
     </>
   );
 }

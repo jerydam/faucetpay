@@ -312,7 +312,7 @@ export default function QuizListPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-      <Header pageTitle="Quiz Arena" />
+      <Header pageTitle="Duel Arena" />
 
       <div className="max-w-7xl mx-auto w-full px-4 pt-6 pb-24 space-y-8">
 
@@ -328,76 +328,87 @@ export default function QuizListPage() {
           </div>
 
           <div className="lg:col-span-5 bg-blue-600 rounded-3xl p-6 lg:p-8 text-white shadow-xl">
-            <h2 className="text-lg font-black flex items-center gap-2 mb-4">
-              <Zap className="h-5 w-5 fill-white" /> Quick Join
-            </h2>
-            <div className="flex gap-2">
-              <Input
-                value={codeInput}
-                onChange={e => setCodeInput(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === "Enter" && handleJoinAction(codeInput)}
-                placeholder="ROOM CODE"
-                className="bg-white/10 border-white/20 text-white placeholder:text-blue-200 font-mono font-bold h-12"
-              />
-              <Button
-                onClick={() => handleJoinAction(codeInput)}
-                disabled={!codeInput || navigating !== null}
-                className="bg-white text-blue-600 hover:bg-blue-50 font-black px-8 h-12 shrink-0"
-              >
-                {navigating === codeInput
-                  ? <Loader2 className="h-5 w-5 animate-spin" />
-                  : "JOIN"}
-              </Button>
-            </div>
+          <h2 className="text-lg font-black flex items-center gap-2 mb-4">
+            <Zap className="h-5 w-5 fill-white" /> Quick Join
+          </h2>
+          <div className="flex gap-2">
+            <Input
+              value={codeInput}
+              onChange={e => setCodeInput(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === "Enter" && handleJoinAction(codeInput)}
+              placeholder="ROOM CODE"
+              className="bg-white/10 border-white/20 text-white placeholder:text-blue-200 font-mono font-bold h-12"
+            />
+            <Button
+              onClick={() => handleJoinAction(codeInput)}
+              disabled={!codeInput || navigating !== null}
+              className="bg-white text-blue-600 hover:bg-blue-50 font-black px-8 h-12 shrink-0"
+            >
+              {navigating === codeInput
+                ? <Loader2 className="h-5 w-5 animate-spin" />
+                : "JOIN"}
+            </Button>
           </div>
+
+          {/* ADD THIS ↓ */}
+          <Button
+            onClick={() => router.push("/challenge/create-challenge")}
+            className="w-full h-11 mt-3 bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold"
+          >
+            <Plus className="mr-2 h-4 w-4" /> Create Challenge
+          </Button>
+        </div>
         </div>
 
         <hr className="border-slate-200 dark:border-white/[0.05]" />
 
         {/* Nav & Controls */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-white/[0.07] self-start">
-            <button
-              onClick={() => setTab("lobby")}
-              className={cn(
-                "px-6 py-2 rounded-xl text-sm font-black transition-all",
-                tab === "lobby" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-600",
-              )}
-            >
-              PUBLIC
-            </button>
-            <button
-              onClick={() => setTab("history")}
-              className={cn(
-                "px-6 py-2 rounded-xl text-sm font-black transition-all",
-                tab === "history" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-600",
-              )}
-            >
-              MY WINS
-            </button>
-          </div>
+<div className="space-y-3">
+  {/* Create Challenge — full width */}
+  <Button
+    onClick={() => router.push("/challenge/create-challenge")}
+    className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold border-0"
+  >
+    <Plus className="mr-2 h-4 w-4" /> Create Challenge
+  </Button>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => tab === "lobby" ? fetchLobby(true) : fetchHistory()}
-              className="rounded-full bg-white dark:bg-slate-900"
-              disabled={isRefreshing || historyLoading}
-            >
-              <RefreshCw className={cn(
-                "h-4 w-4 text-blue-600",
-                (isRefreshing || historyLoading) && "animate-spin",
-              )} />
-            </Button>
-            <Button
-              onClick={() => router.push("/challenge/create-challenge")}
-              className="hidden md:flex bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl px-6"
-            >
-              <Plus className="mr-2 h-4 w-4" /> Create Challenge
-            </Button>
-          </div>
-        </div>
+  {/* Tabs + Refresh on same row */}
+  <div className="flex items-center gap-2">
+    <div className="flex flex-1 bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-white/[0.07]">
+      <button
+        onClick={() => setTab("lobby")}
+        className={cn(
+          "flex-1 px-6 py-2 rounded-xl text-sm font-black transition-all",
+          tab === "lobby" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-600",
+        )}
+      >
+        PUBLIC
+      </button>
+      <button
+        onClick={() => setTab("history")}
+        className={cn(
+          "flex-1 px-6 py-2 rounded-xl text-sm font-black transition-all",
+          tab === "history" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-600",
+        )}
+      >
+        MY WINS
+      </button>
+    </div>
+
+    <Button
+      variant="outline"
+      size="icon"
+      onClick={() => tab === "lobby" ? fetchLobby(true) : fetchHistory()}
+      className="rounded-full bg-white dark:bg-slate-900 shrink-0"
+      disabled={isRefreshing || historyLoading}
+    >
+      <RefreshCw className={cn(
+        "h-4 w-4 text-blue-600",
+        (isRefreshing || historyLoading) && "animate-spin",
+      )} />
+    </Button>
+  </div>
+</div>
 
         {/* ── LOBBY TAB ── */}
         {tab === "lobby" && (
@@ -506,14 +517,7 @@ export default function QuizListPage() {
       </div>
 
       {/* Mobile FAB */}
-      <div className="md:hidden fixed bottom-6 right-6 z-50">
-        <Button
-          onClick={() => router.push("/challenge/create-challenge")}
-          className="h-16 w-16 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-2xl border-0 p-0"
-        >
-          <Plus className="h-8 w-8" />
-        </Button>
-      </div>
+      
     </div>
   );
 }

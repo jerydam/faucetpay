@@ -13,20 +13,12 @@ import {
   Search, Plus, Trophy, Users, Clock, Loader2,
   Gamepad2, Play, CheckCircle2, Hash, RefreshCw, BookOpen,
   ChevronRight, Trash2, AlertTriangle, Zap, Sparkles,
-  Swords, Coins, ChevronDown, CheckCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import Loading from "../loading/page";
 
 const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
-
-// ── Supported stake tokens ────────────────────────────────────────────────────
-const STAKE_TOKENS = [
-  { symbol: "STRK", label: "Starknet" },
-  { symbol: "ETH",  label: "Ethereum" },
-  { symbol: "USDC", label: "USD Coin" },
-];
 
 interface QuizCard {
   code: string;
@@ -45,221 +37,6 @@ interface QuizCard {
   reward?: { poolAmount: number; tokenSymbol: string; totalWinners: number };
 }
 
-// ── Stored challenge agreement shape ─────────────────────────────────────────
-interface ChallengeAgreement {
-  amount: string;
-  token: string;
-  agreedAt: number; // timestamp ms
-}
-
-const CHALLENGE_STORAGE_KEY = "faucetdrops_challenge_agreement";
-
-function getChallengeAgreement(): ChallengeAgreement | null {
-  try {
-    const raw = localStorage.getItem(CHALLENGE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed: ChallengeAgreement = JSON.parse(raw);
-    // Expire agreements older than 24 h
-    if (Date.now() - parsed.agreedAt > 24 * 60 * 60 * 1000) {
-      localStorage.removeItem(CHALLENGE_STORAGE_KEY);
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function saveChallengeAgreement(agreement: ChallengeAgreement) {
-  try {
-    localStorage.setItem(CHALLENGE_STORAGE_KEY, JSON.stringify(agreement));
-  } catch { /* ignore */ }
-}
-
-function clearChallengeAgreement() {
-  try { localStorage.removeItem(CHALLENGE_STORAGE_KEY); } catch { /* ignore */ }
-}
-
-// ── Challenge Modal ───────────────────────────────────────────────────────────
-function ChallengeModal({
-  onClose,
-  onConfirm,
-  existingAgreement,
-}: {
-  onClose: () => void;
-  onConfirm: (amount: string, token: string) => void;
-  existingAgreement: ChallengeAgreement | null;
-}) {
-  const [amount, setAmount]           = useState(existingAgreement?.amount ?? "");
-  const [token, setToken]             = useState(existingAgreement?.token ?? "STRK");
-  const [tokenOpen, setTokenOpen]     = useState(false);
-  const [useExisting, setUseExisting] = useState(!!existingAgreement);
-
-  const isValid = parseFloat(amount) > 0;
-
-  const handleConfirm = () => {
-    const finalAmount = useExisting && existingAgreement ? existingAgreement.amount : amount;
-    const finalToken  = useExisting && existingAgreement ? existingAgreement.token  : token;
-    if (!useExisting || !existingAgreement) {
-      saveChallengeAgreement({ amount: finalAmount, token: finalToken, agreedAt: Date.now() });
-    }
-    onConfirm(finalAmount, finalToken);
-  };
-
-  const handleClearAndNew = () => {
-    clearChallengeAgreement();
-    setUseExisting(false);
-    setAmount("");
-    setToken("STRK");
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.07] rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
-
-        {/* Header */}
-        <div className="p-6 pb-0">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 flex items-center justify-center shrink-0">
-              <Swords className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-            </div>
-            <div>
-              <h3 className="text-base font-black text-slate-900 dark:text-white">Set Challenge Stake</h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                This amount will be auto-filled when you create the quiz.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 space-y-4">
-
-          {/* Existing agreement banner */}
-          {existingAgreement && useExisting && (
-            <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-xl p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-green-700 dark:text-green-400 text-xs font-bold">
-                  <CheckCheck className="h-3.5 w-3.5" />
-                  Previously Agreed Amount
-                </span>
-                <button
-                  onClick={handleClearAndNew}
-                  className="text-[10px] text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-colors underline underline-offset-2"
-                >
-                  Use different amount
-                </button>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-slate-900 dark:text-white">
-                  {existingAgreement.amount}
-                </span>
-                <span className="text-sm font-bold text-slate-500 dark:text-slate-400">
-                  {existingAgreement.token}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                Agreed {new Date(existingAgreement.agreedAt).toLocaleString()}
-              </p>
-            </div>
-          )}
-
-          {/* Amount + token inputs — shown when no existing agreement or user wants a new one */}
-          {(!existingAgreement || !useExisting) && (
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                Stake Amount
-              </label>
-
-              <div className="flex gap-2">
-                {/* Amount */}
-                <div className="relative flex-1">
-                  <Coins className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
-                  <Input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={amount}
-                    onChange={e => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="pl-9 h-11 font-bold text-base bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus-visible:border-orange-400 placeholder:text-slate-300 dark:placeholder:text-white/20"
-                  />
-                </div>
-
-                {/* Token picker */}
-                <div className="relative">
-                  <button
-                    onClick={() => setTokenOpen(o => !o)}
-                    className="h-11 px-3 flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-slate-300 text-sm font-bold hover:border-orange-400 transition-colors min-w-[90px]"
-                  >
-                    {token}
-                    <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                  </button>
-
-                  {tokenOpen && (
-                    <div className="absolute right-0 top-full mt-1 z-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden w-44">
-                      {STAKE_TOKENS.map(t => (
-                        <button
-                          key={t.symbol}
-                          onClick={() => { setToken(t.symbol); setTokenOpen(false); }}
-                          className={cn(
-                            "w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors",
-                            token === t.symbol
-                              ? "bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold"
-                              : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"
-                          )}
-                        >
-                          <span>{t.label}</span>
-                          <span className="font-mono text-xs font-bold">{t.symbol}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Helper text */}
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 flex items-start gap-1.5">
-                <span className="shrink-0 mt-0.5 w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-white/20 flex items-center justify-center text-[9px] font-bold">i</span>
-                Both you and your opponent must stake this amount. Winner takes the pool.
-              </p>
-            </div>
-          )}
-
-          {/* Pool preview */}
-          {isValid && !useExisting && (
-            <div className="bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
-              <span className="text-xs text-orange-700 dark:text-orange-400 font-medium">Total pool (2 players)</span>
-              <span className="font-black text-orange-700 dark:text-orange-400 text-sm">
-                {(parseFloat(amount) * 2).toFixed(parseFloat(amount) % 1 === 0 ? 0 : 4)} {token}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="px-6 pb-6 flex gap-3">
-          <Button
-            variant="outline"
-            className="flex-1 h-11 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-transparent"
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
-          <Button
-            className="flex-1 h-11 bg-orange-500 hover:bg-orange-400 text-white font-bold border-0 disabled:opacity-40 gap-2"
-            disabled={useExisting ? false : !isValid}
-            onClick={handleConfirm}
-          >
-            <Swords className="h-4 w-4" />
-            {useExisting && existingAgreement ? "Continue with This Amount" : "Set & Create Quiz"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
   waiting: {
     label: "Waiting",
@@ -281,7 +58,6 @@ const STATUS_CONFIG = {
   },
 };
 
-// ── Quiz card ─────────────────────────────────────────────────────────────────
 function QuizCardItem({
   quiz,
   onClick,
@@ -342,6 +118,7 @@ function QuizCardItem({
             <div
               onClick={(e) => { e.stopPropagation(); onDelete(e); }}
               className="p-1.5 rounded-full bg-red-50 dark:bg-red-500/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/30 transition-colors border border-red-200 dark:border-red-500/30 backdrop-blur"
+
               title="Delete Quiz"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -372,12 +149,12 @@ function QuizCardItem({
         <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
           <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {quiz.totalQuestions}Q</span>
           <span className="flex items-center gap-1">
-            <Users className="h-3 w-3" />
-            <span className="font-semibold">{quiz.playerCount}</span>
-            <span className="text-slate-300 dark:text-slate-600">
-              {quiz.maxParticipants > 0 ? `/${quiz.maxParticipants}` : " joined"}
-            </span>
+          <Users className="h-3 w-3" />
+          <span className="font-semibold">{quiz.playerCount}</span>
+          <span className="text-slate-300 dark:text-slate-600">
+            {quiz.maxParticipants > 0 ? `/${quiz.maxParticipants}` : " joined"}
           </span>
+        </span>
           {quiz.reward && (
             <span className="flex items-center gap-1">
               <Trophy className="h-3 w-3 text-yellow-500" /> {quiz.reward.totalWinners}W
@@ -385,7 +162,7 @@ function QuizCardItem({
           )}
           <span className="ml-auto text-[10px]">
             by {quiz.creatorUsername?.trim() || quiz.creatorAddress.slice(0, 6) + "…"}
-          </span>
+           </span>
         </div>
 
         <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-white/[0.06]">
@@ -415,25 +192,19 @@ function QuizCardItem({
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function QuizListPage() {
   const router = useRouter();
   const { address: userWalletAddress } = useWallet();
-
-  const [quizzes, setQuizzes]           = useState<QuizCard[]>([]);
-  const [isLoading, setIsLoading]       = useState(true);
+  const [quizzes, setQuizzes] = useState<QuizCard[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery]   = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "waiting" | "active" | "finished">("all");
-  const [codeInput, setCodeInput]       = useState("");
-  const [isJumping, setIsJumping]       = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+  const [isJumping, setIsJumping] = useState(false);
   const [quizToDelete, setQuizToDelete] = useState<QuizCard | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [isDeleting, setIsDeleting]     = useState(false);
-
-  // Challenge state
-  const [showChallengeModal, setShowChallengeModal] = useState(false);
-  const [existingAgreement, setExistingAgreement]   = useState<ChallengeAgreement | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchQuizzes = async (silent = false) => {
     if (!silent) setIsLoading(true); else setIsRefreshing(true);
@@ -450,34 +221,6 @@ export default function QuizListPage() {
     const t = setInterval(() => fetchQuizzes(true), 15000);
     return () => clearInterval(t);
   }, []);
-
-  // ── Challenge click handler ────────────────────────────────────────────────
-  const handleChallengeClick = () => {
-    if (!userWalletAddress) {
-      toast.error("Connect your wallet to create a challenge");
-      return;
-    }
-    const agreement = getChallengeAgreement();
-    if (agreement) {
-      // Already agreed — skip modal, route directly with pre-filled stake
-      toast.success(`Using agreed stake: ${agreement.amount} ${agreement.token}`);
-      router.push(
-        `/quiz/create-quiz?stakeAmount=${encodeURIComponent(agreement.amount)}&stakeToken=${encodeURIComponent(agreement.token)}&mode=challenge`
-      );
-    } else {
-      // No prior agreement — open modal
-      setExistingAgreement(null);
-      setShowChallengeModal(true);
-    }
-  };
-
-  // ── Modal confirm → save + route ──────────────────────────────────────────
-  const handleChallengeConfirm = (amount: string, token: string) => {
-    setShowChallengeModal(false);
-    router.push(
-      `/quiz/create-quiz?stakeAmount=${encodeURIComponent(amount)}&stakeToken=${encodeURIComponent(token)}&mode=challenge`
-    );
-  };
 
   const initiateDelete = (quiz: QuizCard) => {
     setQuizToDelete(quiz);
@@ -579,34 +322,14 @@ export default function QuizListPage() {
                   </span>
                 )}
                 {quizzes.reduce((sum, q) => sum + q.playerCount, 0) > 0 && (
-                  <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm font-medium">
-                    <Users className="h-3.5 w-3.5" />
-                    {quizzes.reduce((sum, q) => sum + q.playerCount, 0).toLocaleString()} total players
-                  </span>
-                )}
-              </div>
-
-              {/* ── Create + Challenge buttons ── */}
-              {userWalletAddress && (
-                <div className="flex flex-wrap items-center gap-2 pt-2">
-                  <Button
-                    onClick={() => router.push("/quiz/create-quiz")}
-                    className="h-10 px-4 font-bold bg-blue-600 hover:bg-blue-500 text-white border-0 gap-2"
-                  >
-                    <Plus className="h-4 w-4" /> Create Quiz
-                  </Button>
-
-                  <Button
-                    onClick={handleChallengeClick}
-                    className="h-10 px-4 font-bold bg-orange-500 hover:bg-orange-400 text-white border-0 gap-2"
-                  >
-                    <Swords className="h-4 w-4" /> Challenge
-                  </Button>
-                </div>
+                <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm font-medium">
+                  <Users className="h-3.5 w-3.5" />
+                  {quizzes.reduce((sum, q) => sum + q.playerCount, 0).toLocaleString()} total players
+                </span>
               )}
+              </div>
             </div>
 
-            {/* Join with code */}
             <div className="w-full lg:w-auto shrink-0 space-y-2 lg:min-w-[260px]">
               <p className="text-slate-400 dark:text-slate-500 text-xs uppercase font-bold tracking-widest mb-2">Join with Code</p>
               <div className="flex gap-2">
@@ -626,6 +349,14 @@ export default function QuizListPage() {
                   {isJumping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
                 </Button>
               </div>
+
+              {/* ADD THIS ↓ */}
+              <Button
+                onClick={() => router.push("/quiz/create-quiz")}
+                className="w-full h-11 bg-blue-600 hover:bg-blue-500 text-white font-bold border-0 mt-1"
+              >
+                <Plus className="mr-2 h-4 w-4" /> Create Quiz
+              </Button>
             </div>
           </div>
         </div>
@@ -679,7 +410,7 @@ export default function QuizListPage() {
         {/* ── Grid ── */}
         {isLoading ? (
           <div className="flex items-center justify-center py-32">
-            <Loading />
+            <Loading/>
           </div>
         ) : filtered.length === 0 ? (
           <div className="border border-dashed border-slate-200 dark:border-white/[0.07] rounded-2xl flex flex-col items-center justify-center py-24 space-y-4">
@@ -718,16 +449,14 @@ export default function QuizListPage() {
           </div>
         )}
       </div>
-
-      {/* ── Challenge Modal ── */}
-      {showChallengeModal && (
-        <ChallengeModal
-          onClose={() => setShowChallengeModal(false)}
-          onConfirm={handleChallengeConfirm}
-          existingAgreement={existingAgreement}
-        />
-      )}
-
+        <div className="sm:hidden fixed bottom-6 right-6 z-40">
+          <Button
+            onClick={() => router.push("/quiz/create-quiz")}
+            className="h-14 px-5 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-2xl border-0 flex items-center gap-2 font-bold text-sm"
+          >
+            <Plus className="h-5 w-5" /> Create Quiz
+          </Button>
+        </div>
       {/* ── Delete Confirmation Modal ── */}
       {quizToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

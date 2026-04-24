@@ -210,17 +210,7 @@ export function Header({
               <WalletConnectButton />
             )}
 
-            {!isDashboardPage && isConnected && (
-              <Button
-                ref={buttonRef}
-                variant="outline"
-                size="sm"
-                className="px-2 border-border shadow-sm"
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-              >
-                {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </Button>
-            )}
+            
           </div>
         </div>
 

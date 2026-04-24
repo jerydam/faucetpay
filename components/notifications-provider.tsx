@@ -41,7 +41,6 @@ function timeAgo(iso: string) {
 }
 
 // ── Challenge Popup Overlay ───────────────────────────────────────────────────
-
 function ChallengePopupOverlay({
   popup,
   onAccept,
@@ -54,99 +53,123 @@ function ChallengePopupOverlay({
   const { notification: n, secondsLeft } = popup;
   const pct = (secondsLeft / POPUP_DURATION) * 100;
   const isUrgent = secondsLeft <= 10;
-
-  // Extract variables for cleaner code
   const creatorName = n.data?.creatorName || "A challenger";
   const topic = n.data?.topic || "a random topic";
 
   return (
-  <div
-    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
-    style={{
-      background: "radial-gradient(circle at center, var(--overlay-gradient-start, rgba(30, 41, 59, 0.7)) 0%, var(--overlay-gradient-end, rgba(15, 23, 42, 0.9)) 100%)",
-      backdropFilter: "blur(12px) saturate(180%)",
-    }}
-    onClick={onDecline}
-  >
     <div
-      onClick={(e) => e.stopPropagation()}
-      className={cn(
-        "relative w-full max-w-[380px] overflow-hidden rounded-[28px] sm:rounded-[32px]",
-        "border border-white/10 bg-slate-900 shadow-2xl",
-        "animate-in slide-in-from-bottom-8 duration-300",
-        "mx-auto mb-4 sm:mb-0" // Shifts it up slightly on mobile for better thumb reach
-      )}
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-200"
+      style={{
+        background: "radial-gradient(circle at center, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.92) 100%)",
+        backdropFilter: "blur(10px) saturate(160%)",
+      }}
+      onClick={onDecline}
     >
-      {/* Subtle decorative background - reduced opacity for better text contrast on small screens */}
-      <div className="absolute inset-0 opacity-[0.05] pointer-events-none" 
-           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} 
-      />
-
-      <div className="relative p-5 sm:p-8 text-center">
-        {/* Avatar Icon - Scaled for mobile */}
-        <div className="flex justify-center mb-4 sm:mb-6">
-          <div className="h-14 w-14 sm:h-18 sm:w-18 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold border-2 border-blue-500/30 text-lg sm:text-xl shadow-[0_0_20px_rgba(59,130,246,0.2)]">
-            {creatorName.slice(0, 2).toUpperCase()}
-          </div>
-        </div>
-
-        {/* Text Content */}
-        <div className="space-y-2 mb-5 sm:mb-6">
-          <h3 className="text-white font-black text-xl sm:text-2xl leading-tight">
-            Challenge Issued!
-          </h3>
-          <p className="text-slate-300 text-sm sm:text-base leading-relaxed px-2">
-            <span className="text-blue-400 font-bold">{creatorName}</span> just challenged you on <span className="text-white font-bold">"{topic}"</span>
-          </p>
-        </div>
-
-        {/* Stake Detail */}
-        {n.data?.stake && (
-          <div className="flex items-center justify-center gap-2 bg-amber-500/10 rounded-xl sm:rounded-2xl py-2 px-4 border border-amber-500/20 mb-6 w-fit mx-auto">
-            <Zap size={14} className="text-amber-500 fill-amber-500" />
-            <span className="text-[10px] sm:text-xs font-black text-amber-500 uppercase tracking-widest">
-              Stake: {n.data.stake} {n.data.token}
-            </span>
-          </div>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          "relative w-full sm:max-w-[380px] overflow-hidden",
+          // Mobile: slides up from bottom as a sheet
+          "rounded-t-[28px] sm:rounded-[32px]",
+          "border border-white/10 bg-slate-900 shadow-2xl",
+          "animate-in slide-in-from-bottom-8 duration-300",
         )}
+      >
+        {/* Decorative pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.04] pointer-events-none"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}
+        />
 
-        {/* Timer Section */}
-        <div className="mb-6 px-1 sm:px-4">
-           <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div 
-                className={cn("h-full transition-all duration-1000 linear", isUrgent ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-blue-500")}
+        {/* Drag handle on mobile */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full bg-slate-700" />
+        </div>
+
+        <div className="relative px-5 pt-4 pb-6 sm:p-8 sm:text-center">
+          {/* Avatar */}
+          <div className="flex justify-center mb-4">
+            <div className="h-14 w-14 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold border-2 border-blue-500/30 text-lg shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+              {creatorName.slice(0, 2).toUpperCase()}
+            </div>
+          </div>
+
+          {/* Text */}
+          <div className="space-y-1.5 mb-4 text-center">
+            <h3 className="text-white font-black text-xl leading-tight">
+              Challenge Issued!
+            </h3>
+            <p className="text-slate-300 text-sm leading-relaxed px-2">
+              <span className="text-blue-400 font-bold">{creatorName}</span>{" "}
+              challenged you on{" "}
+              <span className="text-white font-bold">"{topic}"</span>
+            </p>
+          </div>
+
+          {/* Stake badge — blue not amber */}
+          {n.data?.stake && (
+            <div className="flex items-center justify-center gap-2 bg-blue-500/10 rounded-xl py-2 px-4 border border-blue-500/20 mb-4 w-fit mx-auto">
+              <Zap size={13} className="text-blue-400 fill-blue-400" />
+              <span className="text-[11px] font-black text-blue-400 uppercase tracking-widest">
+                Stake: {n.data.stake} {n.data.token}
+              </span>
+            </div>
+          )}
+
+          {/* Timer */}
+          <div className="mb-5">
+            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  "h-full transition-all duration-1000 linear rounded-full",
+                  isUrgent
+                    ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                    : "bg-blue-500",
+                )}
                 style={{ width: `${pct}%` }}
               />
-           </div>
-           <div className="flex justify-between items-center mt-2">
-             <p className={cn("text-[9px] sm:text-[10px] font-bold tracking-widest uppercase", isUrgent ? "text-red-500" : "text-slate-500")}>
-               {isUrgent ? "Time is running out" : "Incoming Challenge"}
-             </p>
-             <p className={cn("text-[10px] font-black", isUrgent ? "text-red-500" : "text-blue-400")}>
-               {secondsLeft}s
-             </p>
-           </div>
-        </div>
+            </div>
+            <div className="flex justify-between items-center mt-1.5">
+              <p
+                className={cn(
+                  "text-[10px] font-bold tracking-widest uppercase",
+                  isUrgent ? "text-red-500" : "text-slate-500",
+                )}
+              >
+                {isUrgent ? "Expiring soon" : "Incoming challenge"}
+              </p>
+              <p
+                className={cn(
+                  "text-[11px] font-black tabular-nums",
+                  isUrgent ? "text-red-500" : "text-blue-400",
+                )}
+              >
+                {secondsLeft}s
+              </p>
+            </div>
+          </div>
 
-        {/* Actions - Larger tap areas for mobile */}
-        <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
-          <button 
-            onClick={onAccept}
-            className="order-1 sm:order-2 py-4 rounded-2xl bg-blue-600 text-white font-black text-base sm:text-sm hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
-          >
-            Accept Challenge
-          </button>
-          <button 
-            onClick={onDecline}
-            className="order-2 sm:order-1 py-4 rounded-2xl bg-slate-800 text-slate-400 font-bold text-base sm:text-sm hover:bg-slate-700 transition-colors active:scale-95"
-          >
-            Decline
-          </button>
+          {/* Actions */}
+          <div className="flex flex-col gap-2.5">
+            <button
+              onClick={onAccept}
+              className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-base hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <Zap className="h-4 w-4 fill-white" /> Accept Challenge
+            </button>
+            <button
+              onClick={onDecline}
+              className="w-full py-3.5 rounded-2xl bg-slate-800 text-slate-400 font-bold text-sm hover:bg-slate-700 transition-colors active:scale-[0.98]"
+            >
+              Decline
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -176,14 +199,17 @@ export function NotificationBell() {
 
   // Fetch notifications when panel opens
   useEffect(() => {
-    if (!open || !address) return;
-    setLoading(true);
-    fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}`)
-      .then((r) => r.json())
-      .then((d) => setNotifications(d.notifications ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [open, address]);
+  if (!address) return;
+  fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}`)
+    .then((r) => r.json())
+    .then((d) => {
+      const unread = (d.notifications ?? []).filter((n: Notification) => !n.isRead);
+      if (unread.length > 0) {
+        setNotifications(d.notifications ?? []);
+      }
+    })
+    .catch(() => {});
+}, [address]);
 
   // Clear popup timer on unmount
   useEffect(() => {
@@ -242,6 +268,9 @@ export function NotificationBell() {
 
       // Public challenge invite → show popup
       if (data.type === "public_challenge" || data.type === "friend_invite" || data.type === "rematch_request") {
+        setNotifications((prev) =>
+          prev.some((n) => n.id === notif.id) ? prev : [notif, ...prev]
+        );
         showChallengePopup(notif);
       } else {
         // Other notifications → sonner toast + inbox

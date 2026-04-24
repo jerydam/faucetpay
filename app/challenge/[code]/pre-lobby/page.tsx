@@ -128,10 +128,10 @@ function CounterOfferBanner({
   submitting: boolean;
 }) {
   return (
-    <div className="bg-amber-500/10 border-2 border-amber-400/50 rounded-3xl overflow-hidden">
-      <div className="px-5 pt-4 pb-3 border-b border-amber-400/20">
+    <div className="bg-blue-500/10 border-2 border-blue-400/50 rounded-3xl overflow-hidden">
+      <div className="px-5 pt-4 pb-3 border-b border-blue-400/20">
         <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-amber-500" />
+          <MessageSquare className="h-4 w-4 text-blue-500" />
           <p className="text-sm font-black text-foreground">Counter Offer from {counter.fromName}</p>
           <span className="ml-auto text-[10px] text-muted-foreground">{timeAgo(counter.sentAt)}</span>
         </div>
@@ -155,7 +155,7 @@ function CounterOfferBanner({
           <button
             onClick={() => onAccept(counter.amount)}
             disabled={submitting}
-            className="flex-2 flex-1 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-white font-black text-sm transition-all active:scale-[0.99] disabled:opacity-50"
+            className="flex-2 flex-1 py-3 rounded-2xl bg-blue-500 hover:bg-blue-400 text-white font-black text-sm transition-all active:scale-[0.99] disabled:opacity-50"
           >
             {submitting
               ? <Loader2 className="inline h-4 w-4 animate-spin" />
@@ -186,7 +186,7 @@ function OfferCard({
       "flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-2xl border transition-all duration-200",
       "bg-card border-border hover:border-primary/40 shadow-sm",
       isSelf && "opacity-50 pointer-events-none",
-      isCounterTarget && "border-amber-400/60 bg-amber-500/5",
+      isCounterTarget && "border-blue-400/60 bg-blue-500/5",
     )}>
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <Avatar className="h-9 w-9 shrink-0">
@@ -200,7 +200,7 @@ function OfferCard({
             {offer.username}
             {isSelf && <span className="ml-2 text-[10px] text-muted-foreground">(you)</span>}
             {isCounterTarget && (
-              <span className="ml-2 text-[10px] font-black text-amber-500 uppercase tracking-wider">Countering</span>
+              <span className="ml-2 text-[10px] font-black text-blue-500 uppercase tracking-wider">Countering</span>
             )}
           </p>
           <p className="text-[10px] text-muted-foreground font-mono truncate">
@@ -241,8 +241,8 @@ function OfferCard({
             className={cn(
               "flex-1 flex items-center justify-center gap-1 px-3 py-2 sm:py-1.5 rounded-xl text-xs font-black transition-all",
               isCounterTarget
-                ? "bg-amber-500 hover:bg-amber-400 text-white"
-                : "border-2 border-amber-400/50 text-amber-500 hover:bg-amber-500/10",
+                ? "bg-blue-500 hover:bg-blue-400 text-white"
+                : "border-2 border-blue-400/50 text-blue-500 hover:bg-blue-500/10",
               "active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed",
             )}
           >
@@ -619,7 +619,7 @@ export default function PreLobbyPage() {
 
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="font-mono font-black">{code}</Badge>
-            <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30 text-[10px] font-bold">
+            <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 text-[10px] font-bold">
               PRE-LOBBY
             </Badge>
           </div>
@@ -653,7 +653,7 @@ export default function PreLobbyPage() {
                 </h1>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <div className="flex items-center gap-1.5">
-                    <Crown className="h-3.5 w-3.5 text-amber-500" />
+                    <Crown className="h-3.5 w-3.5 text-blue-500" />
                     <span className="text-xs font-bold text-muted-foreground">{challenge.creatorName}</span>
                   </div>
                   <span className="text-muted-foreground/30">·</span>
@@ -669,7 +669,7 @@ export default function PreLobbyPage() {
 
             <div className="mt-4 flex items-center justify-between px-4 py-3 rounded-2xl bg-primary/5 border border-primary/20">
               <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-amber-500" />
+                <Trophy className="h-4 w-4 text-blue-500" />
                 <span className="text-xs font-bold text-muted-foreground">Opening stake</span>
               </div>
               <div className="text-right">
@@ -733,13 +733,13 @@ export default function PreLobbyPage() {
 
             {/* Creator counter-offer panel — only visible when a target is selected */}
             {counterTarget && (
-              <div className="bg-card border-2 border-amber-500/40 rounded-3xl overflow-hidden">
+              <div className="bg-card border-2 border-blue-500/40 rounded-3xl overflow-hidden">
                 <div className="px-5 pt-4 pb-2 border-b border-border">
                   <div className="flex items-center justify-between">
                     <h3 className="font-black text-foreground text-sm flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-amber-500" />
+                      <Zap className="h-4 w-4 text-blue-500" />
                       Counter to{" "}
-                      <span className="text-amber-500">{counterTarget.username}</span>
+                      <span className="text-blue-500">{counterTarget.username}</span>
                     </h3>
                     {/* Dismiss target selection */}
                     <button
@@ -773,15 +773,15 @@ export default function PreLobbyPage() {
                         onChange={e => setMyOffer(Math.max(0.01, parseFloat(e.target.value) || 0))}
                         className={cn(
                           "w-full h-16 rounded-2xl border-2 bg-background text-center",
-                          "text-3xl font-black text-foreground outline-none transition-colors focus:border-amber-400/60",
-                          "border-amber-400/50",
+                          "text-3xl font-black text-foreground outline-none transition-colors focus:border-blue-400/60",
+                          "border-blue-400/50",
                         )}
                       />
                       <span className="absolute right-4 bottom-3 text-sm font-bold text-muted-foreground pointer-events-none">
                         {challenge.token}
                       </span>
                       {myOffer === counterTarget.amount && (
-                        <span className="absolute left-3 top-3 text-[10px] font-black text-amber-500 uppercase tracking-wider">
+                        <span className="absolute left-3 top-3 text-[10px] font-black text-blue-500 uppercase tracking-wider">
                           = Their offer
                         </span>
                       )}
@@ -806,8 +806,8 @@ export default function PreLobbyPage() {
                           className={cn(
                             "flex-1 min-w-[70px] py-2 rounded-xl border-2 text-xs font-black transition-all",
                             myOffer === v
-                              ? "border-amber-500 bg-amber-500/10 text-amber-500"
-                              : "border-border text-muted-foreground hover:border-amber-400/40",
+                              ? "border-blue-500 bg-blue-500/10 text-blue-500"
+                              : "border-border text-muted-foreground hover:border-blue-400/40",
                           )}
                         >
                           {v === challenge.stake ? `${fmt(v)} ✓` : fmt(v)}
@@ -830,7 +830,7 @@ export default function PreLobbyPage() {
                     <button
                       onClick={() => handleSendCounter(myOffer, counterTarget)}
                       disabled={submitting || myOffer === counterTarget.amount}
-                      className="flex-1 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-white font-black text-sm transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 py-3 rounded-2xl bg-blue-500 hover:bg-blue-400 text-white font-black text-sm transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {submitting
                         ? <><Loader2 className="inline mr-2 h-4 w-4 animate-spin" /> Sending…</>

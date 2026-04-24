@@ -71,6 +71,7 @@ interface PlayerState {
   points: number;
   ready: boolean;
   txVerified: boolean;
+  avatarUrl?: string;
 }
 
 interface QuizOption { id: string; text: string }
@@ -621,7 +622,7 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
           setChallenge(c);
           setPlayers(prev => {
             const incoming = Object.entries(c.players ?? {}).map(([w, d]: [string, any]) => ({
-              walletAddress: w, username: d.username, points: d.points, ready: d.ready, txVerified: d.txVerified,
+              walletAddress: w, username: d.username, points: d.points, ready: d.ready, txVerified: d.txVerified,avatarUrl: d.avatar_url ?? "",
             }));
             if (prev.length === 0) return incoming;
             return incoming.map(newP => {
@@ -635,7 +636,7 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
           const p = msg.player;
           setPlayers(prev => {
             if (prev.some(e => e.walletAddress === p.walletAddress)) return prev;
-            return [...prev, { walletAddress: p.walletAddress, username: p.username, points: 0, ready: false, txVerified: false }];
+            return [...prev, { walletAddress: p.walletAddress, username: p.username, points: 0, ready: false, txVerified: false, avatarUrl: p.avatar_url ?? "" }];
           });
           toast.info(`${p.username} joined the lobby!`);
           break;
@@ -644,7 +645,7 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
           setPlayers(prev => {
             const wallet = msg.wallet.toLowerCase();
             const exists = prev.some(p => p.walletAddress.toLowerCase() === wallet);
-            if (!exists) return [...prev, { walletAddress: wallet, username, points: 0, ready: false, txVerified: true }];
+            if (!exists) return [...prev, { walletAddress: wallet, username, points: 0, ready: false, txVerified: true, avatarUrl: msg.avatar_url ?? "" }];
             return prev.map(p => p.walletAddress.toLowerCase() === wallet ? { ...p, txVerified: true } : p);
           });
           if (msg.wallet.toLowerCase() === myWallet) {
@@ -863,7 +864,7 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
         setHasJoined(true);
         setPlayers(prev => {
           if (prev.some(p => p.walletAddress.toLowerCase() === myWallet)) return prev;
-          return [...prev, { walletAddress: userWalletAddress, username, points: 0, ready: false, txVerified: true }];
+          return [...prev, { walletAddress: userWalletAddress, username, points: 0, ready: false, txVerified: true, avatarUrl }];
         });
       }
 
@@ -1180,6 +1181,7 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
                       <div className="flex items-center gap-3">
                         <span className="text-xs font-black text-muted-foreground w-4">{i + 1}</span>
                         <Avatar className="h-6 w-6">
+                          <AvatarImage src={p.avatarUrl || undefined} />
                           <AvatarFallback className="text-[8px]">{p.username.slice(0,2)}</AvatarFallback>
                         </Avatar>
                         <span className={cn("text-sm font-bold", p.walletAddress.toLowerCase() === myWallet ? "text-primary" : "text-foreground")}>
@@ -1337,7 +1339,7 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
             </div>
           </div>
           {!userWalletAddress ? (
-            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-xl px-4 py-3 text-amber-700 dark:text-amber-300 text-sm font-medium">
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 rounded-xl px-4 py-3 text-blue-700 dark:text-blue-300 text-sm font-medium">
               Connect your wallet to join
               <WalletConnectButton/>
             </div>
@@ -1450,8 +1452,9 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
                     p.ready ? "border-emerald-400/40 dd-btn" : p.txVerified ? "border-blue-400/30 bg-blue-500/5" : "border-border bg-muted/20"
                   )}>
                     <Avatar className="h-14 w-14 border-2 border-border">
-                      <AvatarFallback className="font-bold text-base">{p.username?.slice(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
+                    <AvatarImage src={p.avatarUrl || undefined} />
+                    <AvatarFallback className="font-bold text-base">{p.username?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
                     <p className="font-black text-foreground text-sm">{p.username}</p>
                     <p className={cn("text-[10px] font-semibold", statusLabel.cls)}>{statusLabel.text}</p>
                     <div className="flex gap-1 flex-wrap justify-center">
@@ -1488,7 +1491,7 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
             {!myTxVerified && (
               <>
                 <Button
-                  className="w-full h-16 text-lg font-black dd-btn rounded-2xl shadow-[0_4px_0_rgb(161,120,0)] active:translate-y-1 active:shadow-none transition-all"
+                  className="w-full h-16 text-lg font-black dd-btn rounded-2xl shadow-[0_4px_0_rgb(30,80,200)] active:translate-y-1 active:shadow-none transition-all"
                   onClick={handleStake}
                   disabled={isStaking || stakeVerifying}
                 >

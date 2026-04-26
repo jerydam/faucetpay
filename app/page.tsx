@@ -170,14 +170,10 @@ export default function LandingPage() {
               className="w-8 h-8 flex items-center justify-center"
               
             >
-              <Image
-                              src="/favicon.png"
-                              alt="FaucetDrops Logo"
-                              width={40}
-                              height={40}
-                              className="w-8 h-8 lg:w-10 lg:h-10 rounded-md object-contain flex-shrink-0"
-                            />
             </div>
+            <span className="d font-black text-xl tracking-tight text-white" style={{ letterSpacing: "-.01em" }}>
+              PrimeIQ
+            </span>
             <span
               className="d font-black text-xl tracking-tight"
               style={{ color: "var(--dd-text)", letterSpacing: "-.01em" }}

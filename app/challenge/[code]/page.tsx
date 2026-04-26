@@ -587,6 +587,22 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
   setRematchInvite(null);
 }, []);
 
+const sendWhenReady = useCallback((payload: object) => {
+  const ws = wsRef.current;
+  if (!ws) return;
+
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  } else if (ws.readyState === WebSocket.CONNECTING) {
+    // Queue the send until the socket opens
+    const onOpen = () => {
+      ws.send(JSON.stringify(payload));
+      ws.removeEventListener("open", onOpen);
+    };
+    ws.addEventListener("open", onOpen);
+  }
+}, []);
+
   // ── Timer ─────────────────────────────────────────────────────────────────────
   const startTimer = useCallback((startedAt: number, limit: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -601,11 +617,16 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
 
   // ── Send stake_confirmed over WS ──────────────────────────────────────────────
   const sendStakeConfirmed = useCallback((txHash: string) => {
-    if (!userWalletAddress) return;
-    setStakeTxHash(txHash);
-    setStakeVerifying(true);
-    wsRef.current?.send(JSON.stringify({ type: "stake_confirmed", walletAddress: userWalletAddress, txHash }));
-  }, [userWalletAddress]);
+  if (!userWalletAddress) return;
+  setStakeTxHash(txHash);
+  setStakeVerifying(true);
+  sendWhenReady({ type: "stake_confirmed", walletAddress: userWalletAddress, txHash });
+}, [userWalletAddress, sendWhenReady]);
+
+const handleReady = useCallback(() => {
+  if (!userWalletAddress) return;
+  sendWhenReady({ type: "ready", walletAddress: userWalletAddress });
+}, [userWalletAddress, sendWhenReady]);
 
   // ── WebSocket ─────────────────────────────────────────────────────────────────
   const connectWS = useCallback(() => {
@@ -881,10 +902,6 @@ useEffect(() => () => clearRematchTimers(), [clearRematchTimers]);
     }
   }, [userWalletAddress, challenge, hasJoined, code, username, sendStakeConfirmed, agreedStake, myWallet]);
 
-  const handleReady = useCallback(() => {
-    if (!userWalletAddress) return;
-    wsRef.current?.send(JSON.stringify({ type: "ready", walletAddress: userWalletAddress }));
-  }, [userWalletAddress]);
 
  const handleSelectAnswer = useCallback((optId: string) => {
   // We still block selection if the timer is out or we are in the reveal phase

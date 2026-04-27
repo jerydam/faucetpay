@@ -17,7 +17,7 @@ import {
 import { toast } from "sonner";
 import Loading from "../loading/page";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app0";
 const CELO_CHAIN_ID = 42220;
 
 interface LobbyChallenge {

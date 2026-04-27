@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/use-wallet";
 import { ArrowLeft, Swords, Search, ChevronUp, ChevronDown, Minus } from "lucide-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app0";
 const WS_BASE  = API_BASE.replace(/^http/, "ws");
 
 // ─── Tier system ──────────────────────────────────────────────────────────────

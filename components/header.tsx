@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme";
 import { NotificationBell } from "./notifications-provider";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app0";
 
 export function Header({ 
   pageTitle, 

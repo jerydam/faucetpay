@@ -23,7 +23,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app0";
 
 function getWsBase() {
   if (typeof window === "undefined") return "wss://127.0.0.1:8000";

@@ -42,11 +42,7 @@ function timeAgo(iso: string) {
 }
 
 // ── Challenge Popup Overlay ───────────────────────────────────────────────────
-function ChallengePopupOverlay({
-  popup,
-  onAccept,
-  onDecline,
-}: {
+function ChallengePopupOverlay({ popup, onAccept, onDecline }: {
   popup: ChallengePopup;
   onAccept: () => void;
   onDecline: () => void;
@@ -56,6 +52,24 @@ function ChallengePopupOverlay({
   const isUrgent = secondsLeft <= 10;
   const creatorName = n.data?.creatorName || "A challenger";
   const topic = n.data?.topic || "a random topic";
+  const code = n.data?.code;
+
+  // ── Fetch creator avatar ──────────────────────────────────────────────────
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!code) return;
+    fetch(`${API_BASE_URL}/api/challenge/${code}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.challenge?.creator) {
+          return fetch(`${API_BASE_URL}/api/players/${d.challenge.creator}`);
+        }
+      })
+      .then(r => r?.json())
+      .then(d => { if (d?.avatar_url) setAvatarUrl(d.avatar_url); })
+      .catch(() => {});
+  }, [code]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -91,9 +105,24 @@ function ChallengePopupOverlay({
 
         <div className="relative px-5 pt-4 pb-6 sm:p-8 sm:text-center">
           {/* Avatar */}
+         {/* Avatar */}
           <div className="flex justify-center mb-4">
-            <div className="h-14 w-14 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold border-2 border-blue-500/30 text-lg shadow-[0_0_20px_rgba(59,130,246,0.2)]">
-              {creatorName.slice(0, 2).toUpperCase()}
+            <div className="relative">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={creatorName}
+                  className="h-14 w-14 rounded-full object-cover border-2 border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.2)]"
+                />
+              ) : (
+                <div className="h-14 w-14 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold border-2 border-blue-500/30 text-lg shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+                  {creatorName.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              {/* Online pulse ring */}
+              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-900 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 bg-white rounded-full" />
+              </span>
             </div>
           </div>
 

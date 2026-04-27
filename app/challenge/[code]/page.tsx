@@ -1055,70 +1055,48 @@ export default function ChallengePage() {
 }, [userWalletAddress]);
 
   const handleSyncStake = useCallback(async () => {
-    if (!userWalletAddress || !challenge) return;
-    setIsSyncing(true);
-    try {
-      const GET_QUIZ_ABI = [{
-        inputs: [{ internalType: "bytes32", name: "quizId", type: "bytes32" }],
-        name: "getQuiz",
-        outputs: [{ components: [
-          { internalType: "bytes32", name: "id",            type: "bytes32" },
-          { internalType: "address", name: "token",         type: "address" },
-          { internalType: "uint256", name: "stakePerPlayer",type: "uint256" },
-          { internalType: "uint256", name: "totalStaked",   type: "uint256" },
-          { internalType: "address", name: "player1",       type: "address" },
-          { internalType: "address", name: "player2",       type: "address" },
-          { internalType: "address", name: "winner",        type: "address" },
-          { internalType: "bool",    name: "resolved",      type: "bool"    },
-          { internalType: "bool",    name: "rewardClaimed", type: "bool"    },
-          { internalType: "uint256", name: "createdAt",     type: "uint256" },
-        ], internalType: "struct QuizHub.Quiz", name: "", type: "tuple" }],
-        stateMutability: "view", type: "function",
-      }] as const;
+  if (!userWalletAddress || !challenge) return;
+  setIsSyncing(true);
+  try {
+    // ── Delegate to backend — it does the real on-chain check ──
+    const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/sync-stake`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ walletAddress: userWalletAddress }),
+    });
+    const d = await res.json();
 
-      // Inside handleSyncStake, replace the provider/contract block with:
-      const { walletClient, publicClient } = await getViemClients();
-      const quizId = deriveQuizId(code);
-      const quiz = await publicClient.readContract({
-        address: CONTRACT_ADDRESS,
-        abi: GET_QUIZ_ABI,
-        functionName: "getQuiz",
-        args: [quizId],
-      }) as any;
-
-      const stakePerPlayer = quiz.stakePerPlayer as bigint;
-      const totalStaked    = quiz.totalStaked as bigint;
-      const player1        = (quiz.player1 as string).toLowerCase();
-      const player2        = (quiz.player2 as string).toLowerCase();
-      const wallet         = userWalletAddress.toLowerCase();
-      let hasStaked = false;
-      if (wallet === player1)      hasStaked = totalStaked >= stakePerPlayer;
-      else if (wallet === player2) hasStaked = totalStaked >= stakePerPlayer * 2n;
-      else                         hasStaked = totalStaked >= stakePerPlayer * 2n;
-      if (!hasStaked) { toast.error("No stake found on-chain yet. Complete the stake transaction first."); return; }
-      if (!hasJoined) {
-        const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ walletAddress: userWalletAddress, username, txHash: "sync-recovery" }),
-        });
-        const d = await res.json();
-        if (!d.success) throw new Error(d.detail ?? "Join failed");
-        setHasJoined(true);
-      }
-      sendWhenReady({ type: "stake_confirmed", walletAddress: userWalletAddress, txHash: "sync-recovery" });
-      setPlayers(prev => {
-        const w      = userWalletAddress.toLowerCase();
-        const exists = prev.some(p => p.walletAddress.toLowerCase() === w);
-        if (!exists) return [...prev, { walletAddress: userWalletAddress, username, points: 0, ready: false, txVerified: true, avatarUrl: avatarUrl ?? "" }];
-        return prev.map(p => p.walletAddress.toLowerCase() === w ? { ...p, txVerified: true } : p);
-      });
-      toast.success("Stake synced! Click 'I'm Ready' to continue.");
-    } catch (err: any) {
-      toast.error(err?.message ?? "Could not read on-chain data.");
-    } finally {
-      setIsSyncing(false);
+    if (!d.success && !d.alreadyVerified) {
+      toast.error(d.message ?? "No stake found on-chain yet. Complete the stake transaction first.");
+      return;
     }
-  }, [userWalletAddress, challenge, code, username, hasJoined, sendWhenReady, avatarUrl]);
+
+    // ── Backend broadcasts stake_verified via WS if verified ──
+    // ── Do NOT set txVerified locally here — wait for WS event ──
+    if (d.alreadyVerified) {
+      toast.success("Stake already verified! Click 'I'm Ready' to continue.");
+    } else {
+      toast.success("Stake synced! Click 'I'm Ready' to continue.");
+    }
+
+    // Ensure player is joined
+    if (!hasJoined) {
+      const joinRes = await fetch(`${API_BASE_URL}/api/challenge/${code}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: userWalletAddress, username, txHash: "sync-recovery" }),
+      });
+      const joinData = await joinRes.json();
+      if (!joinData.success) throw new Error(joinData.detail ?? "Join failed");
+      setHasJoined(true);
+    }
+
+  } catch (err: any) {
+    toast.error(err?.message ?? "Could not sync stake.");
+  } finally {
+    setIsSyncing(false);
+  }
+}, [userWalletAddress, challenge, code, username, hasJoined]);
 
   // ── Derived values ────────────────────────────────────────────────────────────
   const myClaim   = pendingClaims.find(c => c.code === code);

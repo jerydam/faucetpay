@@ -43,6 +43,8 @@ function timeAgo(iso: string) {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
+
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Challenge {
@@ -153,7 +155,7 @@ function CounterOfferBanner({
 // ── Offer Card ────────────────────────────────────────────────────────────────
 
 function OfferCard({
-  offer, token, onAccept, onCounter, accepting, isSelf, isCounterTarget,
+  offer, token, onAccept, onCounter, accepting, isSelf, isCounterTarget, avatarUrl,
 }: {
   offer: Offer;
   token: string;
@@ -162,6 +164,7 @@ function OfferCard({
   accepting: boolean;
   isSelf: boolean;
   isCounterTarget: boolean;
+  avatarUrl?: string;
 }) {
   return (
     <div className={cn(
@@ -172,6 +175,7 @@ function OfferCard({
     )}>
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <Avatar className="h-9 w-9 shrink-0">
+          {avatarUrl && <img src={avatarUrl} alt={offer.username} className="h-full w-full rounded-full object-cover" />}
           <AvatarFallback className="text-xs font-black bg-primary/10 text-primary">
             {offer.username.slice(0, 2).toUpperCase()}
           </AvatarFallback>
@@ -326,7 +330,19 @@ export default function PreLobbyPage() {
   const code   = ((params.code as string) ?? "").toUpperCase();
   const { address: userWalletAddress } = useWallet();
   const myWallet = useMemo(() => userWalletAddress?.toLowerCase() ?? "", [userWalletAddress]);
-  
+  const [avatarCache, setAvatarCache] = useState<Record<string, string>>({});
+
+  const fetchAvatar = useCallback((wallet: string) => {
+    if (!wallet || avatarCache[wallet.toLowerCase()]) return;
+    fetch(`${API_BASE_URL}/api/players/${wallet}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.avatar_url) {
+          setAvatarCache(prev => ({ ...prev, [wallet.toLowerCase()]: d.avatar_url }));
+        }
+      })
+      .catch(() => {});
+  }, [avatarCache]);
   const [challenge, setChallenge]     = useState<Challenge | null>(null);
   const [username, setUsername]       = useState("");
   const [pageState, setPageState]     = useState<PageState>("loading");
@@ -357,6 +373,7 @@ export default function PreLobbyPage() {
         const c: Challenge = d.challenge;
         setChallenge(c);
         setMyOffer(c.stake);
+        if (d.challenge?.creator) fetchAvatar(d.challenge.creator);
         if (c.status === "active" || c.status === "finished") {
           router.replace(`/challenge/${code}`);
           return;
@@ -365,6 +382,13 @@ export default function PreLobbyPage() {
       })
       .catch(() => { toast.error("Failed to load challenge"); setPageState("error"); });
   }, [code, router]);
+  useEffect(() => {
+  if (challenge?.creator) fetchAvatar(challenge.creator);
+}, [challenge?.creator]);
+
+useEffect(() => {
+  offers.forEach(o => fetchAvatar(o.wallet));
+}, [offers]);
 
   // ── Username ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -679,9 +703,17 @@ export default function PreLobbyPage() {
           <div className="h-1.5 bg-gradient-to-r from-primary/60 via-primary to-primary/60" />
           <div className="p-5">
             <div className="flex items-start gap-4">
-              <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 text-2xl">
-                🧠
-              </div>
+              {avatarCache[challenge.creator?.toLowerCase()] ? (
+                <img
+                  src={avatarCache[challenge.creator.toLowerCase()]}
+                  alt={challenge.creatorName}
+                  className="h-14 w-14 rounded-2xl object-cover border border-primary/20 shrink-0"
+                />
+              ) : (
+                <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 font-black text-xl text-primary">
+                  {challenge.creatorName.slice(0, 2).toUpperCase()}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <h1 className="font-black text-xl text-foreground leading-tight line-clamp-2">
                   {challenge.topic}
@@ -758,6 +790,7 @@ export default function PreLobbyPage() {
                       accepting={accepting}
                       isSelf={offer.wallet.toLowerCase() === myWallet}
                       isCounterTarget={counterTarget?.wallet === offer.wallet}
+                      avatarUrl={avatarCache[offer.wallet.toLowerCase()]}
                     />
                   ))}
                 </div>
@@ -1012,6 +1045,13 @@ export default function PreLobbyPage() {
                     className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border bg-muted/20 text-sm"
                   >
                     <Avatar className="h-7 w-7 shrink-0">
+                      {avatarCache[offer.wallet.toLowerCase()] && (
+                        <img
+                          src={avatarCache[offer.wallet.toLowerCase()]}
+                          alt={offer.username}
+                          className="h-full w-full rounded-full object-cover"
+                        />
+                      )}
                       <AvatarFallback className="text-[10px] font-black">
                         {offer.username.slice(0, 2).toUpperCase()}
                       </AvatarFallback>

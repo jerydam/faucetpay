@@ -20,7 +20,7 @@ import { usePrivy } from "@privy-io/react-auth"
 import Loading from "@/app/loading"
 import { cn } from "@/lib/utils"
 
-const BACKEND_URL = "https://faucetpay-backend.koyeb.app0"
+const BACKEND_URL = "https://faucetpay-backend.koyeb.app"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

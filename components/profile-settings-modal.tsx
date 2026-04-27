@@ -14,7 +14,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-const API_BASE_URL = "https://faucetpay-backend.koyeb.app0"
+const API_BASE_URL = "https://faucetpay-backend.koyeb.app"
 
 const AVATAR_SEEDS = [
   "Jerry","John","Aneka","Zack","Molly","Bear","Crypto","Whale","Pepe",

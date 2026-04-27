@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Home, Trophy, User, Gavel, Swords, X } from "lucide-react";
 import { useWallet } from "@/components/wallet-provider";
 
-const API_BASE_URL = "https://faucetpay-backend.koyeb.app0";
+const API_BASE_URL = "https://faucetpay-backend.koyeb.app";
 
 const tabs = [
   { id: "home",    label: "Home",    icon: Home,   href: "/" },

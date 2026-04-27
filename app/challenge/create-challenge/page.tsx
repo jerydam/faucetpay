@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useSearchParams } from "next/navigation";
 import {
   Loader2, CheckCircle2, AlertCircle,
   ChevronRight, ChevronLeft, Rocket, Globe, Lock,
@@ -188,12 +189,54 @@ export default function CreateChallengePage() {
   const [topic, setTopic]                  = useState("");
   const [creatorUsername, setCreatorUsername] = useState("");
   const [isPublic, setIsPublic]            = useState(true);
-  const [inviteWallet, setInviteWallet]    = useState("");
   const [questionCount, setQuestionCount] = useState(9);
   // Step 1 — Stake
   const [stakeAmount, setStakeAmount]      = useState("");
   const [tokenSymbol, setTokenSymbol]      = useState(availableTokens[0]?.symbol ?? "CELO");
+  const searchParams = useSearchParams();
 
+  // Pre-fill from ranks page duel routing
+const [inviteUsername, setInviteUsername] = useState(
+  searchParams.get("inviteUsername") ?? ""
+);
+// resolved wallet — may come from URL or from username lookup
+const [inviteWallet, setInviteWallet] = useState(
+  searchParams.get("inviteWallet") ?? ""
+);
+
+// Username lookup state
+const [usernameStatus, setUsernameStatus] = useState
+  "idle" | "loading" | "found" | "notfound"
+>("idle");
+
+const [resolvedUsername, setResolvedUsername] = useState(
+  searchParams.get("inviteUsername") ?? ""
+);
+
+// If we arrived from ranks with both params already set, mark as found
+useEffect(() => {
+  if (searchParams.get("inviteWallet") && searchParams.get("inviteUsername")) {
+    setUsernameStatus("found");
+  }
+}, []);
+
+// ── Username lookup function ──
+const lookupUsername = async (username: string) => {
+  if (!username.trim() || username.length < 3) return;
+  setUsernameStatus("loading");
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/players/by-username/${encodeURIComponent(username.trim())}`
+    );
+    if (!res.ok) { setUsernameStatus("notfound"); return; }
+    const data = await res.json();
+    setInviteWallet(data.wallet);
+    setResolvedUsername(data.username);
+    setUsernameStatus("found");
+  } catch {
+    setUsernameStatus("notfound");
+  }
+};
   // Keep selected token in sync when chain changes
   useEffect(() => {
     const tokens = TOKENS_BY_CHAIN[chainId] ?? [];
@@ -212,11 +255,15 @@ export default function CreateChallengePage() {
   const selectedToken = availableTokens.find(t => t.symbol === tokenSymbol);
 
   const canAdvance = useCallback((): boolean => {
-    const id = STEPS[wizardStep]?.id;
-    if (id === "topic") return topic.trim().length > 3 && !!userWalletAddress;
-    if (id === "stake") return !!stakeAmount && parseFloat(stakeAmount) > 0 && !!tokenSymbol;
-    return true;
-  }, [wizardStep, topic, stakeAmount, tokenSymbol, userWalletAddress]);
+  const id = STEPS[wizardStep]?.id;
+  if (id === "topic") {
+    const topicOk = topic.trim().length > 3 && !!userWalletAddress;
+    if (!isPublic) return topicOk && usernameStatus === "found";
+    return topicOk;
+  }
+  if (id === "stake") return !!stakeAmount && parseFloat(stakeAmount) > 0 && !!tokenSymbol;
+  return true;
+}, [wizardStep, topic, stakeAmount, tokenSymbol, userWalletAddress, isPublic, usernameStatus]);
 
   // ─── On-chain staking ───────────────────────────────────────────────────────
   /**
@@ -227,54 +274,43 @@ export default function CreateChallengePage() {
    */
   // ── New: Create Quiz on-chain (NO staking, NO approval) ─────────────────────
   const createQuizOnChain = async (
-    code: string,
-    token: TokenConfig,
-    amount: string,
-  ): Promise<void> => {
-    if (!signer) throw new Error("Wallet not connected");
+  code: string,
+  token: TokenConfig,
+  amount: string,
+): Promise<void> => {
+  if (!signer) throw new Error("Wallet not connected");
 
-    console.log("[createQuizOnChain] Starting...", { code, token, amount });
+  const contractAddress = QUIZ_HUB_ADDRESSES[chainId];
+  if (!contractAddress) throw new Error(`QuizHub not configured for chain ${chainId}`);
 
-    const contractAddress = QUIZ_HUB_ADDRESSES[chainId];
-    if (!contractAddress) {
-      throw new Error(
-        `QuizHub contract address not configured for chain ${chainId} (${CHAIN_NAMES[chainId] ?? "unknown"}). ` +
-        `Set NEXT_PUBLIC_QUIZ_HUB_${CHAIN_NAMES[chainId]?.toUpperCase() ?? chainId} in .env.local`
-      );
-    }
+  const quizId  = deriveQuizId(code);
+  const quizHub = new Contract(contractAddress, QUIZ_HUB_ABI, signer);
 
-    const quizId   = deriveQuizId(code);
-    const amountBN = parseUnits(amount, token.decimals);
-    console.log("[createQuizOnChain] quizId:", quizId, "| stakePerPlayer:", amountBN.toString());
+  setTxPhase("Creating");
+  toast.info("Confirm quiz creation in your wallet…");
 
-    const quizHub = new Contract(contractAddress, QUIZ_HUB_ABI, signer);
+  const createTx = await quizHub.createQuiz(quizId, token.address);
 
-    console.log("[createQuizOnChain] Contracts initialised");
-    console.log("[createQuizOnChain] quizHub address:", contractAddress);
-    console.log("[createQuizOnChain] token address:", token.address);
+  toast.loading("Waiting for confirmation…", { id: "create-confirm" });
+  const receipt = await createTx.wait();
 
-    // ── Step: Create quiz on-chain (no approve, no fee, no transfer) ───────
-    setTxPhase("Creating");
+  toast.success("Quiz created on-chain! ⛓️✅", { id: "create-confirm" });
 
-    toast.info("Confirm quiz creation in your wallet…");
-
-    console.log("[createQuizOnChain] Sending createQuiz tx:", {
-      quizId,
-      tokenAddress: token.address,
-      stakePerPlayer: amountBN.toString(),
+  // ── Notify backend that on-chain tx is confirmed — triggers notifications ──
+  try {
+    await fetch(`${API_BASE_URL}/api/challenge/${code}/on-chain-confirmed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        creatorWallet: userWalletAddress,
+        txHash:        receipt.hash,
+      }),
     });
-
-    const createTx = await quizHub.createQuiz(quizId, token.address);
-    console.log("[createQuizOnChain] createTx hash:", createTx.hash);
-
-    toast.loading("Waiting for creation confirmation…", { id: "create-confirm" });
-    const createReceipt = await createTx.wait();
-    console.log("[createQuizOnChain] createReceipt:", createReceipt);
-
-    toast.success("Quiz created on-chain! ⛓️✅", { id: "create-confirm" });
-    console.log("[createQuizOnChain] Done ✅");
-  };
-
+  } catch (err) {
+    // Non-fatal — challenge is already live, notifications are best-effort
+    console.warn("[on-chain-confirmed] failed to notify:", err);
+  }
+};
   // ─── Full create flow (backend + on-chain creation only) ─────────────────────
   const handleCreate = async () => {
     if (!userWalletAddress)          { toast.error("Connect your wallet"); return; }
@@ -320,7 +356,7 @@ export default function CreateChallengePage() {
           tokenSymbol,
           chainId,
           isPublic,
-          inviteWallet:    !isPublic && inviteWallet.trim() ? inviteWallet.trim() : undefined,
+          inviteWallet: !isPublic && inviteWallet.trim() ? inviteWallet.trim() : undefined,
         }),
       });
 
@@ -414,16 +450,6 @@ export default function CreateChallengePage() {
           The more specific, the better. Gemini generates 3 rounds: easy, medium, hard.
         </p>
       </div>
-
-      <div className="space-y-2">
-        <Label className="text-sm font-bold text-foreground">Your username</Label>
-        <Input
-          value={creatorUsername}
-          onChange={e => setCreatorUsername(e.target.value)}
-          placeholder="Set in your player profile"
-          className="h-11 rounded-xl border-2"
-        />
-      </div>
       <div className="space-y-2">
       <Label className="text-sm font-bold text-foreground">Number of Questions</Label>
       <div className="grid grid-cols-4 gap-2">
@@ -473,18 +499,61 @@ export default function CreateChallengePage() {
         </div>
       </div>
 
-      {!isPublic && (
-        <div className="space-y-2 animate-in fade-in duration-200">
-          <Label className="text-sm font-bold text-foreground">Opponent wallet address</Label>
-          <Input
-            value={inviteWallet}
-            onChange={e => setInviteWallet(e.target.value)}
-            placeholder="0x…"
-            className="h-11 rounded-xl border-2 font-mono text-sm"
-          />
-        </div>
-      )}
+     {!isPublic && (
+  <div className="space-y-2 animate-in fade-in duration-200">
+    <Label className="text-sm font-bold text-foreground">
+      Opponent username
+    </Label>
+    <div className="flex gap-2">
+      <Input
+        value={inviteUsername}
+        onChange={e => {
+          setInviteUsername(e.target.value);
+          setUsernameStatus("idle");
+          setInviteWallet("");
+        }}
+        onBlur={() => lookupUsername(inviteUsername)}
+        placeholder="e.g. axelrod"
+        className="h-11 rounded-xl border-2 text-sm flex-1"
+      />
+      <button
+        type="button"
+        onClick={() => lookupUsername(inviteUsername)}
+        disabled={usernameStatus === "loading"}
+        className="px-4 rounded-xl border-2 border-border bg-card text-sm font-bold text-muted-foreground hover:border-primary/50 transition-all disabled:opacity-50"
+      >
+        {usernameStatus === "loading" ? "…" : "Find"}
+      </button>
+    </div>
 
+    {/* Status feedback */}
+    {usernameStatus === "found" && (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
+        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+        <div>
+          <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+            {resolvedUsername}
+          </span>
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 ml-1">
+            — {inviteWallet.slice(0, 6)}…{inviteWallet.slice(-4)}
+          </span>
+        </div>
+      </div>
+    )}
+    {usernameStatus === "notfound" && (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
+        <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+        <span className="text-xs font-medium text-red-700 dark:text-red-300">
+          Username not found. Check spelling and try again.
+        </span>
+      </div>
+    )}
+
+    <p className="text-[10px] text-muted-foreground">
+      They'll receive a private invite notification.
+    </p>
+  </div>
+)}
       {!userWalletAddress && (
         <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
           <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />

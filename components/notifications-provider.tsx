@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bell, X, Check, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { createPortal } from "react-dom";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
 
@@ -171,6 +172,12 @@ function ChallengePopupOverlay({
     </div>
   );
 }
+function PopupPortal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
+}
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -316,7 +323,15 @@ export function NotificationBell() {
 
   return (
     <>
-      {popup && <ChallengePopupOverlay popup={popup} onAccept={handleAccept} onDecline={handleDecline} />}
+      {popup && (
+        <PopupPortal>
+          <ChallengePopupOverlay
+            popup={popup}
+            onAccept={handleAccept}
+            onDecline={handleDecline}
+          />
+        </PopupPortal>
+      )}
 
       <div className="relative" ref={panelRef}>
         <button

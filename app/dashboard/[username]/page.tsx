@@ -42,12 +42,14 @@ interface ChallengeHistoryItem {
   winner_address: string | null
   created_at: string
   finished_at: string | null
-  // opponent info (joined from challenge_players)
   opponent_username?: string
   opponent_wallet?: string
 }
 
-type HistoryTab = "all" | "won" | "participated"
+// ── Only these statuses count as "played" ──
+type FinishedGame = ChallengeHistoryItem & { status: "finished" }
+
+type HistoryTab = "all" | "won"
 
 function fmt(n: number) {
   return n % 1 === 0 ? n.toString() : n.toFixed(n < 1 ? 2 : 1)
@@ -87,51 +89,36 @@ function ChallengeRow({
   myWallet,
   onClick,
 }: {
-  item: ChallengeHistoryItem
+  item: FinishedGame
   myWallet: string
   onClick: () => void
 }) {
-  const isWinner   = item.winner_address?.toLowerCase() === myWallet
-  const isFinished = item.status === "finished"
-  const isActive   = item.status === "active"
+  const isWinner = item.winner_address?.toLowerCase() === myWallet
 
-  const outcomeIcon = isFinished
-    ? isWinner
-      ? <Trophy className="h-4 w-4 text-amber-500 shrink-0" />
-      : <XCircle className="h-4 w-4 text-muted-foreground/50 shrink-0" />
-    : isActive
-    ? <Zap className="h-4 w-4 text-primary shrink-0 animate-pulse" />
-    : <Clock className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+  const outcomeIcon = isWinner
+    ? <Trophy className="h-4 w-4 text-amber-500 shrink-0" />
+    : <XCircle className="h-4 w-4 text-muted-foreground/50 shrink-0" />
 
-  const outcomeLabel = isFinished
-    ? isWinner ? "Won" : "Lost"
-    : isActive  ? "Live"
-    : "Waiting"
+  const outcomeLabel = isWinner ? "Won" : "Lost"
 
-  const outcomeColor = isFinished
-    ? isWinner
-      ? "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-400/30"
-      : "text-muted-foreground bg-muted/30 border-border"
-    : isActive
-    ? "text-primary bg-primary/10 border-primary/30"
-    : "text-muted-foreground bg-muted/20 border-border"
+  const outcomeColor = isWinner
+    ? "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-400/30"
+    : "text-muted-foreground bg-muted/30 border-border"
 
   return (
     <button
       onClick={onClick}
       className="w-full group flex items-center gap-3 px-4 py-3.5 rounded-2xl border border-border bg-card hover:border-primary/30 hover:shadow-sm transition-all duration-150 text-left"
     >
-      {/* Outcome icon */}
       <div className={cn(
         "w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
-        isFinished && isWinner
+        isWinner
           ? "bg-amber-500/10 border-amber-400/30"
           : "bg-muted/40 border-border",
       )}>
         {outcomeIcon}
       </div>
 
-      {/* Main info */}
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm text-foreground truncate leading-tight">
           {item.topic}
@@ -148,7 +135,6 @@ function ChallengeRow({
         </div>
       </div>
 
-      {/* Stake + outcome */}
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className={cn(
           "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-black",
@@ -171,6 +157,7 @@ function ChallengeRow({
   )
 }
 
+// ── Tier system ───────────────────────────────────────────────────────────────
 
 const TIERS = [
   { label: "Rookie",   minWins: 0,  stars: 1, color: "#9ca3af" },
@@ -186,19 +173,20 @@ function getTier(wins: number) {
   }
   return TIERS[0]
 }
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const params    = useRouter()
   const routerParams = useParams()
-  const router    = useRouter()
+  const router       = useRouter()
   const { address: connectedAddress } = useWallet()
   const { user: privyUser }           = usePrivy()
 
   const targetUsernameOrAddress = routerParams.username as string
 
   const [profile, setProfile]               = useState<UserProfileData | null>(null)
-  const [history, setHistory]               = useState<ChallengeHistoryItem[]>([])
+  // Raw fetch — all statuses
+  const [rawHistory, setRawHistory]         = useState<ChallengeHistoryItem[]>([])
   const [loading, setLoading]               = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [initialLoadComplete, setInitialLoadComplete] = useState(false)
@@ -210,7 +198,7 @@ export default function DashboardPage() {
     return connectedAddress.toLowerCase() === profile.wallet_address.toLowerCase()
   }, [connectedAddress, profile])
 
-  // ── Privy-derived identity ──────────────────────────────────────────────
+  // ── Privy-derived identity ────────────────────────────────────────────────
   const privyEmail: string = (() => {
     if (!privyUser) return ""
     if (privyUser.google?.email) return privyUser.google.email as string
@@ -298,7 +286,7 @@ export default function DashboardPage() {
     try {
       const res  = await fetch(`${BACKEND_URL}/api/challenge/${wallet}/history?limit=50`)
       const data = await res.json()
-      if (data.success) setHistory(data.history ?? [])
+      if (data.success) setRawHistory(data.history ?? [])
     } catch {} finally {
       setHistoryLoading(false)
     }
@@ -307,7 +295,7 @@ export default function DashboardPage() {
   useEffect(() => {
     setInitialLoadComplete(false)
     setProfile(null)
-    setHistory([])
+    setRawHistory([])
     fetchProfile()
   }, [targetUsernameOrAddress, fetchProfile])
 
@@ -315,28 +303,35 @@ export default function DashboardPage() {
     if (profile?.wallet_address) fetchHistory(profile.wallet_address)
   }, [profile?.wallet_address, fetchHistory])
 
-  // Re-fetch profile after edit save
   useEffect(() => {
     const handler = () => fetchProfile()
     window.addEventListener("profileUpdated", handler)
     return () => window.removeEventListener("profileUpdated", handler)
   }, [fetchProfile])
 
-  // ── Derived stats ─────────────────────────────────────────────────────────
-  const myWallet     = profile?.wallet_address?.toLowerCase() ?? ""
-  const won          = history.filter(h => h.winner_address?.toLowerCase() === myWallet && h.status === "finished")
-  const participated = history.filter(h => h.status === "finished")
-  const active       = history.filter(h => h.status === "active" || h.status === "waiting")
+  // ── Derived stats — finished games ONLY, no pending/waiting/active ────────
+  const myWallet = profile?.wallet_address?.toLowerCase() ?? ""
 
-  const filteredHistory = useMemo(() => {
-    if (activeTab === "won")          return won
-    if (activeTab === "participated") return participated
-    return history
-  }, [activeTab, history, won, participated])
+  // "played" = status is finished (game fully completed)
+  const played = useMemo(
+    () => rawHistory.filter((h): h is FinishedGame => h.status === "finished"),
+    [rawHistory],
+  )
 
-  const winRate = participated.length
-    ? Math.round((won.length / participated.length) * 100)
+  const won = useMemo(
+    () => played.filter(h => h.winner_address?.toLowerCase() === myWallet),
+    [played, myWallet],
+  )
+
+  const winRate = played.length
+    ? Math.round((won.length / played.length) * 100)
     : 0
+
+  // Tab filtering — both tabs only ever show finished games
+  const filteredHistory = useMemo(() => {
+    if (activeTab === "won") return won
+    return played  // "all" = all finished games
+  }, [activeTab, played, won])
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -368,6 +363,9 @@ export default function DashboardPage() {
     ? `${profile.wallet_address.slice(0, 6)}…${profile.wallet_address.slice(-4)}`
     : ""
 
+  // Live/active games (shown only as the online dot, never in history lists)
+  const activeLive = rawHistory.filter(h => h.status === "active" || h.status === "waiting")
+
   return (
     <main className="min-h-screen bg-background pb-24">
       <div className="max-w-2xl mx-auto px-4 pt-6 space-y-6">
@@ -378,7 +376,6 @@ export default function DashboardPage() {
 
         {/* ── Profile Card ──────────────────────────────────────────────── */}
         <Card className="border border-border bg-card rounded-3xl overflow-hidden shadow-sm">
-          {/* top accent bar */}
           <div className="h-1.5 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
 
           <CardContent className="p-6 space-y-5">
@@ -391,8 +388,8 @@ export default function DashboardPage() {
                     {displayName[0]?.toUpperCase() ?? "?"}
                   </AvatarFallback>
                 </Avatar>
-                {/* Online dot for active challenges */}
-                {active.length > 0 && (
+                {/* Online dot only for genuinely live/active games */}
+                {activeLive.length > 0 && (
                   <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-background" />
                 )}
               </div>
@@ -407,7 +404,6 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Wallet */}
                 <button
                   onClick={() => copyToClipboard(profile.wallet_address)}
                   className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono hover:text-foreground transition-colors group"
@@ -417,7 +413,6 @@ export default function DashboardPage() {
                   <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </button>
 
-                {/* Identity badges */}
                 {(shownEmail || shownPhone) && (
                   <div className="flex flex-wrap gap-1.5 pt-0.5">
                     {shownEmail && (
@@ -434,7 +429,6 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* ── Edit button (owner only) ── */}
               {isOwner && (
                 <button
                   onClick={() => setEditOpen(true)}
@@ -450,69 +444,67 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Bio */}
             {profile.bio && (
               <p className="text-sm text-muted-foreground leading-relaxed">{profile.bio}</p>
             )}
 
-            {/* Stats row */}
+            {/* Stats — based on finished games only */}
             <div className="grid grid-cols-4 gap-1.5">
-  <StatPill
-    icon={Swords}
-    label="Played"
-    value={history.length}
-    accent="text-blue-500"
-  />
-  <StatPill
-    icon={Trophy}
-    label="Won"
-    value={won.length}
-    accent="text-amber-500"
-  />
-  <StatPill
-    icon={CheckCircle2}
-    label="Win rate"
-    value={`${winRate}%`}
-    accent="text-emerald-500"
-  />
+              <StatPill
+                icon={Swords}
+                label="Played"
+                value={played.length}
+                accent="text-blue-500"
+              />
+              <StatPill
+                icon={Trophy}
+                label="Won"
+                value={won.length}
+                accent="text-amber-500"
+              />
+              <StatPill
+                icon={CheckCircle2}
+                label="Win rate"
+                value={`${winRate}%`}
+                accent="text-emerald-500"
+              />
 
-  {/* Tier pill */}
-  {(() => {
-    const tier = getTier(won.length)
-    return (
-      <div className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-2xl bg-muted/40 border border-border">
-        <div className="flex gap-px">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <svg key={i} width={10} height={10} viewBox="0 0 24 24"
-              fill={i < tier.stars ? tier.color : "none"}
-              stroke={i < tier.stars ? tier.color : "rgba(255,255,255,0.15)"}
-              strokeWidth={1.5}
-            >
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-          ))}
-        </div>
-        <span className="text-sm font-black tabular-nums" style={{ color: tier.color }}>
-          {tier.label}
-        </span>
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider leading-none">
-          Tier
-        </span>
-      </div>
-    )
-  })()}
-</div>
+              {/* Tier pill */}
+              {(() => {
+                const tier = getTier(won.length)
+                return (
+                  <div className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-2xl bg-muted/40 border border-border">
+                    <div className="flex gap-px">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <svg key={i} width={10} height={10} viewBox="0 0 24 24"
+                          fill={i < tier.stars ? tier.color : "none"}
+                          stroke={i < tier.stars ? tier.color : "rgba(255,255,255,0.15)"}
+                          strokeWidth={1.5}
+                        >
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                      ))}
+                    </div>
+                    <span className="text-sm font-black tabular-nums" style={{ color: tier.color }}>
+                      {tier.label}
+                    </span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider leading-none">
+                      Tier
+                    </span>
+                  </div>
+                )
+              })()}
+            </div>
           </CardContent>
         </Card>
 
-        {/* ── Challenge History ─────────────────────────────────────────── */}
+        {/* ── Challenge History — finished games only ────────────────────── */}
         <div className="space-y-3">
-          {/* Tab bar */}
+          {/* Tab bar — simplified: All Played vs Won */}
           <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-xl border border-border">
             {([
-              { key: "all",          label: "All",         count: history.length      },
-              { key: "won",          label: "Won",         count: won.length          },
-              { key: "participated", label: "Finished",    count: participated.length },
+              { key: "all", label: "All Played", count: played.length },
+              { key: "won", label: "Won",        count: won.length    },
             ] as { key: HistoryTab; label: string; count: number }[]).map(t => (
               <button
                 key={t.key}
@@ -555,13 +547,13 @@ export default function DashboardPage() {
               ) : (
                 <>
                   <Swords className="h-10 w-10 text-muted-foreground/20" />
-                  <p className="font-bold text-muted-foreground">No challenges yet</p>
+                  <p className="font-bold text-muted-foreground">No completed games yet</p>
                   <p className="text-xs text-muted-foreground/60 text-center max-w-[200px]">
-                    Join or create a challenge to get started
+                    Finish a challenge to see it here
                   </p>
                   {isOwner && (
                     <button
-                      onClick={() => router.push("/quiz")}
+                      onClick={() => router.push("/challenge")}
                       className="mt-1 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-opacity"
                     >
                       Browse Challenges
@@ -577,7 +569,7 @@ export default function DashboardPage() {
                   key={item.code}
                   item={item}
                   myWallet={myWallet}
-                  onClick={() => router.push(`/quiz/${item.code}`)}
+                  onClick={() => router.push(`/challenge/${item.code}`)}
                 />
               ))}
             </div>
@@ -585,7 +577,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Edit Profile Modal ── */}
       {isOwner && (
         <ProfileSettingsModal open={editOpen} onOpenChange={setEditOpen} />
       )}

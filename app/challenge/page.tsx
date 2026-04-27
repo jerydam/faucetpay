@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, Trophy, Users, Loader2, Gamepad2,
   RefreshCw, ChevronRight, Zap, Swords,
-  CheckCircle2, XCircle, Clock,
+  XCircle, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -133,26 +133,16 @@ function HistoryRow({
   myWallet: string;
   onClick: () => void;
 }) {
-  const isFinished = item.status === "finished";
-  const isWon      = isFinished && item.winner_address?.toLowerCase() === myWallet;
-  const isLost     = isFinished && item.winner_address && item.winner_address.toLowerCase() !== myWallet;
-  const isActive   = item.status === "active";
+  // Only finished games reach here (pending/active filtered out upstream)
+  const isWon = item.winner_address?.toLowerCase() === myWallet;
 
   const outcomeIcon = isWon
     ? <Trophy className="h-4 w-4 text-amber-500" />
-    : isLost
-    ? <XCircle className="h-4 w-4 text-slate-300 dark:text-slate-600" />
-    : isActive
-    ? <Zap className="h-4 w-4 text-blue-500 animate-pulse" />
-    : <Clock className="h-4 w-4 text-slate-300" />;
+    : <XCircle className="h-4 w-4 text-slate-300 dark:text-slate-600" />;
 
   const outcomeBadge = isWon
     ? <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-400/30">WON</span>
-    : isLost
-    ? <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 border border-slate-200 dark:border-white/10">LOST</span>
-    : isActive
-    ? <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-400/30 animate-pulse">LIVE</span>
-    : <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 border border-slate-200 dark:border-white/10">PENDING</span>;
+    : <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 border border-slate-200 dark:border-white/10">LOST</span>;
 
   return (
     <button
@@ -164,7 +154,6 @@ function HistoryRow({
         isWon && "border-amber-200/50 dark:border-amber-500/20 bg-amber-50/30 dark:bg-amber-500/5",
       )}
     >
-      {/* Icon */}
       <div className={cn(
         "w-9 h-9 rounded-xl border flex items-center justify-center shrink-0",
         isWon ? "bg-amber-500/10 border-amber-400/30" : "bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/10",
@@ -172,7 +161,6 @@ function HistoryRow({
         {outcomeIcon}
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0 text-left">
         <p className="font-bold text-sm text-slate-900 dark:text-white truncate leading-tight">
           {item.topic}
@@ -183,7 +171,6 @@ function HistoryRow({
         </p>
       </div>
 
-      {/* Stake + outcome */}
       <div className="flex flex-col items-end gap-1 shrink-0">
         {outcomeBadge}
         <span className="text-[11px] font-bold text-slate-500 tabular-nums">
@@ -215,7 +202,6 @@ export default function QuizListPage() {
   const [historyLoading, setHistoryLoading]   = useState(false);
   const [codeInput, setCodeInput]             = useState("");
   const [navigating, setNavigating]           = useState<string | null>(null);
-  const [historyTab, setHistoryTab]           = useState<"all" | "won">("all");
 
   // ── Lobby ─────────────────────────────────────────────────────────────────
   const fetchLobby = async (silent = false) => {
@@ -236,7 +222,7 @@ export default function QuizListPage() {
     }
   };
 
-  // ── History ───────────────────────────────────────────────────────────────
+  // ── History — fetch only finished games ───────────────────────────────────
   const fetchHistory = async () => {
     if (!userWalletAddress) return;
     setHistoryLoading(true);
@@ -245,7 +231,13 @@ export default function QuizListPage() {
         `${API_BASE_URL}/api/challenge/${userWalletAddress.toLowerCase()}/history?limit=50`
       );
       const d = await r.json();
-      if (d.success) setHistory(d.history ?? []);
+      if (d.success) {
+        // ── Only keep finished games — drop waiting/active/pending ──
+        const finished = (d.history ?? [] as HistoryChallenge[]).filter(
+          (h: HistoryChallenge) => h.status === "finished"
+        );
+        setHistory(finished);
+      }
     } catch {
       toast.error("Failed to load match history");
     } finally {
@@ -266,17 +258,24 @@ export default function QuizListPage() {
     return () => clearInterval(t);
   }, [tab]);
 
-  // ── Derived history stats ─────────────────────────────────────────────────
+  // ── Derived stats — all from finished games only ──────────────────────────
   const myWallet = userWalletAddress?.toLowerCase() ?? "";
-  const wins     = useMemo(
-    () => history.filter(h => h.status === "finished" && h.winner_address?.toLowerCase() === myWallet),
+
+  // wins = finished games where I won
+  const wins = useMemo(
+    () => history.filter(h => h.winner_address?.toLowerCase() === myWallet),
     [history, myWallet],
   );
+
+  // total earned from wins only
   const totalWon = useMemo(
     () => wins.reduce((sum, h) => sum + h.stake_amount * 2, 0),
     [wins],
   );
-  const filteredHistory = historyTab === "won" ? wins : history;
+
+  // MY WINS tab: only won finished games
+  // ALL tab (not shown in this page but keeping consistent): all finished games
+  const winsHistory = wins;
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const handleJoinAction = async (code: string) => {
@@ -328,80 +327,77 @@ export default function QuizListPage() {
           </div>
 
           <div className="lg:col-span-5 bg-blue-600 rounded-3xl p-6 lg:p-8 text-white shadow-xl">
-          <h2 className="text-lg font-black flex items-center gap-2 mb-4">
-            <Zap className="h-5 w-5 fill-white" /> Quick Join
-          </h2>
-          <div className="flex gap-2">
-            <Input
-              value={codeInput}
-              onChange={e => setCodeInput(e.target.value.toUpperCase())}
-              onKeyDown={e => e.key === "Enter" && handleJoinAction(codeInput)}
-              placeholder="ROOM CODE"
-              className="bg-white/10 border-white/20 text-white placeholder:text-blue-200 font-mono font-bold h-12"
-            />
-            <Button
-              onClick={() => handleJoinAction(codeInput)}
-              disabled={!codeInput || navigating !== null}
-              className="bg-white text-blue-600 hover:bg-blue-50 font-black px-8 h-12 shrink-0"
-            >
-              {navigating === codeInput
-                ? <Loader2 className="h-5 w-5 animate-spin" />
-                : "DUEL"}
-            </Button>
+            <h2 className="text-lg font-black flex items-center gap-2 mb-4">
+              <Zap className="h-5 w-5 fill-white" /> Quick Join
+            </h2>
+            <div className="flex gap-2">
+              <Input
+                value={codeInput}
+                onChange={e => setCodeInput(e.target.value.toUpperCase())}
+                onKeyDown={e => e.key === "Enter" && handleJoinAction(codeInput)}
+                placeholder="ROOM CODE"
+                className="bg-white/10 border-white/20 text-white placeholder:text-blue-200 font-mono font-bold h-12"
+              />
+              <Button
+                onClick={() => handleJoinAction(codeInput)}
+                disabled={!codeInput || navigating !== null}
+                className="bg-white text-blue-600 hover:bg-blue-50 font-black px-8 h-12 shrink-0"
+              >
+                {navigating === codeInput
+                  ? <Loader2 className="h-5 w-5 animate-spin" />
+                  : "DUEL"}
+              </Button>
+            </div>
           </div>
-
-        </div>
         </div>
 
         <hr className="border-slate-200 dark:border-white/[0.05]" />
 
         {/* Nav & Controls */}
-<div className="space-y-3">
-  {/* Create Challenge — full width */}
-  <Button
-    onClick={() => router.push("/challenge/create-challenge")}
-    className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold border-0"
-  >
-    <Plus className="mr-2 h-4 w-4" /> Create Challenge
-  </Button>
+        <div className="space-y-3">
+          <Button
+            onClick={() => router.push("/challenge/create-challenge")}
+            className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold border-0"
+          >
+            <Plus className="mr-2 h-4 w-4" /> Create Challenge
+          </Button>
 
-  {/* Tabs + Refresh on same row */}
-  <div className="flex items-center gap-2">
-    <div className="flex flex-1 bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-white/[0.07]">
-      <button
-        onClick={() => setTab("lobby")}
-        className={cn(
-          "flex-1 px-6 py-2 rounded-xl text-sm font-black transition-all",
-          tab === "lobby" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-600",
-        )}
-      >
-        PUBLIC
-      </button>
-      <button
-        onClick={() => setTab("history")}
-        className={cn(
-          "flex-1 px-6 py-2 rounded-xl text-sm font-black transition-all",
-          tab === "history" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-600",
-        )}
-      >
-        MY WINS
-      </button>
-    </div>
+          <div className="flex items-center gap-2">
+            <div className="flex flex-1 bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-white/[0.07]">
+              <button
+                onClick={() => setTab("lobby")}
+                className={cn(
+                  "flex-1 px-6 py-2 rounded-xl text-sm font-black transition-all",
+                  tab === "lobby" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-600",
+                )}
+              >
+                PUBLIC
+              </button>
+              <button
+                onClick={() => setTab("history")}
+                className={cn(
+                  "flex-1 px-6 py-2 rounded-xl text-sm font-black transition-all",
+                  tab === "history" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-600",
+                )}
+              >
+                MY WINS
+              </button>
+            </div>
 
-    <Button
-      variant="outline"
-      size="icon"
-      onClick={() => tab === "lobby" ? fetchLobby(true) : fetchHistory()}
-      className="rounded-full bg-white dark:bg-slate-900 shrink-0"
-      disabled={isRefreshing || historyLoading}
-    >
-      <RefreshCw className={cn(
-        "h-4 w-4 text-blue-600",
-        (isRefreshing || historyLoading) && "animate-spin",
-      )} />
-    </Button>
-  </div>
-</div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => tab === "lobby" ? fetchLobby(true) : fetchHistory()}
+              className="rounded-full bg-white dark:bg-slate-900 shrink-0"
+              disabled={isRefreshing || historyLoading}
+            >
+              <RefreshCw className={cn(
+                "h-4 w-4 text-blue-600",
+                (isRefreshing || historyLoading) && "animate-spin",
+              )} />
+            </Button>
+          </div>
+        </div>
 
         {/* ── LOBBY TAB ── */}
         {tab === "lobby" && (
@@ -413,10 +409,7 @@ export default function QuizListPage() {
                 <Gamepad2 className="h-12 w-12 text-slate-200 dark:text-slate-700 mx-auto mb-4" />
                 <h3 className="text-slate-900 dark:text-white font-bold text-lg">No active duels</h3>
                 <p className="text-slate-500 mb-6">Be the first to create a public challenge on Celo.</p>
-                <Button
-                  onClick={() => router.push("/challenge/create-challenge")}
-                  className="bg-blue-600"
-                >
+                <Button onClick={() => router.push("/challenge/create-challenge")} className="bg-blue-600">
                   Start Duel
                 </Button>
               </div>
@@ -435,26 +428,27 @@ export default function QuizListPage() {
           </div>
         )}
 
-        {/* ── HISTORY TAB ── */}
+        {/* ── MY WINS TAB ── */}
         {tab === "history" && (
           <div className="space-y-4">
-
-            {/* Must be connected */}
             {!userWalletAddress ? (
               <div className="text-center py-24 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/[0.07]">
                 <Trophy className="h-12 w-12 text-blue-100 dark:text-slate-800 mx-auto mb-4" />
                 <p className="text-slate-500 font-bold max-w-xs mx-auto">
-                  Connect your wallet to see your match history and earnings.
+                  Connect your wallet to see your wins and earnings.
                 </p>
               </div>
             ) : historyLoading ? (
               <div className="flex justify-center py-32"><Loading /></div>
             ) : (
               <>
-                {/* Stats banner */}
+                {/* Stats banner — only shown when there are finished games */}
                 {history.length > 0 && (
                   <div className="grid grid-cols-3 gap-3">
-                    
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.07] rounded-2xl p-4 text-center">
+                      <p className="text-2xl font-black text-slate-800 dark:text-white tabular-nums">{history.length}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Played</p>
+                    </div>
                     <div className="bg-white dark:bg-slate-900 border border-amber-200/50 dark:border-amber-500/20 rounded-2xl p-4 text-center bg-amber-50/30 dark:bg-amber-500/5">
                       <p className="text-2xl font-black text-amber-600 tabular-nums">{wins.length}</p>
                       <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mt-0.5">Won</p>
@@ -468,32 +462,22 @@ export default function QuizListPage() {
                   </div>
                 )}
 
-                
-
-                {/* List */}
-                {filteredHistory.length === 0 ? (
+                {/* Wins list */}
+                {winsHistory.length === 0 ? (
                   <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-white/[0.05]">
-                    {historyTab === "won" ? (
-                      <>
-                        <Trophy className="h-10 w-10 text-slate-200 dark:text-slate-700 mx-auto mb-3" />
-                        <p className="font-bold text-slate-500">No wins yet — keep playing!</p>
-                      </>
-                    ) : (
-                      <>
-                        <Swords className="h-10 w-10 text-slate-200 dark:text-slate-700 mx-auto mb-3" />
-                        <p className="font-bold text-slate-500">No matches played yet.</p>
-                        <Button
-                          onClick={() => setTab("lobby")}
-                          className="mt-4 bg-blue-600"
-                        >
-                          Find a Challenge
-                        </Button>
-                      </>
+                    <Trophy className="h-10 w-10 text-slate-200 dark:text-slate-700 mx-auto mb-3" />
+                    <p className="font-bold text-slate-500">
+                      {history.length === 0 ? "No matches played yet." : "No wins yet — keep playing!"}
+                    </p>
+                    {history.length === 0 && (
+                      <Button onClick={() => setTab("lobby")} className="mt-4 bg-blue-600">
+                        Find a Challenge
+                      </Button>
                     )}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {filteredHistory.map(item => (
+                    {winsHistory.map(item => (
                       <HistoryRow
                         key={item.code}
                         item={item}
@@ -508,9 +492,6 @@ export default function QuizListPage() {
           </div>
         )}
       </div>
-
-      {/* Mobile FAB */}
-      
     </div>
   );
 }

@@ -4,17 +4,7 @@
  * /app/challenge/[code]/pre-lobby/page.tsx
  *
  * Negotiation arena. Challengers arrive, submit stake offers, and the creator
- * can accept OR counter a specific challenger's offer. Counter-offers are sent
- * only to the targeted challenger — not broadcast to everyone.
- *
- * Flow:
- *   1. Load challenge meta — show topic, creator, current stake
- *   2. Challenger submits a stake offer (accept creator's amount OR counter)
- *   3. Creator sees all live offers via WS and can:
- *        a. Accept → winner routed to lobby, losers see "Slot Taken"
- *        b. Counter (per offer) → only THAT challenger receives the counter banner
- *   4. Targeted challenger sees creator's counter and can Accept or Re-counter
- *   5. Self-offer and self-accept are both blocked client-side
+ * can accept OR counter a specific challenger's offer.
  */
 
 import React, {
@@ -74,26 +64,22 @@ interface Offer {
   sentAt: string;
 }
 
-/**
- * A counter-offer sent by the creator at a specific challenger.
- * `targetWallet` is always the challenger's wallet (never null in v2).
- */
 interface CounterOffer {
-  fromWallet: string;    // creator
+  fromWallet: string;
   fromName: string;
   amount: number;
   sentAt: string;
-  targetWallet: string;  // always targeted — no more broadcast counters
+  targetWallet: string;
 }
 
 type PageState =
   | "loading"
-  | "idle"       // connected, no offer submitted yet
-  | "pending"    // offer submitted, awaiting creator
-  | "countered"  // creator sent back a counter — challenger sees it and can respond
-  | "accepted"   // MY offer was accepted — routing to lobby
-  | "rejected"   // another offer was accepted first
-  | "creator"    // I am the creator
+  | "idle"
+  | "pending"
+  | "countered"
+  | "accepted"
+  | "rejected"
+  | "creator"
   | "error";
 
 // ── Animated pulse ────────────────────────────────────────────────────────────
@@ -112,14 +98,10 @@ function Pulse({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Counter-offer banner (challenger sees this) ───────────────────────────────
+// ── Counter-offer banner ──────────────────────────────────────────────────────
 
 function CounterOfferBanner({
-  counter,
-  token,
-  onAccept,
-  onDecline,
-  submitting,
+  counter, token, onAccept, onDecline, submitting,
 }: {
   counter: CounterOffer;
   token: string;
@@ -168,7 +150,7 @@ function CounterOfferBanner({
   );
 }
 
-// ── Updated Offer Card (Always show buttons) ─────────────────────────────────────────────────
+// ── Offer Card ────────────────────────────────────────────────────────────────
 
 function OfferCard({
   offer, token, onAccept, onCounter, accepting, isSelf, isCounterTarget,
@@ -194,7 +176,6 @@ function OfferCard({
             {offer.username.slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
-
         <div className="flex-1 min-w-0">
           <p className="font-bold text-sm text-foreground truncate">
             {offer.username}
@@ -207,7 +188,6 @@ function OfferCard({
             {offer.wallet.slice(0, 6)}…{offer.wallet.slice(-4)}
           </p>
         </div>
-
         <div className="text-right shrink-0">
           <p className="font-black text-lg text-foreground tabular-nums">
             <Pulse>{fmt(offer.amount)}</Pulse>
@@ -216,11 +196,8 @@ function OfferCard({
           <p className="text-[10px] text-muted-foreground">{timeAgo(offer.sentAt)}</p>
         </div>
       </div>
-
-      {/* Action buttons - Removed opacity-0 and group-hover classes */}
       {!isSelf && (
         <div className="flex sm:flex-col gap-1.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border sm:ml-2">
-          {/* Accept */}
           <button
             onClick={() => onAccept(offer)}
             disabled={accepting}
@@ -233,8 +210,6 @@ function OfferCard({
             {accepting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
             Lock In
           </button>
-          
-          {/* Counter this specific offer */}
           <button
             onClick={() => onCounter(offer)}
             disabled={accepting}
@@ -250,6 +225,85 @@ function OfferCard({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Stake Amount Input (shared) ───────────────────────────────────────────────
+// Free-type input that clamps on blur, with +/- buttons stepping by 0.01
+
+function StakeInput({
+  value,
+  onChange,
+  token,
+  label,
+  borderClass,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  token: string;
+  label?: string;
+  borderClass?: string;
+}) {
+  const [raw, setRaw] = useState(String(value));
+
+  // Keep raw in sync when value changes externally (e.g. quick-pick)
+  useEffect(() => {
+    setRaw(String(value));
+  }, [value]);
+
+  const commit = (str: string) => {
+    const parsed = parseFloat(str);
+    const clamped = isNaN(parsed) || parsed < 0.01 ? 0.01 : Math.round(parsed * 100) / 100;
+    onChange(clamped);
+    setRaw(String(clamped));
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Decrement */}
+      <button
+        onClick={() => { const next = Math.max(0.01, Math.round((value - 0.01) * 100) / 100); onChange(next); setRaw(String(next)); }}
+        className="w-12 h-12 rounded-2xl border-2 border-border bg-card hover:bg-muted flex items-center justify-center active:scale-95 transition-all shrink-0"
+      >
+        <ChevronDown className="h-5 w-5 text-muted-foreground" />
+      </button>
+
+      {/* Input */}
+      <div className="flex-1 relative">
+        {label && (
+          <span className="absolute left-3 top-2.5 text-[10px] font-black uppercase tracking-wider pointer-events-none"
+            style={{ color: "var(--dd-blue)" }}>
+            {label}
+          </span>
+        )}
+        <input
+          type="number"
+          min="0.01"
+          step="0.01"
+          value={raw}
+          onChange={e => setRaw(e.target.value)}
+          onBlur={e => commit(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
+          className={cn(
+            "w-full h-16 rounded-2xl border-2 bg-background text-center",
+            "text-3xl font-black text-foreground outline-none transition-colors focus:border-primary/60",
+            borderClass ?? "border-border",
+            label && "pt-4",
+          )}
+        />
+        <span className="absolute right-4 bottom-3 text-sm font-bold text-muted-foreground pointer-events-none">
+          {token}
+        </span>
+      </div>
+
+      {/* Increment */}
+      <button
+        onClick={() => { const next = Math.round((value + 0.01) * 100) / 100; onChange(next); setRaw(String(next)); }}
+        className="w-12 h-12 rounded-2xl border-2 border-border bg-card hover:bg-muted flex items-center justify-center active:scale-95 transition-all shrink-0"
+      >
+        <ChevronUp className="h-5 w-5 text-muted-foreground" />
+      </button>
     </div>
   );
 }
@@ -273,11 +327,8 @@ export default function PreLobbyPage() {
   const [countdown, setCountdown]     = useState(120);
   const [lockedAmount, setLockedAmount] = useState<number | null>(null);
 
-  // Counter-offer the creator sent specifically to this challenger
   const [pendingCounter, setPendingCounter] = useState<CounterOffer | null>(null);
-
-  // Which offer the creator is currently targeting for a counter (creator-side)
-  const [counterTarget, setCounterTarget] = useState<Offer | null>(null);
+  const [counterTarget, setCounterTarget]   = useState<Offer | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -286,7 +337,7 @@ export default function PreLobbyPage() {
     [challenge, myWallet],
   );
 
-  // ── Load challenge meta ──────────────────────────────────────────────────
+  // ── Load challenge ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!code) return;
     fetch(`${API_BASE_URL}/api/challenge/${code}`)
@@ -296,7 +347,6 @@ export default function PreLobbyPage() {
         const c: Challenge = d.challenge;
         setChallenge(c);
         setMyOffer(c.stake);
-
         if (c.status === "active" || c.status === "finished") {
           router.replace(`/challenge/${code}`);
           return;
@@ -306,7 +356,7 @@ export default function PreLobbyPage() {
       .catch(() => { toast.error("Failed to load challenge"); setPageState("error"); });
   }, [code, router]);
 
-  // ── Load username ────────────────────────────────────────────────────────
+  // ── Username ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userWalletAddress) return;
     fetch(`${API_BASE_URL}/api/players/${userWalletAddress}`)
@@ -315,22 +365,22 @@ export default function PreLobbyPage() {
       .catch(() => setUsername(`User${userWalletAddress.slice(-4).toUpperCase()}`));
   }, [userWalletAddress]);
 
-  // ── Resolve page state once we have both challenge + wallet ─────────────
+  // ── Resolve page state ───────────────────────────────────────────────────
   useEffect(() => {
     if (!challenge || !myWallet) return;
     if (pageState !== "loading") return;
     setPageState(amCreator ? "creator" : "idle");
   }, [challenge, myWallet, amCreator, pageState]);
 
-  // ── Countdown timer ──────────────────────────────────────────────────────
+  // ── Countdown ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (pageState !== "idle" && pageState !== "creator" && pageState !== "pending" && pageState !== "countered") return;
+    if (!["idle","creator","pending","countered"].includes(pageState)) return;
     if (countdown <= 0) return;
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown, pageState]);
 
-  // ── WebSocket ─────────────────────────────────────────────────────────────
+  // ── WebSocket ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!code || !myWallet) return;
     const ws = new WebSocket(`${getWsBase()}/ws/challenge/${code}`);
@@ -340,7 +390,6 @@ export default function PreLobbyPage() {
       try {
         const msg = JSON.parse(ev.data);
 
-        // ── New / updated offer from a challenger ──────────────────────────
         if (msg.type === "pre_lobby_offer") {
           const incoming: Offer = {
             wallet:   msg.wallet,
@@ -354,8 +403,6 @@ export default function PreLobbyPage() {
           });
         }
 
-        // ── Creator sent a targeted counter-offer ─────────────────────────
-        // Server now always sends targetWallet (never null).
         if (msg.type === "pre_lobby_counter") {
           const counter: CounterOffer = {
             fromWallet:   msg.fromWallet,
@@ -364,36 +411,28 @@ export default function PreLobbyPage() {
             sentAt:       msg.sentAt ?? new Date().toISOString(),
             targetWallet: msg.targetWallet,
           };
-
-          // Only show the banner to the targeted challenger
           if (!amCreator && counter.targetWallet?.toLowerCase() === myWallet) {
             setPendingCounter(counter);
-            setMyOffer(counter.amount); // pre-fill with creator's proposed amount
+            setMyOffer(counter.amount);
             setPageState("countered");
             toast.info(`${counter.fromName} countered with ${fmt(counter.amount)} ${challenge?.token}`);
           }
         }
 
-        // ── Offer accepted → route winner, discard losers ─────────────────
         if (msg.type === "offer_accepted" || msg.type === "pre_lobby_accepted") {
           const winner = (msg.winner ?? msg.challenger ?? "").toLowerCase();
           const amount: number = msg.amount;
           setLockedAmount(amount);
-
           const iWon = amCreator ? true : winner === myWallet;
-
           if (iWon) {
             setPageState("accepted");
             toast.success("🎉 Deal locked! Heading to lobby…");
-            setTimeout(() =>
-              router.push(`/challenge/${code}?stake=${amount}&agreed=1`),
-            1800);
+            setTimeout(() => router.push(`/challenge/${code}?stake=${amount}&agreed=1`), 1800);
           } else {
             setPageState("rejected");
           }
         }
 
-        // ── Full offers snapshot on connect ───────────────────────────────
         if (msg.type === "pre_lobby_offers_snapshot") {
           setOffers(msg.offers ?? []);
         }
@@ -405,10 +444,8 @@ export default function PreLobbyPage() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  /** Challenger submits / updates their offer */
   const handleSubmitOffer = useCallback(async (amount: number) => {
     if (!myWallet || submitting || amCreator) return;
-
     setSubmitting(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/offer`, {
@@ -418,14 +455,13 @@ export default function PreLobbyPage() {
       });
       const d = await res.json();
       if (!d.success) throw new Error(d.detail ?? "Offer failed");
-
       if (d.accepted) {
         setLockedAmount(d.amount);
         setPageState("accepted");
         toast.success(`✅ Deal at ${fmt(d.amount)} ${challenge?.token}!`);
         setTimeout(() => router.push(`/challenge/${code}?stake=${d.amount}&agreed=1`), 1800);
       } else {
-        setPendingCounter(null); // dismiss any counter banner — we responded
+        setPendingCounter(null);
         setPageState("pending");
         toast.info(`Offer sent: ${fmt(amount)} ${challenge?.token}`);
       }
@@ -436,22 +472,17 @@ export default function PreLobbyPage() {
     }
   }, [myWallet, submitting, amCreator, challenge, code, username, router]);
 
-  /**
-   * Creator sends a targeted counter to a specific challenger.
-   * Uses the new /counter endpoint — does NOT go through /offer.
-   */
   const handleSendCounter = useCallback(async (amount: number, target: Offer) => {
     if (!myWallet || submitting) return;
-
     setSubmitting(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/counter`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          creatorWallet:  myWallet,
-          creatorName:    username,
-          targetWallet:   target.wallet,
+          creatorWallet: myWallet,
+          creatorName:   username,
+          targetWallet:  target.wallet,
           amount,
         }),
       });
@@ -465,26 +496,18 @@ export default function PreLobbyPage() {
     }
   }, [myWallet, submitting, challenge, code, username]);
 
-  /**
-   * Creator accepts a specific challenger's offer.
-   */
   const handleAcceptOffer = useCallback(async (offer: Offer) => {
     if (!myWallet || accepting) return;
-
-    if (offer.wallet.toLowerCase() === myWallet) {
-      toast.error("You can't accept your own offer.");
-      return;
-    }
-
+    if (offer.wallet.toLowerCase() === myWallet) { toast.error("You can't accept your own offer."); return; }
     setAccepting(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/challenge/${code}/pre-lobby-accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          creatorWallet:     myWallet,
-          challengerWallet:  offer.wallet,
-          amount:            offer.amount,
+          creatorWallet:    myWallet,
+          challengerWallet: offer.wallet,
+          amount:           offer.amount,
         }),
       });
       const d = await res.json();
@@ -495,21 +518,24 @@ export default function PreLobbyPage() {
     }
   }, [myWallet, accepting, code]);
 
-  /** Challenger dismisses a counter-offer (decline) and goes back to idle */
   const handleDeclineCounter = useCallback(() => {
     setPendingCounter(null);
     setPageState("idle");
     toast.info("Counter declined — you can send a new offer.");
   }, []);
 
-  /** Creator clicks "Counter" on a specific offer card → selects it as target */
   const handleSelectCounterTarget = useCallback((offer: Offer) => {
     setCounterTarget(prev => prev?.wallet === offer.wallet ? null : offer);
-    setMyOffer(offer.amount); // pre-fill with challenger's amount as starting point
+    setMyOffer(offer.amount);
   }, []);
 
-  const adjust = (delta: number) =>
-    setMyOffer(prev => Math.max(0.01, Math.round((prev + delta) * 100) / 100));
+  // ── Quick pick amounts — never show values below min stake ────────────────
+  const quickPicks = useMemo(() => {
+    if (!challenge) return [];
+    const s = challenge.stake;
+    return [s, Math.round(s * 1.5 * 100) / 100, Math.round(s * 2 * 100) / 100, Math.round(s * 3 * 100) / 100]
+      .filter(v => v >= 0.01);
+  }, [challenge]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER STATES
@@ -607,7 +633,7 @@ export default function PreLobbyPage() {
   return (
     <div className="min-h-screen bg-background">
 
-      {/* ── Sticky header ── */}
+      {/* Sticky header */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border">
         <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
           <button
@@ -633,13 +659,12 @@ export default function PreLobbyPage() {
             <Clock className="h-3.5 w-3.5" />
             {String(countdownMin).padStart(2, "0")}:{String(countdownSec).padStart(2, "0")}
           </div>
-          
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-5 pb-28">
 
-        {/* ── Challenge info card ── */}
+        {/* Challenge info card */}
         <div className="bg-card border-2 border-border rounded-3xl overflow-hidden">
           <div className="h-1.5 bg-gradient-to-r from-primary/60 via-primary to-primary/60" />
           <div className="p-5">
@@ -685,8 +710,6 @@ export default function PreLobbyPage() {
         ═══════════════════════════════════════════════════════════════════ */}
         {isCreatorView && (
           <div className="space-y-4">
-
-            {/* Incoming challengers list */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="font-black text-foreground flex items-center gap-2">
@@ -731,92 +754,52 @@ export default function PreLobbyPage() {
               )}
             </div>
 
-            {/* Creator counter-offer panel — only visible when a target is selected */}
+            {/* Creator counter panel */}
             {counterTarget && (
               <div className="bg-card border-2 border-blue-500/40 rounded-3xl overflow-hidden">
                 <div className="px-5 pt-4 pb-2 border-b border-border">
                   <div className="flex items-center justify-between">
                     <h3 className="font-black text-foreground text-sm flex items-center gap-2">
                       <Zap className="h-4 w-4 text-blue-500" />
-                      Counter to{" "}
-                      <span className="text-blue-500">{counterTarget.username}</span>
+                      Counter to <span className="text-blue-500">{counterTarget.username}</span>
                     </h3>
-                    {/* Dismiss target selection */}
-                    <button
-                      onClick={() => setCounterTarget(null)}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
+                    <button onClick={() => setCounterTarget(null)} className="text-muted-foreground hover:text-foreground transition-colors">
                       <X className="h-4 w-4" />
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Only {counterTarget.username} will see this counter — they can accept or re-counter
+                    Only {counterTarget.username} will see this counter
                   </p>
                 </div>
 
                 <div className="px-5 py-4 space-y-3">
-                  {/* Amount adjuster */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => adjust(-0.1)}
-                      className="w-12 h-12 rounded-2xl border-2 border-border bg-card hover:bg-muted flex items-center justify-center active:scale-95 transition-all shrink-0"
-                    >
-                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                    </button>
-
-                    <div className="flex-1 relative">
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.1"
-                        value={myOffer}
-                        onChange={e => setMyOffer(Math.max(0.01, parseFloat(e.target.value) || 0))}
-                        className={cn(
-                          "w-full h-16 rounded-2xl border-2 bg-background text-center",
-                          "text-3xl font-black text-foreground outline-none transition-colors focus:border-blue-400/60",
-                          "border-blue-400/50",
-                        )}
-                      />
-                      <span className="absolute right-4 bottom-3 text-sm font-bold text-muted-foreground pointer-events-none">
-                        {challenge.token}
-                      </span>
-                      {myOffer === counterTarget.amount && (
-                        <span className="absolute left-3 top-3 text-[10px] font-black text-blue-500 uppercase tracking-wider">
-                          = Their offer
-                        </span>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => adjust(0.1)}
-                      className="w-12 h-12 rounded-2xl border-2 border-border bg-card hover:bg-muted flex items-center justify-center active:scale-95 transition-all shrink-0"
-                    >
-                      <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                    </button>
-                  </div>
+                  <StakeInput
+                    value={myOffer}
+                    onChange={setMyOffer}
+                    token={challenge.token}
+                    label={myOffer === counterTarget.amount ? "= Their offer" : undefined}
+                    borderClass="border-blue-400/50"
+                  />
 
                   {/* Quick picks */}
                   <div className="flex gap-1.5 flex-wrap">
-                    {[challenge.stake * 0.5, challenge.stake, challenge.stake * 1.5, challenge.stake * 2]
-                      .map(v => Math.round(v * 100) / 100)
-                      .map(v => (
-                        <button
-                          key={v}
-                          onClick={() => setMyOffer(v)}
-                          className={cn(
-                            "flex-1 min-w-[70px] py-2 rounded-xl border-2 text-xs font-black transition-all",
-                            myOffer === v
-                              ? "border-blue-500 bg-blue-500/10 text-blue-500"
-                              : "border-border text-muted-foreground hover:border-blue-400/40",
-                          )}
-                        >
-                          {v === challenge.stake ? `${fmt(v)} ✓` : fmt(v)}
-                        </button>
-                      ))}
+                    {quickPicks.map(v => (
+                      <button
+                        key={v}
+                        onClick={() => setMyOffer(v)}
+                        className={cn(
+                          "flex-1 min-w-[70px] py-2 rounded-xl border-2 text-xs font-black transition-all",
+                          myOffer === v
+                            ? "border-blue-500 bg-blue-500/10 text-blue-500"
+                            : "border-border text-muted-foreground hover:border-blue-400/40",
+                        )}
+                      >
+                        {v === challenge.stake ? `${fmt(v)} ✓` : fmt(v)}
+                      </button>
+                    ))}
                   </div>
 
                   <div className="flex gap-2">
-                    {/* Accept their exact offer directly */}
                     <button
                       onClick={() => handleAcceptOffer(counterTarget)}
                       disabled={accepting || submitting}
@@ -825,8 +808,6 @@ export default function PreLobbyPage() {
                       <Check className="inline mr-1.5 h-4 w-4" />
                       Accept {fmt(counterTarget.amount)}
                     </button>
-
-                    {/* Send counter */}
                     <button
                       onClick={() => handleSendCounter(myOffer, counterTarget)}
                       disabled={submitting || myOffer === counterTarget.amount}
@@ -861,7 +842,6 @@ export default function PreLobbyPage() {
               submitting={submitting}
             />
 
-            {/* Challenger can still re-counter with a different amount */}
             <div className="bg-card border-2 border-border rounded-3xl overflow-hidden">
               <div className="px-5 pt-4 pb-2 border-b border-border">
                 <p className="text-sm font-black text-foreground">Or propose a different amount</p>
@@ -870,28 +850,11 @@ export default function PreLobbyPage() {
                 </p>
               </div>
               <div className="px-5 py-4 space-y-3">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => adjust(-0.1)} className="w-12 h-12 rounded-2xl border-2 border-border bg-card hover:bg-muted flex items-center justify-center active:scale-95 transition-all shrink-0">
-                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                  </button>
-                  <div className="flex-1 relative">
-                    <input
-                      type="number" min="0.01" step="0.1" value={myOffer}
-                      onChange={e => setMyOffer(Math.max(0.01, parseFloat(e.target.value) || 0))}
-                      className={cn(
-                        "w-full h-16 rounded-2xl border-2 bg-background text-center",
-                        "text-3xl font-black text-foreground outline-none transition-colors focus:border-primary/60 border-border",
-                      )}
-                    />
-                    <span className="absolute right-4 bottom-3 text-sm font-bold text-muted-foreground pointer-events-none">
-                      {challenge.token}
-                    </span>
-                  </div>
-                  <button onClick={() => adjust(0.1)} className="w-12 h-12 rounded-2xl border-2 border-border bg-card hover:bg-muted flex items-center justify-center active:scale-95 transition-all shrink-0">
-                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                  </button>
-                </div>
-
+                <StakeInput
+                  value={myOffer}
+                  onChange={setMyOffer}
+                  token={challenge.token}
+                />
                 <button
                   onClick={() => handleSubmitOffer(myOffer)}
                   disabled={submitting || myOffer === pendingCounter.amount}
@@ -908,7 +871,7 @@ export default function PreLobbyPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            CHALLENGER — PENDING (offer sent, waiting)
+            CHALLENGER — PENDING
         ═══════════════════════════════════════════════════════════════════ */}
         {hasPendingOffer && (
           <div className="flex flex-col items-center gap-4 py-8 px-4 rounded-3xl border-2 border-primary/20 bg-primary/5 text-center">
@@ -932,7 +895,7 @@ export default function PreLobbyPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            CHALLENGER — IDLE (submit initial offer)
+            CHALLENGER — IDLE
         ═══════════════════════════════════════════════════════════════════ */}
         {pageState === "idle" && !isCreatorView && (
           <div className="bg-card border-2 border-border rounded-3xl overflow-hidden">
@@ -947,53 +910,31 @@ export default function PreLobbyPage() {
             </div>
 
             <div className="px-5 py-4 space-y-3">
-              <div className="flex items-center gap-3">
-                <button onClick={() => adjust(-0.1)} className="w-12 h-12 rounded-2xl border-2 border-border bg-card hover:bg-muted flex items-center justify-center active:scale-95 transition-all shrink-0">
-                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                </button>
-                <div className="flex-1 relative">
-                  <input
-                    type="number" min="0.01" step="0.1" value={myOffer}
-                    onChange={e => setMyOffer(Math.max(0.01, parseFloat(e.target.value) || 0))}
-                    className={cn(
-                      "w-full h-16 rounded-2xl border-2 bg-background text-center",
-                      "text-3xl font-black text-foreground outline-none transition-colors",
-                      "focus:border-primary/60",
-                      myOffer === challenge.stake ? "border-emerald-400/50" : "border-border",
-                    )}
-                  />
-                  <span className="absolute right-4 bottom-3 text-sm font-bold text-muted-foreground pointer-events-none">
-                    {challenge.token}
-                  </span>
-                  {myOffer === challenge.stake && (
-                    <span className="absolute left-3 top-3 text-[10px] font-black text-emerald-500 uppercase tracking-wider">
-                      = Opening
-                    </span>
-                  )}
-                </div>
-                <button onClick={() => adjust(0.1)} className="w-12 h-12 rounded-2xl border-2 border-border bg-card hover:bg-muted flex items-center justify-center active:scale-95 transition-all shrink-0">
-                  <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                </button>
-              </div>
+              {/* Free-type input with clamped step */}
+              <StakeInput
+                value={myOffer}
+                onChange={setMyOffer}
+                token={challenge.token}
+                label={myOffer === challenge.stake ? "= Opening" : undefined}
+                borderClass={myOffer === challenge.stake ? "border-emerald-400/50" : "border-border"}
+              />
 
+              {/* Quick picks: opening, 1.5×, 2×, 3× — all ≥ 0.01 */}
               <div className="flex gap-1.5 flex-wrap">
-                {[challenge.stake * 0.5, challenge.stake, challenge.stake * 1.5, challenge.stake * 2].map(val => {
-                  const v = Math.round(val * 100) / 100;
-                  return (
-                    <button
-                      key={v}
-                      onClick={() => setMyOffer(v)}
-                      className={cn(
-                        "flex-1 min-w-[70px] py-2 rounded-xl border-2 text-xs font-black transition-all",
-                        myOffer === v
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:border-primary/40",
-                      )}
-                    >
-                      {v === challenge.stake ? `${fmt(v)} ✓` : fmt(v)}
-                    </button>
-                  );
-                })}
+                {quickPicks.map(v => (
+                  <button
+                    key={v}
+                    onClick={() => setMyOffer(v)}
+                    className={cn(
+                      "flex-1 min-w-[70px] py-2 rounded-xl border-2 text-xs font-black transition-all",
+                      myOffer === v
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:border-primary/40",
+                    )}
+                  >
+                    {v === challenge.stake ? `${fmt(v)} ✓` : fmt(v)}
+                  </button>
+                ))}
               </div>
 
               <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-muted/30 border border-border text-xs">
@@ -1043,7 +984,7 @@ export default function PreLobbyPage() {
           </div>
         )}
 
-        {/* ── Live offers list (challenger sees competition, NOT the counter banner) ── */}
+        {/* Other challengers list */}
         {!isCreatorView && offers.length > 0 && pageState !== "countered" && (
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">

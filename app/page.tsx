@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /app/page.tsx — DropDuel Landing
+ * /app/page.tsx — DropDuel Landing (Rebranded to PrimeIQ)
  * Theme-aware: light/dark via next-themes + CSS variables
  * Font: Big Shoulders Display (display) + Figtree (body)
  */
@@ -35,16 +35,16 @@ export default function LandingPage() {
         :root {
           --dd-bg:        #ffffff;
           --dd-surface:   rgba(0,0,0,0.02);
-          --dd-text:      #020617;
-          --dd-text-dim:  rgba(2,6,23,0.45);
-          --dd-text-mute: rgba(2,6,23,0.25);
-          --dd-line:      rgba(2,6,23,0.07);
-          --dd-line-soft: rgba(2,6,23,0.05);
+          --dd-text:      #0f172a;
+          --dd-text-dim:  rgba(15, 23, 42, 0.45);
+          --dd-text-mute: rgba(15, 23, 42, 0.25);
+          --dd-line:      rgba(15, 23, 42, 0.08);
+          --dd-line-soft: rgba(15, 23, 42, 0.05);
           --dd-blue:      #2563eb;
           --dd-blue2:     #1d4ed8;
           --dd-blue-bg:   rgba(37,99,235,0.10);
-          --dd-card-border: rgba(2,6,23,0.08);
-          --dd-vr:        rgba(2,6,23,0.10);
+          --dd-card-border: rgba(15, 23, 42, 0.08);
+          --dd-vr:        rgba(15, 23, 42, 0.10);
         }
 
         .dark {
@@ -156,6 +156,12 @@ export default function LandingPage() {
         .dd-toggle-btn:hover {
           background: var(--dd-blue-bg) !important;
         }
+
+        /* ── Logo Theme Logic ── */
+        .logo-light { display: block; object-fit: contain; }
+        .logo-dark { display: none; object-fit: contain; }
+        .dark .logo-light { display: none; }
+        .dark .logo-dark { display: block; }
       `}</style>
 
       <div
@@ -166,18 +172,12 @@ export default function LandingPage() {
         {/* ── Nav ── */}
         <nav className="r r1 flex items-center justify-between px-6 pt-8 pb-6">
           <div className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 flex items-center justify-center"
-              
-            >
+            <div className="w-8 h-8 relative flex items-center justify-center">
+              <Image src="/logo.png" alt="PrimeIQ Light Logo" width={32} height={32} className="logo-light" priority />
+              <Image src="/logo.png" alt="PrimeIQ Dark Logo" width={32} height={32} className="logo-dark" priority />
             </div>
-            <span className="d font-black text-xl tracking-tight text-white" style={{ letterSpacing: "-.01em" }}>
+            <span className="d font-black text-xl tracking-tight" style={{ color: "var(--dd-text)", letterSpacing: "-.01em" }}>
               PrimeIQ
-            </span>
-            <span
-              className="d font-black text-xl tracking-tight"
-              style={{ color: "var(--dd-text)", letterSpacing: "-.01em" }}
-            >
             </span>
           </div>
 

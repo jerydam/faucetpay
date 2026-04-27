@@ -30,7 +30,7 @@ import { QUIZ_HUB_ABI } from "@/lib/abis";
 const API_BASE_URL = "https://faucetpay-backend.koyeb.app";
 
 const QUIZ_HUB_ADDRESSES: Record<number, string> = {
-  42220: process.env.NEXT_PUBLIC_QUIZ_HUB_CELO  ?? "0xceDC56a09ae64563D3b04cCde4dC2A2E0667Ce8B",
+  42220: process.env.NEXT_PUBLIC_QUIZ_HUB_CELO  ?? "0x9088298cd07BE0cAA1e256d3f3761313e1a1447E",
 };
 
 interface TokenConfig {

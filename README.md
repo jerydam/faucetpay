@@ -153,7 +153,7 @@ Users progress through 5 stages by earning points:
 
 | Network | Status | Features |
 |---------|--------|----------|
-| **Celo** | ✅ Live | Native CELO, stablecoins (cUSD, cEUR, cNGN) |
+| **Celo** | ✅ Live | Native CELO, stablecoins (USDm, cEUR, cNGN) |
 | **Lisk** | ✅ Live | ETH, LSK, USDT, USDC |
 | **Arbitrum** | ✅ Live | ETH, USDC, USDT, ARB |
 | **Base** | ✅ Live | ETH, USDC, USDT, DEGEN |

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 function getWsNotifyUrl() {
   if (typeof window === "undefined") return "wss://127.0.0.1:8000/ws/notify";

@@ -28,7 +28,7 @@ import { QUIZ_HUB_ABI, ERC20_ABI } from "@/lib/abis";
 // Config
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API_BASE_URL = "https://faucetpay-backend.koyeb.app";
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 /**
  * Fill in the deployed QuizHub address for each chain.
@@ -55,7 +55,7 @@ interface TokenConfig {
 const TOKENS_BY_CHAIN: Record<number, TokenConfig[]> = {
   42220: [
     // CELO is ERC-20 on its own chain — fully supported
-    { address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", symbol: "cUSD",  decimals: 18, logoUrl: "/cusd.png"   },
+    { address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", symbol: "USDm",  decimals: 18, logoUrl: "/USDm.png"   },
     { address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", symbol: "USDC",  decimals: 6,  logoUrl: "/usdc.jpg"   },
     { address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", symbol: "USDT",  decimals: 6,  logoUrl: "/usdt.jpg"   },
   ],
@@ -205,7 +205,7 @@ const [inviteWallet, setInviteWallet] = useState(
 );
 
 // Username lookup state
-const [usernameStatus, setUsernameStatus] = useState
+const [usernameStatus, setUsernameStatus] = useState<
   "idle" | "loading" | "found" | "notfound"
 >("idle");
 

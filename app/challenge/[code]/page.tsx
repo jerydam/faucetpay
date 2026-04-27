@@ -34,7 +34,7 @@ const CREATE_QUIZ_FRAGMENT = [{
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 function getWsBaseUrl(): string {
   if (typeof window === "undefined") return "wss://127.0.0.1:8000";
@@ -47,7 +47,7 @@ const CELO_CHAIN_ID = 42220;
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_STAKE_CONTRACT ?? "0xceDC56a09ae64563D3b04cCde4dC2A2E0667Ce8B";
 
 const TOKEN_ADDRESSES: Record<string, string> = {
-  cUSD: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+  USDm: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
   USDC: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
   USDT: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e",
 };
@@ -165,7 +165,7 @@ async function stakeOnChain(
 ): Promise<string> {
   await ensureCeloNetwork();
   const tokenAddr = TOKEN_ADDRESSES[tokenSymbol.toUpperCase()];
-  if (!tokenAddr) throw new Error(`Unsupported token: ${tokenSymbol}. Only cUSD, USDC, and USDT are accepted.`);
+  if (!tokenAddr) throw new Error(`Unsupported token: ${tokenSymbol}. Only USDm, USDC, and USDT are accepted.`);
   const provider = new BrowserProvider(window.ethereum);
   const signer   = await provider.getSigner();
   const userAddr = await signer.getAddress();
@@ -355,7 +355,7 @@ export async function handleRematchCreate(params: {
     const signer    = await provider.getSigner();
     const contract  = new Contract(CONTRACT_ADDRESS, CREATE_QUIZ_FRAGMENT, signer);
     const quizId    = keccak256(toUtf8Bytes(newCode));
-    const tokenAddr = TOKEN_ADDRESSES[(challenge?.token ?? "cUSD").toUpperCase()] ?? TOKEN_ADDRESSES.cUSD;
+    const tokenAddr = TOKEN_ADDRESSES[(challenge?.token ?? "USDm").toUpperCase()] ?? TOKEN_ADDRESSES.USDm;
     sonnerToast.info("Confirm quiz creation in your wallet…");
     const tx = await contract.createQuiz(quizId, tokenAddr);
     await tx.wait();

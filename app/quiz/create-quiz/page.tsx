@@ -122,7 +122,7 @@ interface TokenConfiguration {
 const ALL_TOKENS_BY_CHAIN: Record<number, TokenConfiguration[]> = {
   42220: [
     { address: "0x471EcE3750Da237f93B8E339c536989b8978a438", name: "Celo", symbol: "CELO", decimals: 18, isNative: true, logoUrl: "/celo.jpeg", description: "Native Celo token" },
-    { address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", name: "Celo Dollar", symbol: "cUSD", decimals: 18, logoUrl: "/cusd.png", description: "USD-pegged stablecoin" },
+    { address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", name: "Celo Dollar", symbol: "USDm", decimals: 18, logoUrl: "/USDm.png", description: "USD-pegged stablecoin" },
     { address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", name: "Tether", symbol: "USDT", decimals: 6, logoUrl: "/usdt.jpg", description: "Tether USD stablecoin" },
     { address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", name: "USD Coin", symbol: "USDC", decimals: 6, logoUrl: "/usdc.jpg", description: "USD Coin stablecoin" },
   ],
@@ -148,7 +148,7 @@ const ALL_TOKENS_BY_CHAIN: Record<number, TokenConfiguration[]> = {
 };
 
 const COINGECKO_IDS: Record<string, string> = {
-  CELO: "celo", cUSD: "celo-dollar", USDT: "tether", USDC: "usd-coin",
+  CELO: "celo", USDm: "celo-dollar", USDT: "tether", USDC: "usd-coin",
   ETH: "ethereum", LSK: "lisk", BNB: "binance-coin", BUSD: "binance-usd",
 };
 const CHAIN_NAMES: Record<number, string> = {

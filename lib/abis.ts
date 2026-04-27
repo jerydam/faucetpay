@@ -734,7 +734,7 @@ export const QUIZ_HUB_ABI =[
 	},
 	{
 		"inputs": [],
-		"name": "CUSD",
+		"name": "USDm",
 		"outputs": [
 			{
 				"internalType": "address",
@@ -764,7 +764,7 @@ export const QUIZ_HUB_ABI =[
 		"outputs": [
 			{
 				"internalType": "address",
-				"name": "cusd",
+				"name": "USDm",
 				"type": "address"
 			},
 			{

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/use-wallet";
 import { ArrowLeft, Swords, Search, ChevronUp, ChevronDown, Minus } from "lucide-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 const WS_BASE  = API_BASE.replace(/^http/, "ws");
 
 // ─── Tier system ──────────────────────────────────────────────────────────────
@@ -117,21 +117,27 @@ function PodiumCard({
   return (
     <div
       className={`podium-card${isFirst ? " podium-first" : ""}`}
-      style={{ order: place === 2 ? 0 : place === 1 ? 1 : 2 }}
+      style={{}}
+
     >
       {isFirst && <span className="crown-emoji">👑</span>}
 
       <div style={{ position: "relative", display: "inline-block" }}>
         <div
-          className="podium-avatar"
-          style={{
-            background: `${tier.color}22`, color: tier.color,
-            width: isFirst ? 60 : 48, height: isFirst ? 60 : 48,
-            fontSize: isFirst ? 22 : 17,
-          }}
-        >
-          {initial}
-        </div>
+  className="podium-avatar"
+  style={{
+    background: `${tier.color}22`, color: tier.color,
+    width: isFirst ? 60 : 48, height: isFirst ? 60 : 48,
+    fontSize: isFirst ? 22 : 17, overflow: "hidden", padding: 0,
+  }}
+>
+  {player.avatar_url ? (
+    <img src={player.avatar_url} alt={player.username}
+      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+    />
+  ) : initial}
+</div>
         {/* Online dot on avatar */}
         <span style={{
           position: "absolute", bottom: 0, right: 0,
@@ -345,15 +351,35 @@ export default function RanksPage() {
           background: var(--dd-card); border: 1px solid var(--dd-line);
           cursor: pointer; transition: border-color 0.2s, background 0.2s;
           margin-bottom: 8px;
+          align-items: center;
           animation: fadeUp 0.35s ease forwards; opacity: 0;
         }
+        .player-name {
+          font-weight: 700;
+          font-size: 13px;
+          color: var(--dd-text);
+          word-break: break-word;
+        }
+
+        .player-name-row {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          flex-wrap: wrap;        /* ← lets badges wrap instead of squeezing the name */
+        }
+
+        .player-info {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          overflow: visible;      /* ← was clipping on small screens */
+        }  
         .player-row:hover { border-color: rgba(37,99,235,0.4); background: rgba(37,99,235,0.04); }
         .player-row.me    { border-color: rgba(37,99,235,0.5); background: rgba(37,99,235,0.08); }
         .rank-num { font-family: 'Big Shoulders Display', sans-serif; font-size: 16px; font-weight: 900; min-width: 28px; text-align: center; flex-shrink: 0; }
         .avatar { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-family: 'Big Shoulders Display', sans-serif; font-size: 14px; font-weight: 900; flex-shrink: 0; position: relative; }
-        .player-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-        .player-name-row { display: flex; align-items: center; gap: 5px; }
-        .player-name { font-weight: 700; font-size: 13px; color: var(--dd-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .you-badge { font-size: 8px; font-weight: 800; background: var(--dd-blue); color: #fff; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
         .online-label { font-size: 9px; color: #22c55e; font-weight: 600; flex-shrink: 0; }
         .offline-label { font-size: 9px; color: var(--dd-text-muted); font-weight: 500; flex-shrink: 0; }
@@ -407,7 +433,7 @@ export default function RanksPage() {
                 <div className="my-banner-username">{myEntry.username}</div>
                 <div className="my-banner-record">{myEntry.total_wins}W / {myEntry.total_duels}D</div>
                 <div className="my-banner-delta">
-                  <RankDelta delta={myEntry.rank_delta} />
+                  
                 </div>
               </div>
             </div>
@@ -430,16 +456,21 @@ export default function RanksPage() {
         {/* Podium Top 3 */}
         {!loading && players.length >= 3 && (
           <div className="podium-wrap fade-up">
-            {[1, 0, 2].map((idx) => (
+            {[
+              { playerIdx: 1, place: 2 },  // 3rd — left
+              { playerIdx: 0, place: 1 },  // 1st — center (elevated)
+              { playerIdx: 2, place: 3 },  // 2nd — right
+            ].map(({ playerIdx, place }) => (
               <PodiumCard
-                key={players[idx].wallet_address}
-                player={players[idx]}
-                place={idx + 1 === 1 ? 2 : idx === 0 ? 1 : 3}
+                key={players[playerIdx].wallet_address}
+                player={players[playerIdx]}
+                place={place}
                 myWallet={myWallet ?? ""}
                 onDuel={handleDuel}
-                online={isOnline(players[idx].wallet_address)}
+                online={isOnline(players[playerIdx].wallet_address)}
               />
             ))}
+
           </div>
         )}
 
@@ -517,8 +548,13 @@ export default function RanksPage() {
                     </span>
 
                     {/* Avatar with online dot */}
-                    <div className="avatar" style={{ background: `${tier.color}22`, color: tier.color }}>
-                      {initial}
+                    <div className="avatar" style={{ background: `${tier.color}22`, color: tier.color, overflow: "hidden", padding: 0 }}>
+                      {player.avatar_url ? (
+                        <img src={player.avatar_url} alt={player.username}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      ) : initial}
                       <span style={{
                         position: "absolute", bottom: -2, right: -2,
                         width: 10, height: 10, borderRadius: "50%",
@@ -532,9 +568,8 @@ export default function RanksPage() {
                       <div className="player-name-row">
                         <span className="player-name">{player.username}</span>
                         {isMe && <span className="you-badge">you</span>}
-                        {!isMe && online  && <span className="online-label">● online</span>}
-                        {!isMe && !online && <span className="offline-label">offline</span>}
-                        <RankDelta delta={player.rank_delta} />
+                        
+                        
                       </div>
                       <StarDisplay count={tier.stars} color={tier.color} size={11} />
                       <div className="player-meta">

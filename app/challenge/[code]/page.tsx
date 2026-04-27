@@ -111,7 +111,12 @@ function deriveQuizId(code: string): `0x${string}` {
   return keccak256(toBytes(code));
 }
 
-function getViemClients() {
+async function getViemClients() {
+  if (!window.ethereum) throw new Error("No wallet found. Please open inside MiniPay.");
+  
+  // MiniPay requires an explicit account request before signing
+  await window.ethereum.request({ method: "eth_requestAccounts" });
+
   const walletClient = createWalletClient({
     chain: celo,
     transport: custom(window.ethereum),
@@ -122,6 +127,7 @@ function getViemClients() {
   });
   return { walletClient, publicClient };
 }
+
 const CONFETTI_COLORS = ["#FFD700","#FF6B6B","#4ECDC4","#45B7D1","#96CEB4","#FFEAA7"];
 function Confetti({ active }: { active: boolean }) {
   const particles = useMemo(() =>
@@ -149,6 +155,10 @@ function Confetti({ active }: { active: boolean }) {
 
 async function ensureCeloNetwork(): Promise<void> {
   if (!window.ethereum) throw new Error("No wallet detected.");
+  
+  // MiniPay is always on Celo — skip the switch attempt
+  if (window.ethereum.isMiniPay) return;
+
   const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
   if (parseInt(chainIdHex, 16) !== CELO_CHAIN_ID) {
     try {
@@ -184,7 +194,7 @@ async function stakeOnChain(
   if (!tokenAddr)
     throw new Error(`Unsupported token: ${tokenSymbol}. Only USDm, USDC, and USDT are accepted.`);
 
-  const { walletClient, publicClient } = getViemClients();
+  const { walletClient, publicClient } = await getViemClients();
   const [userAddr] = await walletClient.getAddresses();
   const quizId = deriveQuizId(challengeCode);
 
@@ -417,10 +427,12 @@ export async function handleRematchCreate(params: {
 
     const newCode: string = d.newCode;  // ← defined here
 
-    const walletClient = createWalletClient({
-      chain: celo,
-      transport: custom(window.ethereum),
-    });
+    if (!window.ethereum) throw new Error("No wallet found. Please open inside MiniPay.");
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const walletClient = createWalletClient({
+        chain: celo,
+        transport: custom(window.ethereum),
+      });
     const publicClient = createPublicClient({
       chain: celo,
       transport: http("https://forno.celo.org"),
@@ -1013,7 +1025,7 @@ export default function ChallengePage() {
   const handleClaim = useCallback(async (claimCode: string) => {
   setIsClaiming(true);
   try {
-    const { walletClient, publicClient } = getViemClients();
+    const { walletClient, publicClient } = await getViemClients();
     const [userAddr] = await walletClient.getAddresses();
     const quizId = deriveQuizId(claimCode);
 
@@ -1065,7 +1077,7 @@ export default function ChallengePage() {
       }] as const;
 
       // Inside handleSyncStake, replace the provider/contract block with:
-      const { publicClient } = getViemClients();
+      const { walletClient, publicClient } = await getViemClients();
       const quizId = deriveQuizId(code);
       const quiz = await publicClient.readContract({
         address: CONTRACT_ADDRESS,

@@ -212,6 +212,11 @@ export default function CreateChallengePage() {
   }, [wizardStep, topic, stakeAmount, tokenSymbol, userWalletAddress, isPublic, usernameStatus]);
 
  const createQuizOnChain = async (code: string, token: TokenConfig): Promise<void> => {
+  if (!window.ethereum) throw new Error("No wallet found. Please open inside MiniPay.");
+  
+  // Required for MiniPay before any signing
+  await window.ethereum.request({ method: "eth_requestAccounts" });
+
   const walletClient = createWalletClient({
     chain: celo,
     transport: custom(window.ethereum),

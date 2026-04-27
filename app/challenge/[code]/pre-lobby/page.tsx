@@ -278,13 +278,20 @@ function StakeInput({
           </span>
         )}
         <input
-          type="number"
-          min="0.01"
-          step="0.01"
-          value={raw}
-          onChange={e => setRaw(e.target.value)}
-          onBlur={e => commit(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={raw}
+            onChange={e => {
+              setRaw(e.target.value);
+              // ← ADD THIS: update parent live while typing
+              const parsed = parseFloat(e.target.value);
+              if (!isNaN(parsed) && parsed >= 0.01) {
+                onChange(Math.round(parsed * 100) / 100);
+              }
+            }}
+            onBlur={e => commit(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
           className={cn(
             "w-full h-16 rounded-2xl border-2 bg-background text-center",
             "text-3xl font-black text-foreground outline-none transition-colors focus:border-primary/60",

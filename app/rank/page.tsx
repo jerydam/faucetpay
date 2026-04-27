@@ -179,7 +179,7 @@ export default function RanksPage() {
       inviteUsername: targetUsername,
       inviteWallet:   targetWallet,
     });
-    router.push(`/challenge/create?${params.toString()}`);
+    router.push(`/challenge/create-challenge?${params.toString()}`);
   };
 
   const filtered = useMemo(() => {

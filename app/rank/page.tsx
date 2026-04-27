@@ -117,33 +117,32 @@ function PodiumCard({
   return (
     <div
       className={`podium-card${isFirst ? " podium-first" : ""}`}
-      style={{}}
-
     >
       {isFirst && <span className="crown-emoji">👑</span>}
 
       <div style={{ position: "relative", display: "inline-block" }}>
         <div
-  className="podium-avatar"
-  style={{
-    background: `${tier.color}22`, color: tier.color,
-    width: isFirst ? 60 : 48, height: isFirst ? 60 : 48,
-    fontSize: isFirst ? 22 : 17, overflow: "hidden", padding: 0,
-  }}
->
-  {player.avatar_url ? (
-    <img src={player.avatar_url} alt={player.username}
-      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
-      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-    />
-  ) : initial}
-</div>
-        {/* Online dot on avatar */}
+          className="podium-avatar"
+          style={{
+            background: `${tier.color}22`, color: tier.color,
+            width: isFirst ? 60 : 48, height: isFirst ? 60 : 48,
+            fontSize: isFirst ? 22 : 17, overflow: "hidden", padding: 0,
+          }}
+        >
+          {player.avatar_url ? (
+            <img src={player.avatar_url} alt={player.username}
+              style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          ) : initial}
+        </div>
+        {/* Adjusted online dot placement to ensure visibility */}
         <span style={{
-          position: "absolute", bottom: 0, right: 0,
-          width: 10, height: 10, borderRadius: "50%",
+          position: "absolute", bottom: -2, right: -2,
+          width: 14, height: 14, borderRadius: "50%",
           background: online ? "#22c55e" : "#6b7280",
-          border: "2px solid var(--dd-bg)",
+          border: "3px solid var(--dd-bg)",
+          zIndex: 10,
         }} />
       </div>
 
@@ -158,8 +157,9 @@ function PodiumCard({
         <button
           className="podium-duel-btn"
           onClick={() => onDuel(player.wallet_address, player.username)}
+          disabled={!online}
         >
-          Duel ↗
+          {online ? "Duel ↗" : "Offline"}
         </button>
       )}
     </div>
@@ -320,7 +320,10 @@ export default function RanksPage() {
           font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 8px;
           background: var(--dd-blue); border: none; color: #fff; cursor: pointer; transition: background 0.15s;
         }
-        .podium-duel-btn:hover { background: var(--dd-blue2, #1d4ed8); }
+        .podium-duel-btn:hover:not(:disabled) { background: var(--dd-blue2, #1d4ed8); }
+        .podium-duel-btn:disabled {
+          background: var(--dd-line); color: var(--dd-dim); cursor: not-allowed;
+        }
         .crown-emoji { font-size: 20px; animation: shimmer 2s ease infinite; }
         .search-wrap { position: relative; margin: 0 16px 12px; }
         .search-input {
@@ -398,8 +401,9 @@ export default function RanksPage() {
           cursor: pointer; display: flex; align-items: center; gap: 4px;
           white-space: nowrap; transition: background 0.15s, transform 0.12s; flex-shrink: 0;
         }
-        .duel-btn:hover  { background: var(--dd-blue2, #1d4ed8); }
-        .duel-btn:active { transform: scale(0.95); }
+        .duel-btn:hover:not(:disabled)  { background: var(--dd-blue2, #1d4ed8); }
+        .duel-btn:active:not(:disabled) { transform: scale(0.95); }
+        .duel-btn:disabled { background: var(--dd-line); color: var(--dd-dim); cursor: not-allowed; }
       `}</style>
 
       <div className="ranks-page">
@@ -547,19 +551,22 @@ export default function RanksPage() {
                       {globalRank <= 3 ? ["🥇", "🥈", "🥉"][globalRank - 1] : `#${globalRank}`}
                     </span>
 
-                    {/* Avatar with online dot */}
-                    <div className="avatar" style={{ background: `${tier.color}22`, color: tier.color, overflow: "hidden", padding: 0 }}>
-                      {player.avatar_url ? (
-                        <img src={player.avatar_url} alt={player.username}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
-                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
-                      ) : initial}
+                    {/* Wrapper for avatar to allow absolute positioning without clipping */}
+                    <div style={{ position: "relative", flexShrink: 0 }}>
+                      <div className="avatar" style={{ background: `${tier.color}22`, color: tier.color, overflow: "hidden", padding: 0 }}>
+                        {player.avatar_url ? (
+                          <img src={player.avatar_url} alt={player.username}
+                            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                        ) : initial}
+                      </div>
                       <span style={{
                         position: "absolute", bottom: -2, right: -2,
-                        width: 10, height: 10, borderRadius: "50%",
+                        width: 12, height: 12, borderRadius: "50%",
                         background: online ? "#22c55e" : "#6b7280",
                         border: "2px solid var(--dd-card)",
+                        zIndex: 10
                       }} />
                     </div>
 
@@ -595,7 +602,7 @@ export default function RanksPage() {
                       </div>
                     </div>
 
-                    {/* Duel button — hidden for own wallet */}
+                    {/* Duel button — hidden for own wallet, disabled for offline players */}
                     {!isMe && (
                       <button
                         className="duel-btn"
@@ -603,8 +610,9 @@ export default function RanksPage() {
                           e.stopPropagation();
                           handleDuel(player.wallet_address, player.username);
                         }}
+                        disabled={!online}
                       >
-                        <Swords size={11} /> Duel ↗
+                        <Swords size={11} /> {online ? "Duel ↗" : "Offline"}
                       </button>
                     )}
                   </div>

@@ -72,7 +72,20 @@ export function BottomNav() {
         borderTop:  "1px solid var(--dd-line)",
       }}
     >
-      {/* Centre Play button — same size as other tabs */}
+      {/* Left tab: Home */}
+      {resolvedTabs.slice(0, 1).map(t => (
+        <button
+          key={t.id}
+          onClick={() => router.push(t.href)}
+          className="flex flex-col items-center gap-1 px-3 py-1"
+          style={{ color: pathname === t.href ? "var(--dd-blue)" : "var(--dd-dim)" }}
+        >
+          <t.icon size={22} strokeWidth={1.8} />
+          <span style={{ fontSize: 11, fontWeight: 500 }}>{t.label}</span>
+        </button>
+      ))}
+
+      {/* Play button — Second position */}
       <div className="relative flex flex-col items-center">
         {open && (
           <div
@@ -116,28 +129,18 @@ export function BottomNav() {
           Play
         </span>
       </div>
-      {/* Left two tabs: Home, Ranks */}
-      {resolvedTabs.slice(0, 2).map(t => (
+
+      {/* Right tabs: Ranks, Profile */}
+      {resolvedTabs.slice(1).map(t => (
         <button
           key={t.id}
           onClick={() => router.push(t.href)}
           className="flex flex-col items-center gap-1 px-3 py-1"
-          style={{ color: pathname === t.href ? "var(--dd-blue)" : "var(--dd-dim)" }}
-        >
-          <t.icon size={22} strokeWidth={1.8} />
-          <span style={{ fontSize: 11, fontWeight: 500 }}>{t.label}</span>
-        </button>
-      ))}
-
-      
-
-      {/* Right tab: Profile */}
-      {resolvedTabs.slice(2).map(t => (
-        <button
-          key={t.id}
-          onClick={() => router.push(t.href)}
-          className="flex flex-col items-center gap-1 px-3 py-1"
-          style={{ color: pathname.startsWith("/dashboard") ? "var(--dd-blue)" : "var(--dd-dim)" }}
+          style={{ 
+            color: pathname === t.href || (t.id === "profile" && pathname.startsWith("/dashboard")) 
+              ? "var(--dd-blue)" 
+              : "var(--dd-dim)" 
+          }}
         >
           <t.icon size={22} strokeWidth={1.8} />
           <span style={{ fontSize: 11, fontWeight: 500 }}>{t.label}</span>

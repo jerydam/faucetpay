@@ -63,7 +63,7 @@ const TOKENS_BY_CHAIN: Record<number, TokenConfig[]> = {
 const CHAIN_NAMES: Record<number, string> = {
   42220: "Celo",
 };
-
+const MIN_STAKE = 0.5;
 function deriveQuizId(code: string): `0x${string}` {
   return keccak256(toBytes(code));
 }
@@ -207,7 +207,7 @@ export default function CreateChallengePage() {
       if (!isPublic) return topicOk && usernameStatus === "found";
       return topicOk;
     }
-    if (id === "stake") return !!stakeAmount && parseFloat(stakeAmount) > 0 && !!tokenSymbol;
+    if (id === "stake") return !!stakeAmount && parseFloat(stakeAmount) >= MIN_STAKE && !!tokenSymbol;
     return true;
   }, [wizardStep, topic, stakeAmount, tokenSymbol, userWalletAddress, isPublic, usernameStatus]);
 
@@ -488,10 +488,15 @@ export default function CreateChallengePage() {
       )}
 
       <div className="space-y-2">
-        <Label className="text-xs font-black text-muted-foreground uppercase tracking-wider">Amount per player</Label>
+        <Label className="text-xs font-black text-muted-foreground uppercase tracking-wider">Amount per player <span className="text-destructive">(min {MIN_STAKE})</span></Label>
         <div className="relative">
           <Input type="number" value={stakeAmount} onChange={e => setStakeAmount(e.target.value)} placeholder="0.00" className="h-12 text-lg font-mono rounded-xl pr-20 border-2" />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-muted-foreground">{tokenSymbol}</span>
+          {stakeAmount && parseFloat(stakeAmount) < MIN_STAKE && parseFloat(stakeAmount) > 0 && (
+            <p className="text-xs text-destructive font-bold mt-1">
+              Minimum stake is {MIN_STAKE} {tokenSymbol}
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
-
+const MIN_STAKE = 0.5
 function getWsBase() {
   if (typeof window === "undefined") return "wss://127.0.0.1:8000";
   return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
@@ -238,12 +238,14 @@ function StakeInput({
   token,
   label,
   borderClass,
+  min = MIN_STAKE,
 }: {
   value: number;
   onChange: (v: number) => void;
   token: string;
   label?: string;
   borderClass?: string;
+  min? : number;
 }) {
   const [raw, setRaw] = useState(String(value));
 
@@ -251,19 +253,20 @@ function StakeInput({
   useEffect(() => {
     setRaw(String(value));
   }, [value]);
-
+  const MIN_STAKE = 0.5;
+  
   const commit = (str: string) => {
-    const parsed = parseFloat(str);
-    const clamped = isNaN(parsed) || parsed < 0.01 ? 0.01 : Math.round(parsed * 100) / 100;
-    onChange(clamped);
-    setRaw(String(clamped));
-  };
+  const parsed = parseFloat(str);
+  const clamped = isNaN(parsed) || parsed < MIN_STAKE ? MIN_STAKE : Math.round(parsed * 100) / 100;
+  onChange(clamped);
+  setRaw(String(clamped));
+};
 
   return (
     <div className="flex items-center gap-3">
       {/* Decrement */}
       <button
-        onClick={() => { const next = Math.max(0.01, Math.round((value - 0.01) * 100) / 100); onChange(next); setRaw(String(next)); }}
+        onClick={() => { const next = Math.max(MIN_STAKE, Math.round((value - 0.01) * 100) / 100); onChange(next); setRaw(String(next)); }}
         className="w-12 h-12 rounded-2xl border-2 border-border bg-card hover:bg-muted flex items-center justify-center active:scale-95 transition-all shrink-0"
       >
         <ChevronDown className="h-5 w-5 text-muted-foreground" />
@@ -279,14 +282,14 @@ function StakeInput({
         )}
         <input
             type="number"
-            min="0.01"
+            
             step="0.01"
             value={raw}
             onChange={e => {
               setRaw(e.target.value);
               // ← ADD THIS: update parent live while typing
               const parsed = parseFloat(e.target.value);
-              if (!isNaN(parsed) && parsed >= 0.01) {
+              if (!isNaN(parsed) && parsed >= MIN_STAKE) {
                 onChange(Math.round(parsed * 100) / 100);
               }
             }}
@@ -323,7 +326,7 @@ export default function PreLobbyPage() {
   const code   = ((params.code as string) ?? "").toUpperCase();
   const { address: userWalletAddress } = useWallet();
   const myWallet = useMemo(() => userWalletAddress?.toLowerCase() ?? "", [userWalletAddress]);
-
+  
   const [challenge, setChallenge]     = useState<Challenge | null>(null);
   const [username, setUsername]       = useState("");
   const [pageState, setPageState]     = useState<PageState>("loading");
@@ -541,7 +544,7 @@ export default function PreLobbyPage() {
     if (!challenge) return [];
     const s = challenge.stake;
     return [s, Math.round(s * 1.5 * 100) / 100, Math.round(s * 2 * 100) / 100, Math.round(s * 3 * 100) / 100]
-      .filter(v => v >= 0.01);
+      .filter(v => v >= MIN_STAKE);
   }, [challenge]);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -783,6 +786,7 @@ export default function PreLobbyPage() {
                   <StakeInput
                     value={myOffer}
                     onChange={setMyOffer}
+                     
                     token={challenge.token}
                     label={myOffer === counterTarget.amount ? "= Their offer" : undefined}
                     borderClass="border-blue-400/50"
@@ -860,6 +864,7 @@ export default function PreLobbyPage() {
                 <StakeInput
                   value={myOffer}
                   onChange={setMyOffer}
+                  
                   token={challenge.token}
                 />
                 <button
@@ -922,6 +927,7 @@ export default function PreLobbyPage() {
                 value={myOffer}
                 onChange={setMyOffer}
                 token={challenge.token}
+                
                 label={myOffer === challenge.stake ? "= Opening" : undefined}
                 borderClass={myOffer === challenge.stake ? "border-emerald-400/50" : "border-border"}
               />

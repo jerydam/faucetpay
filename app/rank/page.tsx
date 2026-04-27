@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/use-wallet";
 import { ArrowLeft, Swords, Search, ChevronUp, ChevronDown, Minus } from "lucide-react";
+import { usePresence } from "@/components/presence-provider"; // ← Global presence hook
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
-const WS_BASE  = API_BASE.replace(/^http/, "ws");
 
 // ─── Tier system ──────────────────────────────────────────────────────────────
 
@@ -75,21 +75,6 @@ function RankDelta({ delta }: { delta: number }) {
   );
 }
 
-// ─── Online dot ───────────────────────────────────────────────────────────────
-
-function OnlineDot({ online }: { online: boolean }) {
-  return (
-    <span style={{
-      display: "inline-block",
-      width: 8, height: 8,
-      borderRadius: "50%",
-      background: online ? "#22c55e" : "#6b7280",
-      flexShrink: 0,
-      boxShadow: online ? "0 0 0 2px rgba(34,197,94,0.2)" : "none",
-    }} title={online ? "Online" : "Offline"} />
-  );
-}
-
 interface Player {
   wallet_address: string;
   username: string;
@@ -115,9 +100,7 @@ function PodiumCard({
   const isFirst = place === 1;
 
   return (
-    <div
-      className={`podium-card${isFirst ? " podium-first" : ""}`}
-    >
+    <div className={`podium-card${isFirst ? " podium-first" : ""}`}>
       {isFirst && <span className="crown-emoji">👑</span>}
 
       <div style={{ position: "relative", display: "inline-block" }}>
@@ -136,7 +119,7 @@ function PodiumCard({
             />
           ) : initial}
         </div>
-        {/* Adjusted online dot placement to ensure visibility */}
+        {/* Visible online dot for Podium */}
         <span style={{
           position: "absolute", bottom: -2, right: -2,
           width: 14, height: 14, borderRadius: "50%",
@@ -177,10 +160,8 @@ export default function RanksPage() {
   const [search, setSearch]   = useState("");
   const [filter, setFilter] = useState<"all" | "top10" | "myrank" | "online">("top10");
 
-
-  // ── Online presence: map of wallet → boolean ──
-  const [onlineSet, setOnlineSet] = useState<Set<string>>(new Set());
-  const presenceWsRef = useRef<WebSocket | null>(null);
+  // 👇 Grab the global online set from your new provider
+  const onlineSet = usePresence();
 
   useEffect(() => {
     fetch(`${API_BASE}/api/ranks`)
@@ -190,37 +171,10 @@ export default function RanksPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // ── Connect to presence endpoint once players are loaded ──
-  useEffect(() => {
-    if (!players.length) return;
-
-    // Use a lightweight WS endpoint that broadcasts the set of online wallets.
-    // The backend pushes { type: "presence", online: ["0x...", ...] } periodically.
-    const ws = new WebSocket(`${WS_BASE}/ws/presence`);
-    presenceWsRef.current = ws;
-
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "presence" && Array.isArray(msg.online)) {
-          setOnlineSet(new Set(msg.online.map((w: string) => w.toLowerCase())));
-        }
-      } catch {}
-    };
-
-    // Announce our own wallet if connected
-    ws.onopen = () => {
-      if (myWallet) ws.send(JSON.stringify({ type: "hello", wallet: myWallet }));
-    };
-
-    return () => { ws.close(); };
-  }, [players.length, myWallet]);
-
   const isOnline = (wallet: string) => onlineSet.has(wallet.toLowerCase());
 
   // ── Duel routing — always private invite ──
   const handleDuel = (targetWallet: string, targetUsername: string) => {
-    // Route to create page with private invite pre-filled (username + wallet)
     const params = new URLSearchParams({
       inviteUsername: targetUsername,
       inviteWallet:   targetWallet,
@@ -368,7 +322,7 @@ export default function RanksPage() {
           display: flex;
           align-items: center;
           gap: 5px;
-          flex-wrap: wrap;        /* ← lets badges wrap instead of squeezing the name */
+          flex-wrap: wrap; 
         }
 
         .player-info {
@@ -377,7 +331,7 @@ export default function RanksPage() {
           display: flex;
           flex-direction: column;
           gap: 3px;
-          overflow: visible;      /* ← was clipping on small screens */
+          overflow: visible; 
         }  
         .player-row:hover { border-color: rgba(37,99,235,0.4); background: rgba(37,99,235,0.04); }
         .player-row.me    { border-color: rgba(37,99,235,0.5); background: rgba(37,99,235,0.08); }
@@ -489,7 +443,7 @@ export default function RanksPage() {
           />
         </div>
 
-        {/* Filter Pills — added Online filter */}
+        {/* Filter Pills */}
         <div className="filter-row">
           {(["top10", "all", "myrank", "online"] as const).map(f => (
             <button
@@ -561,6 +515,7 @@ export default function RanksPage() {
                           />
                         ) : initial}
                       </div>
+                      {/* Visible online dot for list items */}
                       <span style={{
                         position: "absolute", bottom: -2, right: -2,
                         width: 12, height: 12, borderRadius: "50%",
@@ -575,8 +530,6 @@ export default function RanksPage() {
                       <div className="player-name-row">
                         <span className="player-name">{player.username}</span>
                         {isMe && <span className="you-badge">you</span>}
-                        
-                        
                       </div>
                       <StarDisplay count={tier.stars} color={tier.color} size={11} />
                       <div className="player-meta">

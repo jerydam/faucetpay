@@ -8,7 +8,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
 import { NetworkProvider } from "@/hooks/use-network"
 import { WalletProvider } from "@/components/wallet-provider"
-import { BottomNav } from "@/components/bottom-nav"  // ← add this
+import { BottomNav } from "@/components/bottom-nav"
+import { PresenceProvider } from "@/components/presence-provider"
 
 import sdk from "@farcaster/miniapp-sdk"
 
@@ -72,17 +73,20 @@ export default function RootLayout({
         >
           <NetworkProvider>
             <WalletProvider>
-              <div className="min-h-screen flex flex-col">
-                <main className="flex-1">
-                  {children}
-                </main>
+              {/* 👇 Wrapped the app content in PresenceProvider */}
+              <PresenceProvider>
+                <div className="min-h-screen flex flex-col">
+                  <main className="flex-1">
+                    {children}
+                  </main>
+                  
+                </div>
                 
-              </div>
-              
-              {/* BottomNav sits outside the flex column so it overlays everything */}
-              <BottomNav />
+                {/* BottomNav sits outside the flex column so it overlays everything */}
+                <BottomNav />
 
-              <Toaster richColors position="top-center" closeButton />
+                <Toaster richColors position="top-center" closeButton />
+              </PresenceProvider>
             </WalletProvider>
           </NetworkProvider>
         </ThemeProvider>

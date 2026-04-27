@@ -18,19 +18,22 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import Loading from "@/app/loading";
 import { ERC20_ABI, QUIZ_HUB_ABI } from "@/lib/abis";
-import { BrowserProvider, Contract, parseUnits, keccak256, toUtf8Bytes } from "ethers";
+import {
+  createWalletClient,
+  createPublicClient,
+  custom,
+  http,
+  parseUnits,
+  keccak256,
+  toBytes,
+  type Address,
+} from "viem";
+import { celo } from "viem/chains";
 import { useSearchParams } from "next/navigation";
 import { WalletConnectButton } from "@/components/wallet-connect";
 import { toast as sonnerToast } from "sonner";
 import { RematchPopup, RematchInvite } from "@/components/RematchPopup";
 
-const CREATE_QUIZ_FRAGMENT = [{
-  inputs: [
-    { internalType: "bytes32", name: "quizId",       type: "bytes32" },
-    { internalType: "address", name: "tokenAddress", type: "address" },
-  ],
-  name: "createQuiz", outputs: [], stateMutability: "nonpayable", type: "function",
-}];
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -44,9 +47,9 @@ function getWsBaseUrl(): string {
 }
 
 const CELO_CHAIN_ID = 42220;
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_STAKE_CONTRACT ?? "0x9088298cd07BE0cAA1e256d3f3761313e1a1447E";
+const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_STAKE_CONTRACT ?? "0x9088298cd07BE0cAA1e256d3f3761313e1a1447E") as `0x${string}`;
 
-const TOKEN_ADDRESSES: Record<string, string> = {
+const TOKEN_ADDRESSES: Record<string, `0x${string}`> = {
   USDm: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
   USDC: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
   USDT: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e",
@@ -104,7 +107,21 @@ function LinearTimer({ seconds, total }: { seconds: number; total: number }) {
     </div>
   );
 }
+function deriveQuizId(code: string): `0x${string}` {
+  return keccak256(toBytes(code));
+}
 
+function getViemClients() {
+  const walletClient = createWalletClient({
+    chain: celo,
+    transport: custom(window.ethereum),
+  });
+  const publicClient = createPublicClient({
+    chain: celo,
+    transport: http("https://forno.celo.org"),
+  });
+  return { walletClient, publicClient };
+}
 const CONFETTI_COLORS = ["#FFD700","#FF6B6B","#4ECDC4","#45B7D1","#96CEB4","#FFEAA7"];
 function Confetti({ active }: { active: boolean }) {
   const particles = useMemo(() =>
@@ -131,7 +148,7 @@ function Confetti({ active }: { active: boolean }) {
 // ── On-Chain Staking ──────────────────────────────────────────────────────────
 
 async function ensureCeloNetwork(): Promise<void> {
-  if (!window.ethereum) throw new Error("No wallet detected. Install MetaMask or a Celo wallet.");
+  if (!window.ethereum) throw new Error("No wallet detected.");
   const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
   if (parseInt(chainIdHex, 16) !== CELO_CHAIN_ID) {
     try {
@@ -151,9 +168,7 @@ async function ensureCeloNetwork(): Promise<void> {
             blockExplorerUrls: ["https://celoscan.io"],
           }],
         });
-      } else {
-        throw switchErr;
-      }
+      } else throw switchErr;
     }
   }
 }
@@ -164,32 +179,82 @@ async function stakeOnChain(
   tokenSymbol: string,
 ): Promise<string> {
   await ensureCeloNetwork();
+
   const tokenAddr = TOKEN_ADDRESSES[tokenSymbol.toUpperCase()];
-  if (!tokenAddr) throw new Error(`Unsupported token: ${tokenSymbol}. Only USDm, USDC, and USDT are accepted.`);
-  const provider = new BrowserProvider(window.ethereum);
-  const signer   = await provider.getSigner();
-  const userAddr = await signer.getAddress();
-  const quizId   = keccak256(toUtf8Bytes(challengeCode));
-  const erc20    = new Contract(tokenAddr, ERC20_ABI, signer);
-  const contract = new Contract(CONTRACT_ADDRESS, QUIZ_HUB_ABI, signer);
-  const decimals = await erc20.decimals();
-  const amount   = parseUnits(stakeAmount.toString(), decimals);
-  const balance  = await erc20.balanceOf(userAddr);
-  const flatFee  = await contract.getFlatFee(tokenAddr);
+  if (!tokenAddr)
+    throw new Error(`Unsupported token: ${tokenSymbol}. Only USDm, USDC, and USDT are accepted.`);
+
+  const { walletClient, publicClient } = getViemClients();
+  const [userAddr] = await walletClient.getAddresses();
+  const quizId = deriveQuizId(challengeCode);
+
+  // Read decimals
+  const decimals = await publicClient.readContract({
+        address: tokenAddr as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "decimals",
+  }) as number;
+
+  const amount = parseUnits(stakeAmount.toString(), decimals);
+
+  // Read flat fee from contract
+  const flatFee = await publicClient.readContract({
+    address: CONTRACT_ADDRESS,
+    abi: QUIZ_HUB_ABI,
+    functionName: "getFlatFee",
+    args: [tokenAddr],
+  }) as bigint;
+
   const totalRequired = amount + flatFee;
+
+  // Check balance
+  const balance = await publicClient.readContract({
+        address: tokenAddr as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: [userAddr],
+  }) as bigint;
+
   if (balance < totalRequired) {
-    const needed = Number(totalRequired) / 10 ** Number(decimals);
-    const has    = Number(balance)       / 10 ** Number(decimals);
-    throw new Error(`Insufficient balance. Need ${needed.toFixed(4)} ${tokenSymbol} (stake + fee), but wallet only has ${has.toFixed(4)}.`);
+    const needed = Number(totalRequired) / 10 ** decimals;
+    const has = Number(balance) / 10 ** decimals;
+    throw new Error(
+      `Insufficient balance. Need ${needed.toFixed(4)} ${tokenSymbol} (stake + fee), but wallet only has ${has.toFixed(4)}.`
+    );
   }
-  const allowance = await erc20.allowance(userAddr, CONTRACT_ADDRESS);
+
+  // Check and set allowance if needed
+  const allowance = await publicClient.readContract({
+        address: tokenAddr as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: [userAddr, CONTRACT_ADDRESS],
+  }) as bigint;
+
   if (allowance < totalRequired) {
-    const approveTx = await erc20.approve(CONTRACT_ADDRESS, totalRequired);
-    await approveTx.wait();
+    const approveTxHash = await walletClient.writeContract({
+          address: tokenAddr as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [CONTRACT_ADDRESS, totalRequired],
+      account: userAddr,
+      chain: celo,
+    });
+    await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
   }
-  const tx      = await contract.stake(quizId);
-  const receipt = await tx.wait();
-  return receipt.hash;
+
+  // Stake
+  const stakeTxHash = await walletClient.writeContract({
+    address: CONTRACT_ADDRESS,
+    abi: QUIZ_HUB_ABI,
+    functionName: "stake",
+    args: [quizId],
+    account: userAddr,
+    chain: celo,
+  });
+
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: stakeTxHash });
+  return receipt.transactionHash;
 }
 
 // ── Floating Chat ─────────────────────────────────────────────────────────────
@@ -349,16 +414,45 @@ export async function handleRematchCreate(params: {
     });
     const d = await res.json();
     if (!d.success) throw new Error(d.detail ?? "Rematch creation failed");
-    const newCode: string = d.newCode;
-    if (!window.ethereum) throw new Error("No wallet detected");
-    const provider  = new BrowserProvider(window.ethereum);
-    const signer    = await provider.getSigner();
-    const contract  = new Contract(CONTRACT_ADDRESS, CREATE_QUIZ_FRAGMENT, signer);
-    const quizId    = keccak256(toUtf8Bytes(newCode));
-    const tokenAddr = TOKEN_ADDRESSES[(challenge?.token ?? "USDm").toUpperCase()] ?? TOKEN_ADDRESSES.USDm;
+
+    const newCode: string = d.newCode;  // ← defined here
+
+    const walletClient = createWalletClient({
+      chain: celo,
+      transport: custom(window.ethereum),
+    });
+    const publicClient = createPublicClient({
+      chain: celo,
+      transport: http("https://forno.celo.org"),
+    });
+
+    const [account] = await walletClient.getAddresses();
+
+    const CREATE_QUIZ_ABI = [{
+      inputs: [
+        { internalType: "bytes32", name: "quizId",       type: "bytes32" },
+        { internalType: "address", name: "tokenAddress", type: "address" },
+      ],
+      name: "createQuiz", outputs: [], stateMutability: "nonpayable", type: "function",
+    }] as const;
+
+    const quizId    = keccak256(toBytes(newCode));   // ← uses newCode
+    const tokenSymbol = (challenge?.token ?? "USDm").toUpperCase();
+    const tokenAddr = (TOKEN_ADDRESSES[tokenSymbol] ?? TOKEN_ADDRESSES["USDm"]) as `0x${string}`; // ← defined here
+
     sonnerToast.info("Confirm quiz creation in your wallet…");
-    const tx = await contract.createQuiz(quizId, tokenAddr);
-    await tx.wait();
+
+    const txHash = await walletClient.writeContract({
+      address: CONTRACT_ADDRESS as `0x${string}`,
+      abi: CREATE_QUIZ_ABI,
+      functionName: "createQuiz",
+      args: [quizId, tokenAddr],   // ← both now defined
+      account,
+      chain: celo,
+    });
+
+    await publicClient.waitForTransactionReceipt({ hash: txHash });
+
     sonnerToast.success("Challenge created! Heading to pre-lobby…");
     router.push(`/challenge/${newCode}/pre-lobby`);
   } catch (err: any) {
@@ -368,7 +462,6 @@ export async function handleRematchCreate(params: {
     setIsRequesting(false);
   }
 }
-
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function ChallengePage() {
@@ -918,23 +1011,36 @@ export default function ChallengePage() {
   }, [chatInput, userWalletAddress, username]);
 
   const handleClaim = useCallback(async (claimCode: string) => {
-    setIsClaiming(true);
-    try {
-      const provider = new BrowserProvider(window.ethereum);
-      const signer   = await provider.getSigner();
-      const contract = new Contract(CONTRACT_ADDRESS, QUIZ_HUB_ABI, signer);
-      const quizId   = keccak256(toUtf8Bytes(claimCode));
-      const tx       = await contract.claimReward(quizId);
-      toast.info("Claim transaction sent...");
-      await tx.wait();
-      toast.success("Funds transferred to your wallet! 🏆");
-      await fetch(`${API_BASE_URL}/api/challenge/claim`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: claimCode, walletAddress: userWalletAddress }),
-      });
-    } catch { toast.error("Claim failed"); }
-    finally { setIsClaiming(false); }
-  }, [userWalletAddress]);
+  setIsClaiming(true);
+  try {
+    const { walletClient, publicClient } = getViemClients();
+    const [userAddr] = await walletClient.getAddresses();
+    const quizId = deriveQuizId(claimCode);
+
+    const txHash = await walletClient.writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: QUIZ_HUB_ABI,
+      functionName: "claimReward",
+      args: [quizId],
+      account: userAddr,
+      chain: celo,
+    });
+
+    toast.info("Claim transaction sent...");
+    await publicClient.waitForTransactionReceipt({ hash: txHash });
+    toast.success("Funds transferred to your wallet! 🏆");
+
+    await fetch(`${API_BASE_URL}/api/challenge/claim`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: claimCode, walletAddress: userWalletAddress }),
+    });
+  } catch {
+    toast.error("Claim failed");
+  } finally {
+    setIsClaiming(false);
+  }
+}, [userWalletAddress]);
 
   const handleSyncStake = useCallback(async () => {
     if (!userWalletAddress || !challenge) return;
@@ -944,27 +1050,34 @@ export default function ChallengePage() {
         inputs: [{ internalType: "bytes32", name: "quizId", type: "bytes32" }],
         name: "getQuiz",
         outputs: [{ components: [
-          { internalType: "bytes32", name: "id",             type: "bytes32"  },
-          { internalType: "address", name: "token",          type: "address"  },
-          { internalType: "uint256", name: "stakePerPlayer", type: "uint256"  },
-          { internalType: "uint256", name: "totalStaked",    type: "uint256"  },
-          { internalType: "address", name: "player1",        type: "address"  },
-          { internalType: "address", name: "player2",        type: "address"  },
-          { internalType: "address", name: "winner",         type: "address"  },
-          { internalType: "bool",    name: "resolved",       type: "bool"     },
-          { internalType: "bool",    name: "rewardClaimed",  type: "bool"     },
-          { internalType: "uint256", name: "createdAt",      type: "uint256"  },
+          { internalType: "bytes32", name: "id",            type: "bytes32" },
+          { internalType: "address", name: "token",         type: "address" },
+          { internalType: "uint256", name: "stakePerPlayer",type: "uint256" },
+          { internalType: "uint256", name: "totalStaked",   type: "uint256" },
+          { internalType: "address", name: "player1",       type: "address" },
+          { internalType: "address", name: "player2",       type: "address" },
+          { internalType: "address", name: "winner",        type: "address" },
+          { internalType: "bool",    name: "resolved",      type: "bool"    },
+          { internalType: "bool",    name: "rewardClaimed", type: "bool"    },
+          { internalType: "uint256", name: "createdAt",     type: "uint256" },
         ], internalType: "struct QuizHub.Quiz", name: "", type: "tuple" }],
         stateMutability: "view", type: "function",
-      }];
-      const provider       = new BrowserProvider(window.ethereum);
-      const contract       = new Contract(CONTRACT_ADDRESS, GET_QUIZ_ABI, provider);
-      const quizId         = keccak256(toUtf8Bytes(code));
-      const quiz           = await contract.getQuiz(quizId);
-      const stakePerPlayer = quiz[2];
-      const totalStaked    = quiz[3];
-      const player1        = quiz[4].toLowerCase();
-      const player2        = quiz[5].toLowerCase();
+      }] as const;
+
+      // Inside handleSyncStake, replace the provider/contract block with:
+      const { publicClient } = getViemClients();
+      const quizId = deriveQuizId(code);
+      const quiz = await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: GET_QUIZ_ABI,
+        functionName: "getQuiz",
+        args: [quizId],
+      }) as any;
+
+      const stakePerPlayer = quiz.stakePerPlayer as bigint;
+      const totalStaked    = quiz.totalStaked as bigint;
+      const player1        = (quiz.player1 as string).toLowerCase();
+      const player2        = (quiz.player2 as string).toLowerCase();
       const wallet         = userWalletAddress.toLowerCase();
       let hasStaked = false;
       if (wallet === player1)      hasStaked = totalStaked >= stakePerPlayer;

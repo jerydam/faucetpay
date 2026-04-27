@@ -17,10 +17,15 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  Contract,
+  createWalletClient,
+  createPublicClient,
+  custom,
+  http,
   keccak256,
-  toUtf8Bytes,
-} from "ethers";
+  toBytes,
+  type Address,
+} from "viem";
+import { celo } from "viem/chains";
 import { QUIZ_HUB_ABI } from "@/lib/abis";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -29,8 +34,8 @@ import { QUIZ_HUB_ABI } from "@/lib/abis";
 
 const API_BASE_URL = "https://faucetpay-backend.koyeb.app";
 
-const QUIZ_HUB_ADDRESSES: Record<number, string> = {
-  42220: process.env.NEXT_PUBLIC_QUIZ_HUB_CELO  ?? "0x9088298cd07BE0cAA1e256d3f3761313e1a1447E",
+const QUIZ_HUB_ADDRESSES: Record<number, `0x${string}`> = {
+  42220: (process.env.NEXT_PUBLIC_QUIZ_HUB_CELO ?? "0x9088298cd07BE0cAA1e256d3f3761313e1a1447E") as `0x${string}`,
 };
 
 interface TokenConfig {
@@ -57,12 +62,10 @@ const TOKENS_BY_CHAIN: Record<number, TokenConfig[]> = {
 
 const CHAIN_NAMES: Record<number, string> = {
   42220: "Celo",
-  8453:  "Base",
-  1135:  "Lisk",
 };
 
-function deriveQuizId(code: string): string {
-  return keccak256(toUtf8Bytes(code));
+function deriveQuizId(code: string): `0x${string}` {
+  return keccak256(toBytes(code));
 }
 
 const STEPS = [
@@ -131,7 +134,8 @@ function TxStatusPill({ phase }: { phase: TxPhase }) {
 
 export default function CreateChallengePage() {
   const router = useRouter();
-  const { address: userWalletAddress, signer, chainId: walletChainId, ensureCorrectNetwork } = useWallet();
+  const { address: userWalletAddress, chainId: walletChainId, ensureCorrectNetwork } = useWallet();
+
   const searchParams = useSearchParams();
 
   const chainId = walletChainId ?? 42220;
@@ -207,31 +211,48 @@ export default function CreateChallengePage() {
     return true;
   }, [wizardStep, topic, stakeAmount, tokenSymbol, userWalletAddress, isPublic, usernameStatus]);
 
-  const createQuizOnChain = async (code: string, token: TokenConfig): Promise<void> => {
-    if (!signer) throw new Error("Wallet not connected");
-    const contractAddress = QUIZ_HUB_ADDRESSES[chainId];
-    if (!contractAddress) throw new Error(`QuizHub not configured for chain ${chainId}`);
+ const createQuizOnChain = async (code: string, token: TokenConfig): Promise<void> => {
+  const walletClient = createWalletClient({
+    chain: celo,
+    transport: custom(window.ethereum),
+  });
+  const publicClient = createPublicClient({
+    chain: celo,
+    transport: http("https://forno.celo.org"),
+  });
 
-    const quizId  = deriveQuizId(code);
-    const quizHub = new Contract(contractAddress, QUIZ_HUB_ABI, signer);
+  const contractAddress = QUIZ_HUB_ADDRESSES[chainId] as Address;
+  if (!contractAddress) throw new Error(`QuizHub not configured for chain ${chainId}`);
 
-    setTxPhase("Creating");
-    toast.info("Confirm quiz creation in your wallet…");
-    const createTx = await quizHub.createQuiz(quizId, token.address);
-    toast.loading("Waiting for confirmation…", { id: "create-confirm" });
-    const receipt = await createTx.wait();
-    toast.success("Quiz created on-chain! ⛓️✅", { id: "create-confirm" });
+  const [account] = await walletClient.getAddresses();
+  const quizId = deriveQuizId(code);
 
-    try {
-      await fetch(`${API_BASE_URL}/api/challenge/${code}/on-chain-confirmed`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ creatorWallet: userWalletAddress, txHash: receipt.hash }),
-      });
-    } catch (err) {
-      console.warn("[on-chain-confirmed] failed to notify:", err);
-    }
-  };
+  setTxPhase("Creating");
+  toast.info("Confirm quiz creation in your wallet…");
+
+  const txHash = await walletClient.writeContract({
+    address: contractAddress,
+    abi: QUIZ_HUB_ABI,
+    functionName: "createQuiz",
+    args: [quizId, token.address as `0x${string}`],
+    account,
+    chain: celo,
+  });
+
+  toast.loading("Waiting for confirmation…", { id: "create-confirm" });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+  toast.success("Quiz created on-chain! ⛓️✅", { id: "create-confirm" });
+
+  try {
+    await fetch(`${API_BASE_URL}/api/challenge/${code}/on-chain-confirmed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ creatorWallet: userWalletAddress, txHash: receipt.transactionHash }),
+    });
+  } catch (err) {
+    console.warn("[on-chain-confirmed] failed to notify:", err);
+  }
+};
 
   const handleCreate = async () => {
     if (!userWalletAddress || !topic.trim() || !stakeAmount || !selectedToken) {

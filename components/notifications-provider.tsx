@@ -129,11 +129,11 @@ function ChallengePopupOverlay({ popup, onAccept, onDecline }: {
           {/* Text */}
           <div className="space-y-1.5 mb-4 text-center">
             <h3 className="text-white font-black text-xl leading-tight">
-              Challenge Issued!
+              You've Been Called Out!
             </h3>
             <p className="text-slate-300 text-sm leading-relaxed px-2">
               <span className="text-blue-400 font-bold">{creatorName}</span>{" "}
-              challenged you on{" "}
+              is challenging your Knowledge on {" "}
               <span className="text-white font-bold">"{topic}"</span>
             </p>
           </div>

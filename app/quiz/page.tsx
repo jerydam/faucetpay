@@ -449,14 +449,7 @@ export default function QuizListPage() {
           </div>
         )}
       </div>
-        <div className="sm:hidden fixed bottom-6 right-6 z-40">
-          <Button
-            onClick={() => router.push("/quiz/create-quiz")}
-            className="h-14 px-5 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-2xl border-0 flex items-center gap-2 font-bold text-sm"
-          >
-            <Plus className="h-5 w-5" /> Create Quiz
-          </Button>
-        </div>
+        
       {/* ── Delete Confirmation Modal ── */}
       {quizToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

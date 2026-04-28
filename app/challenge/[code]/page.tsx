@@ -695,7 +695,16 @@ export default function ChallengePage() {
 
     const ws = new WebSocket(`${getWsBaseUrl()}/ws/challenge/${code}`);
     wsRef.current = ws;
-    ws.onopen = () => { reconnectAttempts.current = 0; };
+    ws.onopen = () => {
+  reconnectAttempts.current = 0;
+  if (userWalletAddress) {
+    ws.send(JSON.stringify({
+      type: "rejoin",
+      walletAddress: userWalletAddress,
+      code,
+    }));
+  }
+};
 
     ws.onmessage = async (ev) => {
       let msg: any;
@@ -723,6 +732,10 @@ export default function ChallengePage() {
               return existing ? { ...newP, txVerified: newP.txVerified || existing.txVerified } : newP;
             });
           });
+          const phaseRef = useRef(phase);
+          useEffect(() => { phaseRef.current = phase; }, [phase]);
+          if (c.status === "active" && phase === "lobby") setPhase("question");
+
           break;
         }
         case "player_joined": {
@@ -829,7 +842,7 @@ export default function ChallengePage() {
           break;
         }
         case "reconnect_countdown": {
-          const isOpponent = msg.wallet?.toLowerCase() !== myWallet;
+          const isOpponent = msg.wallet?.toLowerCase() !== currentMyWallet;
           if (isOpponent) {
             toast.warning(
               msg.secondsLeft > 0
@@ -841,7 +854,7 @@ export default function ChallengePage() {
           break;
         }
         case "player_rejoined": {
-          const isOpponent = msg.wallet?.toLowerCase() !== myWallet;
+          const isOpponent = msg.wallet?.toLowerCase() !== currentMyWallet;
           if (isOpponent) {
             toast.success(`${msg.username} reconnected!`, { id: "reconnect-countdown" });
           }

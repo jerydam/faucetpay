@@ -151,7 +151,7 @@ export default function CreateChallengePage() {
   
   // 👉 Logic: If inviteUsername is in URL, default to Private (false)
   const [isPublic, setIsPublic]            = useState(!searchParams.get("inviteUsername"));
-  const [questionCount, setQuestionCount]  = useState(9);
+  const [questionCount, setQuestionCount]  = useState(15);
 
   // Step 1 — Stake
   const [stakeAmount, setStakeAmount]      = useState("");

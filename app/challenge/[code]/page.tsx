@@ -621,7 +621,6 @@ export default function ChallengePage() {
         else if (d.challenge.status === "finished") {
           setPhase("game_over");
           
-          // ── Hydrate final scores from REST so returning players see results ──
           const playerEntries = d.challenge.players ?? {};
           const hydratedScores: Record<string, FinalScore> = {};
           Object.entries(playerEntries).forEach(([wallet, data]: [string, any]) => {
@@ -632,16 +631,27 @@ export default function ChallengePage() {
           });
           setFinalScores(hydratedScores);
           
-          // Hydrate winner and outcome
-          const winnerWallet = d.challenge.winner ?? null;
-          setWinner(winnerWallet);
-          if (!winnerWallet) {
-            setGameOutcome("tie");
-          } else {
-            setGameOutcome("winner");
-          }
-          
-          setCanRematch(!!d.challenge.canRematch);
+          // ── FIX: check all field names the backend might use ──
+          const c = d.challenge;
+          const rawWinner =
+            c.winner ??
+            c.winner_address ??      // ← what the DB column is actually called
+            c.winnerAddress ??
+            null;
+
+          // ── Fallback: derive from points if no explicit winner field ──
+          const derivedWinner = (() => {
+            if (rawWinner) return rawWinner;
+            const entries = Object.entries(c.players ?? {}) as [string, any][];
+            if (entries.length < 2) return null;
+            const sorted = entries.sort(([, a], [, b]) => (b.points ?? 0) - (a.points ?? 0));
+            if ((sorted[0][1].points ?? 0) === (sorted[1][1].points ?? 0)) return null;
+            return sorted[0][0];
+          })();
+
+          setWinner(derivedWinner);
+          setGameOutcome(derivedWinner ? "winner" : "tie");
+          setCanRematch(!!c.canRematch);
         }
         else                                        setPhase("lobby");
       })

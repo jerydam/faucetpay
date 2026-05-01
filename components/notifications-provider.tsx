@@ -216,11 +216,11 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
-  const [popup, setPopup] = useState<ChallengePopup | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const [popupQueue, setPopupQueue] = useState<Notification[]>([]);
+  const [activePopup, setActivePopup] = useState<ChallengePopup | null>(null);
   const popupTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+    const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   // Close panel on outside click
   useEffect(() => {
@@ -254,21 +254,40 @@ export function NotificationBell() {
     };
   }, []);
 
-  const dismissPopup = useCallback((notif: Notification) => {
+  const dismissActivePopup = useCallback(() => {
     if (popupTimer.current) clearInterval(popupTimer.current);
-    setPopup(null);
-    // Add to inbox as unread if not already there
+    setActivePopup(null);
+    setPopupQueue((prev) => prev.slice(1));   // advance queue
+}, []);
+
+const handleAccept = () => {
+    if (!activePopup) return;
+    const code = activePopup.notification.data?.code;
+    if (popupTimer.current) clearInterval(popupTimer.current);
     setNotifications((prev) =>
-      prev.some((n) => n.id === notif.id) ? prev : [notif, ...prev]
+        prev.map((n) => (n.id === activePopup.notification.id ? { ...n, isRead: true } : n))
     );
-  }, []);
+    setActivePopup(null);
+    setPopupQueue((prev) => prev.slice(1));
+    if (code) router.push(`/challenge/${code}/pre-lobby`);
+};
+
+const handleDecline = () => {
+    if (!activePopup) return;
+    setNotifications((ns) =>
+        ns.some((n) => n.id === activePopup.notification.id)
+            ? ns
+            : [activePopup.notification, ...ns]
+    );
+    dismissActivePopup();
+};
 
   const showChallengePopup = useCallback((notif: Notification) => {
     if (popupTimer.current) clearInterval(popupTimer.current);
-    setPopup({ notification: notif, secondsLeft: POPUP_DURATION });
+    setActivePopup({ notification: notif, secondsLeft: POPUP_DURATION });
 
     popupTimer.current = setInterval(() => {
-      setPopup((prev) => {
+      setActivePopup((prev) => {
         if (!prev) return null;
         if (prev.secondsLeft <= 1) {
           clearInterval(popupTimer.current!);
@@ -283,59 +302,96 @@ export function NotificationBell() {
     }, 1000);
   }, []);
 
+  useEffect(() => {
+    if (activePopup || popupQueue.length === 0) return;
+    const next = popupQueue[0];
+    setActivePopup({ notification: next, secondsLeft: POPUP_DURATION });
+
+    popupTimer.current = setInterval(() => {
+        setActivePopup((prev) => {
+            if (!prev) return null;
+            if (prev.secondsLeft <= 1) {
+                clearInterval(popupTimer.current!);
+                setPopupQueue((q) => q.slice(1));   // remove head, triggers next
+                setNotifications((ns) =>
+                    ns.some((n) => n.id === prev.notification.id)
+                        ? ns
+                        : [prev.notification, ...ns]
+                );
+                return null;
+            }
+            return { ...prev, secondsLeft: prev.secondsLeft - 1 };
+        });
+    }, 1000);
+}, [popupQueue, activePopup]);
+
+const pendingToasts = useRef<Notification[]>([]);
+const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+const queueToast = useCallback((notif: Notification) => {
+    pendingToasts.current.push(notif);
+    if (toastTimer.current) return;
+    toastTimer.current = setTimeout(() => {
+        const batch = pendingToasts.current;
+        if (batch.length === 1) {
+            toast(batch[0].title, { description: batch[0].body });
+        } else {
+            toast(`${batch.length} new notifications`, {
+                description: batch.map((n) => n.title).join(" · "),
+            });
+        }
+        pendingToasts.current = [];
+        toastTimer.current = null;
+    }, 1500);
+}, []);
+
+// Enqueue instead of showChallengePopup
+const enqueueChallengePopup = useCallback((notif: Notification) => {
+    setPopupQueue((prev) => {
+        if (prev.some((n) => n.id === notif.id)) return prev;  // dedup
+        if (prev.length >= 2) return prev;                      // cap at 2 queued
+        return [...prev, notif];
+    });
+}, []);
+
   // WebSocket push
   useEffect(() => {
     if (!address) return;
     const ws = new WebSocket(`${getWsNotifyUrl()}/${address.toLowerCase()}`);
 
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data) as Notification & { type: string };
-      if (data.type === "unread_count") return;
+    const data = JSON.parse(event.data) as Notification & { type: string };
+    if (data.type === "unread_count") return;
 
-      const notif: Notification = {
-        id: data.id ?? String(Date.now()),
-        type: data.type,
-        title: data.title,
-        body: data.body,
-        data: data.data,
-        isRead: false,
+    const notif: Notification = {
+        id:        data.id ?? String(Date.now()),
+        type:      data.type,
+        title:     data.title,
+        body:      data.body,
+        data:      data.data,
+        isRead:    false,
         createdAt: new Date().toISOString(),
-      };
-
-      // Public challenge invite → show popup
-      if (data.type === "public_challenge" || data.type === "friend_invite" || data.type === "rematch_request") {
-        setNotifications((prev) =>
-          prev.some((n) => n.id === notif.id) ? prev : [notif, ...prev]
-        );
-        showChallengePopup(notif);
-      } else {
-        // Other notifications → sonner toast + inbox
-        setNotifications((prev) => [notif, ...prev]);
-        toast(notif.title, { description: notif.body });
-      }
     };
+
+    if (
+        data.type === "public_challenge" ||
+        data.type === "friend_invite" ||
+        data.type === "rematch_request"
+    ) {
+        setNotifications((prev) =>
+            prev.some((n) => n.id === notif.id) ? prev : [notif, ...prev]
+        );
+        enqueueChallengePopup(notif);   // ← was showChallengePopup
+    } else {
+        setNotifications((prev) => [notif, ...prev]);
+        queueToast(notif);              // ← was toast() directly
+    }
+};
 
     return () => ws.close();
   }, [address, showChallengePopup]);
 
-  const handleAccept = () => {
-    if (!popup) return;
-    const code = popup.notification.data?.code;
-    if (popupTimer.current) clearInterval(popupTimer.current);
-    
-    // Mark as read immediately
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === popup.notification.id ? { ...n, isRead: true } : n))
-    );
-    setPopup(null);
-    
-    if (code) router.push(`/challenge/${code}/pre-lobby`);
-  };
-
-  const handleDecline = () => {
-    if (!popup) return;
-    dismissPopup(popup.notification);
-  };
+ 
 
   const markAllRead = async () => {
     if (!address) return;
@@ -352,15 +408,15 @@ export function NotificationBell() {
 
   return (
     <>
-      {popup && (
+    {activePopup && (
         <PopupPortal>
-          <ChallengePopupOverlay
-            popup={popup}
-            onAccept={handleAccept}
-            onDecline={handleDecline}
-          />
+            <ChallengePopupOverlay
+                popup={activePopup}
+                onAccept={handleAccept}
+                onDecline={handleDecline}
+            />
         </PopupPortal>
-      )}
+    )}
 
       <div className="relative" ref={panelRef}>
         <button

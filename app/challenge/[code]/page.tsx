@@ -612,7 +612,11 @@ export default function ChallengePage() {
         setPlayers(playerEntries);
         const amCreator = userWalletAddress &&
           d.challenge.creator?.toLowerCase() === userWalletAddress.toLowerCase();
+        const alreadyInGame = userWalletAddress && Object.keys(d.challenge.players ?? {}).some(
+          (w: string) => w.toLowerCase() === userWalletAddress.toLowerCase()
+        );
         if (amCreator) { setIsCreator(true); setHasJoined(true); }
+        else if (alreadyInGame) { setHasJoined(true); }
         if (d.challenge.status === "active")        setPhase("question");
         else if (d.challenge.status === "finished") setPhase("game_over");
         else                                        setPhase("lobby");

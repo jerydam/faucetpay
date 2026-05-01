@@ -355,14 +355,18 @@ export default function PreLobbyPage() {
 
   const [pendingCounter, setPendingCounter] = useState<CounterOffer | null>(null);
   const [counterTarget, setCounterTarget]   = useState<Offer | null>(null);
-
-  const wsRef = useRef<WebSocket | null>(null);
-
   const amCreator = useMemo(
     () => challenge?.creator?.toLowerCase() === myWallet,
     [challenge, myWallet],
   );
 
+  const wsRef = useRef<WebSocket | null>(null);
+  const amCreatorRef = useRef(amCreator);
+  const challengeRef = useRef(challenge);
+  useEffect(() => { amCreatorRef.current = amCreator; }, [amCreator]);
+  useEffect(() => { challengeRef.current = challenge; }, [challenge]);
+
+  
   // ── Load challenge ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!code) return;
@@ -414,68 +418,97 @@ useEffect(() => {
     return () => clearTimeout(t);
   }, [countdown, pageState]);
 
-  // ── WebSocket ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!code || !myWallet) return;
-    const ws = new WebSocket(`${getWsBase()}/ws/challenge/${code}`);
-    wsRef.current = ws;
+    //  WebSocket useEffect ─────────────────────────
+useEffect(() => {
+  if (!code || !myWallet) return;
 
-    ws.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(ev.data);
+  const ws = new WebSocket(`${getWsBase()}/ws/challenge/${code}`);
+  wsRef.current = ws;
 
-        if (msg.type === "pre_lobby_offer") {
-          const incoming: Offer = {
-            wallet:   msg.wallet,
-            username: msg.username,
-            amount:   msg.amount,
-            sentAt:   msg.sentAt ?? new Date().toISOString(),
-          };
-          setOffers(prev => {
-            const without = prev.filter(o => o.wallet.toLowerCase() !== incoming.wallet.toLowerCase());
-            return [incoming, ...without].sort((a, b) => b.amount - a.amount);
-          });
+  ws.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+
+      // Always read from refs — never from the closure snapshot
+      const currentAmCreator = amCreatorRef.current;
+      const currentChallenge = challengeRef.current;
+
+      if (msg.type === "pre_lobby_offer") {
+        const incoming: Offer = {
+          wallet:   msg.wallet,
+          username: msg.username,
+          amount:   msg.amount,
+          sentAt:   msg.sentAt ?? new Date().toISOString(),
+        };
+        setOffers(prev => {
+          const without = prev.filter(
+            o => o.wallet.toLowerCase() !== incoming.wallet.toLowerCase(),
+          );
+          return [incoming, ...without].sort((a, b) => b.amount - a.amount);
+        });
+      }
+
+      if (msg.type === "pre_lobby_counter") {
+        const counter: CounterOffer = {
+          fromWallet:   msg.fromWallet,
+          fromName:     msg.fromName ?? "Creator",
+          amount:       msg.amount,
+          sentAt:       msg.sentAt ?? new Date().toISOString(),
+          targetWallet: msg.targetWallet,
+        };
+        // Only show the counter to the specific challenger it was aimed at
+        if (
+          !currentAmCreator &&
+          counter.targetWallet?.toLowerCase() === myWallet
+        ) {
+          setPendingCounter(counter);
+          setMyOffer(counter.amount);
+          setPageState("countered");
+          toast.info(
+            `${counter.fromName} countered with ${fmt(counter.amount)} ${currentChallenge?.token}`,
+          );
         }
+      }
 
-        if (msg.type === "pre_lobby_counter") {
-          const counter: CounterOffer = {
-            fromWallet:   msg.fromWallet,
-            fromName:     msg.fromName ?? "Creator",
-            amount:       msg.amount,
-            sentAt:       msg.sentAt ?? new Date().toISOString(),
-            targetWallet: msg.targetWallet,
-          };
-          if (!amCreator && counter.targetWallet?.toLowerCase() === myWallet) {
-            setPendingCounter(counter);
-            setMyOffer(counter.amount);
-            setPageState("countered");
-            toast.info(`${counter.fromName} countered with ${fmt(counter.amount)} ${challenge?.token}`);
-          }
+      if (
+        msg.type === "offer_accepted" ||
+        msg.type === "pre_lobby_accepted"
+      ) {
+        const winner = (msg.winner ?? msg.challenger ?? "").toLowerCase();
+        const amount: number = msg.amount;
+        setLockedAmount(amount);
+
+        // creator always wins the routing; challenger wins only if their
+        // wallet matches the accepted wallet
+        const iWon = currentAmCreator ? true : winner === myWallet;
+
+        if (iWon) {
+          setPageState("accepted");
+          toast.success("🎉 Deal locked! Heading to lobby…");
+          setTimeout(
+            () => router.push(`/challenge/${code}?stake=${amount}&agreed=1`),
+            1800,
+          );
+        } else {
+          setPageState("rejected");
         }
+      }
 
-        if (msg.type === "offer_accepted" || msg.type === "pre_lobby_accepted") {
-          const winner = (msg.winner ?? msg.challenger ?? "").toLowerCase();
-          const amount: number = msg.amount;
-          setLockedAmount(amount);
-          const iWon = amCreator ? true : winner === myWallet;
-          if (iWon) {
-            setPageState("accepted");
-            toast.success("🎉 Deal locked! Heading to lobby…");
-            setTimeout(() => router.push(`/challenge/${code}?stake=${amount}&agreed=1`), 1800);
-          } else {
-            setPageState("rejected");
-          }
-        }
+      if (msg.type === "pre_lobby_offers_snapshot") {
+        setOffers(msg.offers ?? []);
+      }
+    } catch {}
+  };
 
-        if (msg.type === "pre_lobby_offers_snapshot") {
-          setOffers(msg.offers ?? []);
-        }
-      } catch {}
-    };
-
-    return () => { ws.close(); wsRef.current = null; };
-  }, [code, myWallet, amCreator, challenge, router]);
-
+  return () => {
+    ws.close();
+    wsRef.current = null;
+  };
+  // ── ONLY reconnect when the room or the user changes ─────────────────────
+  // challenge and amCreator are intentionally excluded — they are accessed
+  // via refs above. Including them caused the WS to close/reopen on every
+  // state update, creating a window where pre_lobby_accepted was missed.
+}, [code, myWallet, router]);
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const handleSubmitOffer = useCallback(async (amount: number) => {

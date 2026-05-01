@@ -104,22 +104,56 @@ export default function QuizListPage() {
   const totalWon = useMemo(()=>wins.reduce((s,h)=>s+h.stake_amount*2,0),[wins]);
 
   const handleJoinAction = async (code: string) => {
-    if(code.length<4) return;
-    setNavigating(code);
-    if(!userWalletAddress){ router.push(`/challenge/${code}/pre-lobby`); return }
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/challenge/${code}`);
-      const data = await res.json();
-      if(data.success&&data.challenge){
-        const c=data.challenge, w=userWalletAddress.toLowerCase();
-        const isCreator=c.creator?.toLowerCase()===w;
-        const isPlayer=c.players&&Object.keys(c.players).some((p:string)=>p.toLowerCase()===w);
-        const cnt=Object.keys(c.players||{}).length;
-        if(isCreator) router.push(cnt>=2?`/challenge/${code}`:`/challenge/${code}/pre-lobby`);
-        else router.push(isPlayer?`/challenge/${code}`:`/challenge/${code}/pre-lobby`);
-      } else router.push(`/challenge/${code}/pre-lobby`);
-    } catch { router.push(`/challenge/${code}/pre-lobby`) }
-  };
+  if (code.length < 4) return;
+  setNavigating(code);
+
+  if (!userWalletAddress) {
+    router.push(`/challenge/${code}/pre-lobby`);
+    setNavigating(null);
+    return;
+  }
+
+  try {
+    const res  = await fetch(`${API_BASE_URL}/api/challenge/${code}`);
+    const data = await res.json();
+
+    if (data.success && data.challenge) {
+      const c           = data.challenge;
+      const w           = userWalletAddress.toLowerCase();
+      const playerKeys  = Object.keys(c.players || {});
+      const isCreator   = c.creator?.toLowerCase() === w;
+      const isPlayer    = playerKeys.some((p: string) => p.toLowerCase() === w);
+      const isFull      = playerKeys.length >= 2;
+
+      // Already a participant — go straight to lobby/game
+      if (isCreator || isPlayer) {
+        router.push(`/challenge/${code}`);
+        return;
+      }
+
+      // Challenge is full and this user has no slot
+      if (isFull) {
+        toast.error("This challenge is already full.");
+        setNavigating(null);
+        return;
+      }
+
+      // Challenge is no longer accepting players
+      if (c.status === "active" || c.status === "finished") {
+        toast.error("This challenge is no longer open.");
+        setNavigating(null);
+        return;
+      }
+
+      // Open slot — go negotiate in pre-lobby
+      router.push(`/challenge/${code}/pre-lobby`);
+    } else {
+      router.push(`/challenge/${code}/pre-lobby`);
+    }
+  } catch {
+    router.push(`/challenge/${code}/pre-lobby`);
+  }
+};
 
   return (
     <>

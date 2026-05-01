@@ -483,7 +483,7 @@ export default function ChallengePage() {
 
   const { address: userWalletAddress } = useWallet();
   const myWallet = useMemo(() => userWalletAddress?.toLowerCase() ?? "", [userWalletAddress]);
-
+  const [claimedCodes, setClaimedCodes] = useState<Set<string>>(new Set());
   const searchParams     = useSearchParams();
   const agreedStake      = searchParams.get("stake");
   const cameFromPreLobby = searchParams.get("agreed") === "1";
@@ -618,7 +618,31 @@ export default function ChallengePage() {
         if (amCreator) { setIsCreator(true); setHasJoined(true); }
         else if (alreadyInGame) { setHasJoined(true); }
         if (d.challenge.status === "active")        setPhase("question");
-        else if (d.challenge.status === "finished") setPhase("game_over");
+        else if (d.challenge.status === "finished") {
+          setPhase("game_over");
+          
+          // ── Hydrate final scores from REST so returning players see results ──
+          const playerEntries = d.challenge.players ?? {};
+          const hydratedScores: Record<string, FinalScore> = {};
+          Object.entries(playerEntries).forEach(([wallet, data]: [string, any]) => {
+            hydratedScores[wallet] = {
+              username: data.username,
+              points: data.points ?? 0,
+            };
+          });
+          setFinalScores(hydratedScores);
+          
+          // Hydrate winner and outcome
+          const winnerWallet = d.challenge.winner ?? null;
+          setWinner(winnerWallet);
+          if (!winnerWallet) {
+            setGameOutcome("tie");
+          } else {
+            setGameOutcome("winner");
+          }
+          
+          setCanRematch(!!d.challenge.canRematch);
+        }
         else                                        setPhase("lobby");
       })
       .catch(() => toast.error("Failed to load challenge"));
@@ -1058,6 +1082,7 @@ export default function ChallengePage() {
     toast.info("Claim transaction sent...");
     await publicClient.waitForTransactionReceipt({ hash: txHash });
     toast.success("Funds transferred to your wallet! 🏆");
+    setClaimedCodes(prev => new Set(prev).add(claimCode)); 
 
     await fetch(`${API_BASE_URL}/api/challenge/claim`, {
       method: "POST",
@@ -1230,94 +1255,183 @@ useEffect(() => {
   }
 
   if (phase === "game_over") {
-    const sortedPlayers = Object.entries(finalScores).sort(([, a], [, b]) => b.points - a.points);
-    const isTie = gameOutcome === "tie";
+  const sortedPlayers = Object.entries(finalScores).sort(([, a], [, b]) => b.points - a.points);
+  const isTie = gameOutcome === "tie";
+  const isWinner = winner === myWallet;
+
+  // If scores haven't loaded yet (rare edge case), show skeleton
+  if (sortedPlayers.length === 0) {
     return (
-      <>
-        {globalOverlays}
-        <div className="fixed inset-0 bg-background flex flex-col overflow-auto">
-          <Confetti active={showConfetti} />
-          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
-            <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-              <button onClick={() => router.back()} className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm font-bold transition-colors">
-                <ArrowLeft className="h-4 w-4" /> Back
-              </button>
-              <Badge variant="outline" className="font-mono">{code}</Badge>
+      <div className="flex flex-col min-h-screen bg-background">
+        <Header pageTitle="Challenge" />
+        <div className="flex flex-col items-center justify-center flex-1 gap-3 px-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground font-medium">Loading results…</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {globalOverlays}
+      <div className="fixed inset-0 bg-background flex flex-col overflow-auto">
+        <Confetti active={showConfetti} />
+        
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
+          <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+            <button onClick={() => router.back()} className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm font-bold transition-colors">
+              <ArrowLeft className="h-4 w-4" /> Back
+            </button>
+            <Badge variant="outline" className="font-mono">{code}</Badge>
+          </div>
+        </div>
+
+        <div className="max-w-2xl mx-auto w-full px-4 py-8 pb-24 space-y-5">
+          
+          {/* Outcome hero */}
+          <div className="text-center space-y-2">
+            <div className="text-6xl">{isTie ? "🤝" : isWinner ? "🏆" : "🎯"}</div>
+            <h1 className="text-3xl font-black text-foreground">
+              {isTie ? "It's a tie!" : isWinner ? "You won!" : "Game over"}
+            </h1>
+            <p className="text-muted-foreground text-sm">{challenge?.topic}</p>
+            <div className="inline-flex items-center gap-1.5 bg-muted/50 border border-border rounded-full px-3 py-1 text-xs font-bold text-muted-foreground">
+              <span className="font-mono">{code}</span>
+              <span>·</span>
+              <span>{challenge?.stake} {challenge?.token} each</span>
+              <span>·</span>
+              <span className="text-primary">🏆 {totalPool} {challenge?.token} pool</span>
             </div>
           </div>
-          <div className="max-w-2xl mx-auto w-full px-4 py-8 pb-24 space-y-6">
-            <div className="text-center space-y-2">
-              <div className="text-6xl">{isTie ? "🤝" : winner === myWallet ? "🏆" : "🎯"}</div>
-              <h1 className="text-3xl font-black text-foreground">
-                {isTie ? "It's a tie!" : winner === myWallet ? "You won!" : "Game over"}
-              </h1>
-              <p className="text-muted-foreground text-sm">{challenge?.topic}</p>
+
+          {/* Leaderboard */}
+          <div className="bg-card rounded-2xl border border-border overflow-hidden">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-yellow-500" /> Final Leaderboard
+              </h2>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {sortedPlayers.length} player{sortedPlayers.length !== 1 ? "s" : ""}
+              </span>
             </div>
-            <div className="bg-card rounded-2xl border border-border overflow-hidden">
-              <div className="px-4 py-3 border-b border-border">
-                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <Trophy className="h-4 w-4 text-yellow-500" /> Final Scores
-                </h2>
-              </div>
-              <div className="divide-y divide-border">
-                {sortedPlayers.map(([wallet, data], i) => {
-                  const isMe = wallet.toLowerCase() === myWallet;
-                  return (
-                    <div key={wallet} className={cn("flex items-center gap-3 px-4 py-3", isMe && "bg-blue-50 dark:bg-blue-950/20")}>
-                      <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shrink-0",
-                        i === 0 ? "bg-yellow-400 text-yellow-900" : "bg-muted text-muted-foreground"
-                      )}>
-                        {i === 0 ? "🥇" : "🥈"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-foreground text-sm">{data.username}</p>
-                        {isMe && <Badge className="text-[9px] h-4 px-1 bg-primary text-primary-foreground border-0">YOU</Badge>}
-                      </div>
-                      <p className="font-black text-xl text-foreground">{data.points}</p>
+            <div className="divide-y divide-border">
+              {sortedPlayers.map(([wallet, data], i) => {
+                const isMe = wallet.toLowerCase() === myWallet;
+                const isThisWinner = wallet.toLowerCase() === winner?.toLowerCase();
+                const medals = ["🥇", "🥈", "🥉"];
+                return (
+                  <div key={wallet} className={cn(
+                    "flex items-center gap-3 px-4 py-4 transition-colors",
+                    isMe && "bg-blue-50 dark:bg-blue-950/20",
+                    isThisWinner && !isMe && "bg-yellow-50/50 dark:bg-yellow-950/10"
+                  )}>
+                    <div className="text-xl w-8 text-center shrink-0">
+                      {medals[i] ?? `${i + 1}`}
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-foreground text-sm">{data.username}</p>
+                        {isMe && (
+                          <Badge className="text-[9px] h-4 px-1.5 bg-primary text-primary-foreground border-0">YOU</Badge>
+                        )}
+                        {isThisWinner && (
+                          <Badge className="text-[9px] h-4 px-1.5 bg-yellow-400 text-yellow-900 border-0">WINNER</Badge>
+                        )}
+                        {isTie && (
+                          <Badge variant="outline" className="text-[9px] h-4 px-1.5">TIE</Badge>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                        {wallet.slice(0, 6)}…{wallet.slice(-4)}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-black text-2xl text-foreground leading-none">{data.points}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">pts</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            {myClaim && (
-              <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-4 space-y-3">
-                <p className="font-bold text-yellow-700 dark:text-yellow-400 text-sm">🏆 Reward ready to claim!</p>
-                <p className="text-xs text-yellow-600 dark:text-yellow-500">{myClaim.win_amount} {myClaim.token_symbol}</p>
-                <Button className="w-full h-11 dd-btn font-bold border-0" onClick={() => handleClaim(code)} disabled={isClaiming}>
-                  {isClaiming ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Claiming…</> : "Claim Reward"}
-                </Button>
+          </div>
+
+          {/* Claim / already claimed */}
+          {myClaim && (
+            <div className={cn(
+              "rounded-2xl p-4 space-y-3 border",
+              claimedCodes.has(code)
+                ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800"
+                : "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
+            )}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{claimedCodes.has(code) ? "✅" : "🏆"}</span>
+                <div>
+                  <p className={cn("font-bold text-sm", claimedCodes.has(code) ? "text-emerald-700 dark:text-emerald-400" : "text-yellow-700 dark:text-yellow-400")}>
+                    {claimedCodes.has(code) ? "Reward claimed!" : "Reward ready to claim"}
+                  </p>
+                  <p className={cn("text-xs", claimedCodes.has(code) ? "text-emerald-600 dark:text-emerald-500" : "text-yellow-600 dark:text-yellow-500")}>
+                    {myClaim.win_amount} {myClaim.token_symbol} {claimedCodes.has(code) ? "sent to your wallet" : "waiting in escrow"}
+                  </p>
+                </div>
               </div>
+              <Button
+                className="w-full h-11 font-bold border-0 transition-all"
+                onClick={() => handleClaim(code)}
+                disabled={isClaiming || claimedCodes.has(code)}
+                style={claimedCodes.has(code)
+                  ? { background: '#16a34a', opacity: 1, cursor: 'default' }
+                  : {}}
+              >
+                {isClaiming
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Claiming…</>
+                  : claimedCodes.has(code)
+                  ? <><Check className="mr-2 h-4 w-4" /> Reward Claimed</>
+                  : "Claim Reward"}
+              </Button>
+            </div>
+          )}
+
+          {/* Winner but no pending claim found — may already be claimed server-side */}
+          {isWinner && !myClaim && phase === "game_over" && (
+            <div className="bg-muted/50 border border-border rounded-2xl p-4 text-center space-y-1">
+              <p className="text-sm font-bold text-foreground">Reward already sent ✓</p>
+              <p className="text-xs text-muted-foreground">Your winnings were transferred to your wallet.</p>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex flex-col gap-3">
+            {canRematch && (
+              <button
+                onClick={() => sendRematchInvite({ code, userWalletAddress: userWalletAddress!, setRematchPending, setRematchCountdown, rematchTimerRef, rematchTimeoutRef })}
+                disabled={isRequestingRematch || rematchPending}
+                className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-black text-base hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {rematchPending ? (
+                  <><Loader2 className="h-5 w-5 animate-spin" /> Waiting{rematchCountdown !== null && rematchCountdown > 0 ? ` (${rematchCountdown}s)` : "…"}</>
+                ) : isRequestingRematch ? (
+                  <><Loader2 className="h-5 w-5 animate-spin" /> Creating challenge…</>
+                ) : (
+                  <>🔁 Request Rematch</>
+                )}
+              </button>
             )}
-            <div className="flex flex-col gap-3">
-              {canRematch && (
-                <button
-                  onClick={() => sendRematchInvite({ code, userWalletAddress: userWalletAddress!, setRematchPending, setRematchCountdown, rematchTimerRef, rematchTimeoutRef })}
-                  disabled={isRequestingRematch || rematchPending}
-                  className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-black text-base hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {rematchPending ? (
-                    <><Loader2 className="h-5 w-5 animate-spin" /> Waiting{rematchCountdown !== null && rematchCountdown > 0 ? ` (${rematchCountdown}s)` : "…"}</>
-                  ) : isRequestingRematch ? (
-                    <><Loader2 className="h-5 w-5 animate-spin" /> Creating challenge…</>
-                  ) : (
-                    <>🔁 Request Rematch</>
-                  )}
-                </button>
-              )}
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/challenge")}>
-                  <Home className="mr-2 h-4 w-4" /> Hub
-                </Button>
-                <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/challenge/create")}>
-                  <Plus className="mr-2 h-4 w-4" /> New
-                </Button>
-              </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/challenge")}>
+                <Home className="mr-2 h-4 w-4" /> Hub
+              </Button>
+              <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/challenge/create-challenge")}>
+                <Plus className="mr-2 h-4 w-4" /> New
+              </Button>
             </div>
           </div>
         </div>
-      </>
-    );
-  }
+      </div>
+    </>
+  );
+}
 
   if (phase === "countdown") {
     return (

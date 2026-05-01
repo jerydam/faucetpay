@@ -69,6 +69,8 @@ export default function QuizListPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [codeInput, setCodeInput] = useState("");
   const [navigating, setNavigating] = useState<string|null>(null);
+  const [showFullModal, setShowFullModal] = useState(false);
+  const [claimedCodes, setClaimedCodes] = useState<Set<string>>(new Set());
 
   const fetchLobby = async (silent=false) => {
     if(!silent) setIsLoading(true); else setIsRefreshing(true);
@@ -133,7 +135,7 @@ export default function QuizListPage() {
 
       // Challenge is full and this user has no slot
       if (isFull) {
-        toast.error("This challenge is already full.");
+        setShowFullModal(true);
         setNavigating(null);
         return;
       }
@@ -345,6 +347,25 @@ export default function QuizListPage() {
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
   </svg>
 </button>
+{showFullModal && (
+  <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:'0 24px' }}>
+    <div style={{ background:'var(--dd-bg)', borderRadius:20, padding:28, maxWidth:340, width:'100%', border:'1.5px solid var(--dd-card-border)', textAlign:'center' }}>
+      <div style={{ fontSize:48, marginBottom:12 }}>🔒</div>
+      <h2 className="d" style={{ fontSize:22, fontWeight:900, color:'var(--dd-text)', marginBottom:8 }}>Challenge Full</h2>
+      <p style={{ fontSize:13, color:'var(--dd-text-dim)', marginBottom:24, lineHeight:1.5 }}>
+        This duel already has two players. Create your own challenge to start a new game.
+      </p>
+      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+        <button className="btn-blue" onClick={() => { setShowFullModal(false); router.push('/challenge/create-challenge'); }} style={{ height:46, borderRadius:12, fontSize:14 }}>
+          Create New Challenge
+        </button>
+        <button className="btn-ghost" onClick={() => setShowFullModal(false)} style={{ height:40, borderRadius:12, fontSize:13 }}>
+          Go Back
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </>
   );
 }

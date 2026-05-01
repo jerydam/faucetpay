@@ -481,7 +481,7 @@ export default function CreateChallengePage() {
                 onClick={() => setTokenSymbol(t.symbol)}
                 className={cn(
                   "flex items-center gap-2.5 px-3 py-2.5 rounded-2xl border-2 text-left transition-all",
-                  tokenSymbol === t.symbol ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-500/10" : "border-border hover:border-primary/40 bg-card"
+                  tokenSymbol === t.symbol ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10" : "border-border hover:border-primary/40 bg-card"
                 )}
               >
                 <img src={t.logoUrl} alt={t.symbol} className="w-8 h-8 rounded-full object-cover shrink-0" onError={e => { (e.target as HTMLImageElement).src = "/fallback-token.png"; }} />

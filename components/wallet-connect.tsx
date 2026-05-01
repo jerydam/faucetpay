@@ -149,7 +149,7 @@ export function WalletConnectButton({ className }: WalletConnectButtonProps) {
         )}
       >
         <Wallet className="mr-2 h-4 w-4" />
-        {hasWallet ? "Connect Wallet" : "No Wallet Detected"}
+        {hasWallet ? "Join" : "No User" }
       </Button>
     )
   }

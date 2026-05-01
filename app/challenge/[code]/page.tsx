@@ -92,7 +92,7 @@ interface FinalScore { username: string; points: number }
 const OPTION_STYLES: Record<string, { bg: string; shape: string; ring: string }> = {
   A: { bg: "bg-red-500 hover:bg-red-600",     shape: "▲", ring: "ring-red-400"    },
   B: { bg: "bg-blue-500 hover:bg-blue-600",   shape: "◆", ring: "ring-blue-400"   },
-  C: { bg: "bg-yellow-500 hover:bg-yellow-600", shape: "●", ring: "ring-yellow-400" },
+  C: { bg: "bg-blue-500 hover:bg-blue-600", shape: "●", ring: "ring-blue-400" },
   D: { bg: "bg-green-500 hover:bg-green-600", shape: "■", ring: "ring-green-400"   },
 };
 
@@ -100,7 +100,7 @@ const OPTION_STYLES: Record<string, { bg: string; shape: string; ring: string }>
 
 function LinearTimer({ seconds, total }: { seconds: number; total: number }) {
   const pct   = Math.max(0, (seconds / total) * 100);
-  const color = pct > 50 ? "bg-green-500" : pct > 25 ? "bg-yellow-500" : "bg-red-500";
+  const color = pct > 50 ? "bg-green-500" : pct > 25 ? "bg-blue-500" : "bg-red-500";
   return (
     <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 overflow-hidden shrink-0">
       <div className={cn("h-full transition-all duration-300 ease-linear", color)} style={{ width: `${pct}%` }} />
@@ -1320,7 +1320,7 @@ useEffect(() => {
           <div className="bg-card rounded-2xl border border-border overflow-hidden">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-yellow-500" /> Final Leaderboard
+                <Trophy className="h-4 w-4 text-blue-500" /> Final Leaderboard
               </h2>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                 {sortedPlayers.length} player{sortedPlayers.length !== 1 ? "s" : ""}
@@ -1335,7 +1335,7 @@ useEffect(() => {
                   <div key={wallet} className={cn(
                     "flex items-center gap-3 px-4 py-4 transition-colors",
                     isMe && "bg-blue-50 dark:bg-blue-950/20",
-                    isThisWinner && !isMe && "bg-yellow-50/50 dark:bg-yellow-950/10"
+                    isThisWinner && !isMe && "bg-blue-50/50 dark:bg-blue-950/10"
                   )}>
                     <div className="text-xl w-8 text-center shrink-0">
                       {medals[i] ?? `${i + 1}`}
@@ -1347,7 +1347,7 @@ useEffect(() => {
                           <Badge className="text-[9px] h-4 px-1.5 bg-primary text-primary-foreground border-0">YOU</Badge>
                         )}
                         {isThisWinner && (
-                          <Badge className="text-[9px] h-4 px-1.5 bg-yellow-400 text-yellow-900 border-0">WINNER</Badge>
+                          <Badge className="text-[9px] h-4 px-1.5 bg-blue-400 text-blue-900 border-0">WINNER</Badge>
                         )}
                         {isTie && (
                           <Badge variant="outline" className="text-[9px] h-4 px-1.5">TIE</Badge>
@@ -1373,15 +1373,15 @@ useEffect(() => {
               "rounded-2xl p-4 space-y-3 border",
               claimedCodes.has(code)
                 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800"
-                : "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
+                : "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
             )}>
               <div className="flex items-center gap-2">
                 <span className="text-lg">{claimedCodes.has(code) ? "✅" : "🏆"}</span>
                 <div>
-                  <p className={cn("font-bold text-sm", claimedCodes.has(code) ? "text-emerald-700 dark:text-emerald-400" : "text-yellow-700 dark:text-yellow-400")}>
+                  <p className={cn("font-bold text-sm", claimedCodes.has(code) ? "text-emerald-700 dark:text-emerald-400" : "text-blue-700 dark:text-blue-400")}>
                     {claimedCodes.has(code) ? "Reward claimed!" : "Reward ready to claim"}
                   </p>
-                  <p className={cn("text-xs", claimedCodes.has(code) ? "text-emerald-600 dark:text-emerald-500" : "text-yellow-600 dark:text-yellow-500")}>
+                  <p className={cn("text-xs", claimedCodes.has(code) ? "text-emerald-600 dark:text-emerald-500" : "text-blue-600 dark:text-blue-500")}>
                     {myClaim.win_amount} {myClaim.token_symbol} {claimedCodes.has(code) ? "sent to your wallet" : "waiting in escrow"}
                   </p>
                 </div>
@@ -1741,7 +1741,7 @@ useEffect(() => {
                   const statusLabel = (() => {
                     if (p.ready)      return { text: "Ready ✓",        cls: "text-emerald-500"      };
                     if (p.txVerified) return { text: "Stake verified",  cls: "text-blue-400"         };
-                    if (isHost)       return { text: "Awaiting stake…", cls: "text-yellow-500"       };
+                    if (isHost)       return { text: "Awaiting stake…", cls: "text-blue-500"       };
                     return              { text: "Awaiting stake…",     cls: "text-muted-foreground"  };
                   })();
                   return (

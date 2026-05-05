@@ -52,12 +52,7 @@ const TOKENS_BY_CHAIN: Record<number, TokenConfig[]> = {
     { address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", symbol: "USDC",  decimals: 6,  logoUrl: "/usdc.jpg"   },
     { address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", symbol: "USDT",  decimals: 6,  logoUrl: "/usdt.jpg"   },
   ],
-  8453: [
-    { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC",  decimals: 6,  logoUrl: "/usdc.jpg"   },
-  ],
-  1135: [
-    { address: "0xac485391EB2d7D88253a7F1eF18C37f4242D1A24", symbol: "LSK",   decimals: 18, logoUrl: "/lsk.png"    },
-  ],
+  
 };
 
 const CHAIN_NAMES: Record<number, string> = {

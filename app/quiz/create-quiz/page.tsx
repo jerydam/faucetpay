@@ -786,14 +786,7 @@ export default function CreateQuizPage() {
           isUploading={isUploadingCover} setIsUploading={setIsUploadingCover} />
       </div>
 
-      {creatorUsername && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-          <span className="text-xs text-emerald-700 dark:text-emerald-300">
-            Creating as <span className="font-black">@{creatorUsername}</span>
-          </span>
-        </div>
-      )}
+      
 
       {/* Wallet / network status — gated on address (reliable), not chainId */}
       {userWalletAddress ? (

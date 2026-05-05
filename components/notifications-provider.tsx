@@ -261,15 +261,26 @@ export function NotificationBell() {
 }, []);
 
 const handleAccept = () => {
-    if (!activePopup) return;
-    const code = activePopup.notification.data?.code;
-    if (popupTimer.current) clearInterval(popupTimer.current);
-    setNotifications((prev) =>
-        prev.map((n) => (n.id === activePopup.notification.id ? { ...n, isRead: true } : n))
-    );
-    setActivePopup(null);
-    setPopupQueue((prev) => prev.slice(1));
-    if (code) router.push(`/challenge/${code}/pre-lobby`);
+  if (!activePopup) return;
+  const code = activePopup.notification.data?.code;
+  const type = activePopup.notification.type;
+  if (popupTimer.current) clearInterval(popupTimer.current);
+  setNotifications((prev) =>
+    prev.map((n) => (n.id === activePopup.notification.id ? { ...n, isRead: true } : n))
+  );
+  setActivePopup(null);
+  setPopupQueue((prev) => prev.slice(1));
+  if (code) {
+    if (
+      type === "public_challenge" ||
+      type === "challenge_invite" ||   // ← ADD THIS
+      type === "friend_invite" 
+    ) {
+      router.push(`/challenge/${code}/pre-lobby`);
+    } else {
+      router.push(`/challenge/${code}`);
+    }
+  }
 };
 
 const handleDecline = () => {
@@ -360,32 +371,32 @@ const enqueueChallengePopup = useCallback((notif: Notification) => {
     const ws = new WebSocket(`${getWsNotifyUrl()}/${address.toLowerCase()}`);
 
     ws.onmessage = (event) => {
-    const data = JSON.parse(event.data) as Notification & { type: string };
-    if (data.type === "unread_count") return;
+  const data = JSON.parse(event.data) as Notification & { type: string };
+  if (data.type === "unread_count") return;
 
-    const notif: Notification = {
-        id:        data.id ?? String(Date.now()),
-        type:      data.type,
-        title:     data.title,
-        body:      data.body,
-        data:      data.data,
-        isRead:    false,
-        createdAt: new Date().toISOString(),
-    };
+  const notif: Notification = {
+    id:        data.id ?? String(Date.now()),
+    type:      data.type,
+    title:     data.title,
+    body:      data.body,
+    data:      data.data,
+    isRead:    false,
+    createdAt: new Date().toISOString(),
+  };
 
-    if (
-        data.type === "public_challenge" ||
-        data.type === "friend_invite" ||
-        data.type === "rematch_request"
-    ) {
-        setNotifications((prev) =>
-            prev.some((n) => n.id === notif.id) ? prev : [notif, ...prev]
-        );
-        enqueueChallengePopup(notif);   // ← was showChallengePopup
-    } else {
-        setNotifications((prev) => [notif, ...prev]);
-        queueToast(notif);              // ← was toast() directly
-    }
+  if (
+    data.type === "public_challenge" ||
+    data.type === "challenge_invite" ||   // ← ADD THIS
+    data.type === "friend_invite" 
+  ) {
+    setNotifications((prev) =>
+      prev.some((n) => n.id === notif.id) ? prev : [notif, ...prev]
+    );
+    enqueueChallengePopup(notif);
+  } else {
+    setNotifications((prev) => [notif, ...prev]);
+    queueToast(notif);
+  }
 };
 
     return () => ws.close();
@@ -470,14 +481,14 @@ const enqueueChallengePopup = useCallback((notif: Notification) => {
                       onClick={() => {
                         if (!n.isRead) markOneRead(n.id);
                         
-                        if (isInteractive) {
-                          setOpen(false); // Close dropdown
-                          // Route based on type
-                          if (n.type === "public_challenge" || n.type === "friend_invite" || n.type === "rematch_request") {
-                            router.push(`/challenge/${challengeCode}/pre-lobby`);
-                          } else {
-                            router.push(`/challenge/${challengeCode}`);
-                          }
+                        if (
+                          n.type === "public_challenge" ||
+                          n.type === "challenge_invite" ||   // ← ADD THIS
+                          n.type === "friend_invite" 
+                        ) {
+                          router.push(`/challenge/${challengeCode}/pre-lobby`);
+                        } else {
+                          router.push(`/challenge/${challengeCode}`);
                         }
                       }}
                       className={cn(

@@ -1592,76 +1592,11 @@ useEffect(() => {
     challenge.creator?.toLowerCase() === userWalletAddress.toLowerCase();
 
   if (!hasJoined && !amCreator && phase === "lobby") {
-    if (cameFromPreLobby && agreedStake && userWalletAddress) return null;
-    if (!challenge) {
-      return (
-        <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-          <div className="w-full max-w-sm space-y-4 text-center animate-pulse">
-            <div className="h-28 bg-muted rounded-2xl" />
-            <div className="h-6 bg-muted rounded-xl w-3/4 mx-auto" />
-            <div className="h-4 bg-muted rounded-xl w-1/2 mx-auto" />
-            <div className="h-14 bg-muted rounded-2xl" />
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-8">
-        <div className="w-full max-w-sm space-y-6 text-center">
-          <div className="inline-flex flex-col items-center gap-1 bg-card border border-border rounded-2xl px-8 py-5 shadow-lg">
-            <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">Challenge Code</p>
-            <div className="text-5xl font-black tracking-[0.15em] text-foreground">{code}</div>
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-2xl font-black text-foreground">{challenge.topic}</h2>
-            <p className="text-muted-foreground text-sm">
-              Stake: <span className="font-bold text-foreground">{challenge.stake} {challenge.token}</span>
-              {" · "}Creator: <span className="font-medium">{challenge.creatorName}</span>
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-card border border-border rounded-xl p-3 text-center">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Your Stake</p>
-              <p className="font-black text-foreground text-lg">{challenge.stake} <span className="text-sm font-semibold text-muted-foreground">{challenge.token}</span></p>
-            </div>
-            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 text-center">
-              <p className="text-[10px] font-bold text-primary/70 uppercase tracking-wider mb-1">Total Pool</p>
-              <p className="font-black text-primary text-lg">{totalPool} <span className="text-sm font-semibold text-primary/70">{challenge.token}</span></p>
-            </div>
-          </div>
-          {!userWalletAddress ? (
-            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 rounded-xl px-4 py-3 text-blue-700 dark:text-blue-300 text-sm font-medium">
-              Connect your wallet to join
-              <WalletConnectButton />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3">
-                <Avatar className="h-10 w-10 shrink-0">
-                  <AvatarImage src={avatarUrl || undefined} />
-                  <AvatarFallback className="font-bold text-sm">{username?.slice(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="font-bold text-foreground text-sm">{username}</p>
-                  <p className="text-muted-foreground text-xs">{userWalletAddress?.slice(0, 8)}…</p>
-                </div>
-              </div>
-              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 text-left text-xs text-blue-700 dark:text-blue-300 space-y-1">
-                <p className="font-bold flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Automatic on-chain stake</p>
-                <p>Clicking Join will open your wallet to approve <b>{challenge.stake} {challenge.token}</b> on Celo. The transaction is verified automatically.</p>
-              </div>
-              <Button className="w-full h-14 text-lg font-bold dd-btn text-primary-foreground rounded-2xl" onClick={handleStake} disabled={isStaking}>
-                {isStaking ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Approving stake…</> : <><Zap className="mr-2 h-5 w-5" /> Join &amp; Stake {challenge.stake} {challenge.token}</>}
-              </Button>
-              <button onClick={handleSyncStake} disabled={isSyncing} className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors py-1">
-                {isSyncing ? "Checking on-chain…" : "Already staked? Sync my stake"}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
+  if (typeof window !== "undefined") {
+    router.replace(`/challenge/${code}/pre-lobby`);
   }
+  return null;
+}
 
   // ─────────────────────────────────────────────────────────────────────────────
   //  LOBBY

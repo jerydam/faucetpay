@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { useWallet } from "@/hooks/use-wallet"; // Adjust this import path if needed
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
 const WS_BASE  = API_BASE.replace(/^http/, "ws");
 
 // Create a context to hold our set of online wallets

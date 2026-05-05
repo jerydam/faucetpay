@@ -71,23 +71,6 @@ const ALL_TOKENS_BY_CHAIN: Record<number, TokenConfiguration[]> = {
     { address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", name: "Tether",      symbol: "USDT", decimals: 6,  logoUrl: "/usdt.jpg",  description: "Tether USD stablecoin" },
     { address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", name: "USD Coin",    symbol: "USDC", decimals: 6,  logoUrl: "/usdc.jpg",  description: "USD Coin stablecoin" },
   ],
-  1135: [
-    { address: "0x0000000000000000000000000000000000000000", name: "Ethereum", symbol: "ETH", decimals: 18, isNative: true, logoUrl: "/ether.jpeg", description: "Native Ethereum" },
-    { address: "0xac485391EB2d7D88253a7F1eF18C37f4242D1A24", name: "Lisk",     symbol: "LSK", decimals: 18, logoUrl: "/lsk.png",   description: "Lisk native token" },
-  ],
-  42161: [
-    { address: "0x0000000000000000000000000000000000000000", name: "Ethereum", symbol: "ETH",  decimals: 18, isNative: true, logoUrl: "/ether.jpeg", description: "Native Ethereum" },
-    { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", name: "USD Coin", symbol: "USDC", decimals: 6,  logoUrl: "/usdc.jpg",   description: "Native USD Coin" },
-  ],
-  8453: [
-    { address: "0x0000000000000000000000000000000000000000", name: "Ethereum", symbol: "ETH",  decimals: 18, isNative: true, logoUrl: "/ether.jpeg", description: "Native Ethereum" },
-    { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", name: "USD Coin", symbol: "USDC", decimals: 6,  logoUrl: "/usdc.jpg",   description: "Native USD Coin" },
-  ],
-  56: [
-    { address: "0x0000000000000000000000000000000000000000", name: "BNB",        symbol: "BNB",  decimals: 18, isNative: true, logoUrl: "/bnb.png",  description: "Native BNB" },
-    { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", name: "USD Coin",   symbol: "USDC", decimals: 18, logoUrl: "/usdc.jpg", description: "Binance-Peg USD Coin" },
-    { address: "0x55d398326f99059fF775485246999027B3197955", name: "Tether USD",  symbol: "USDT", decimals: 18, logoUrl: "/usdt.jpg", description: "Binance-Peg BSC-USD" },
-  ],
 };
 
 const COINGECKO_IDS: Record<string, string> = {

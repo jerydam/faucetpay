@@ -270,17 +270,7 @@ const handleAccept = () => {
   );
   setActivePopup(null);
   setPopupQueue((prev) => prev.slice(1));
-  if (code) {
-    if (
-      type === "public_challenge" ||
-      type === "challenge_invite" ||   // ← ADD THIS
-      type === "friend_invite" 
-    ) {
-      router.push(`/challenge/${code}/pre-lobby`);
-    } else {
-      router.push(`/challenge/${code}`);
-    }
-  }
+  if (code) navigateToChallenge(code, type);
 };
 
 const handleDecline = () => {
@@ -364,6 +354,55 @@ const enqueueChallengePopup = useCallback((notif: Notification) => {
         return [...prev, notif];
     });
 }, []);
+
+// Add this helper inside NotificationBell, before handleAccept
+const navigateToChallenge = useCallback(async (code: string, type: string) => {
+  // Rematch notifications go straight to game page — WS handles the flow
+  if (type === "rematch_request" || type === "game_over" || type === "reward_available" || type === "player_joined" || type === "game_starting") {
+    router.push(`/challenge/${code}`);
+    return;
+  }
+
+  // For challenge invites and public challenges, check current state first
+  try {
+    const res  = await fetch(`${API_BASE_URL}/api/challenge/${code}`);
+    const data = await res.json();
+
+    if (data.success && data.challenge) {
+      const c          = data.challenge;
+      const w          = address?.toLowerCase() ?? "";
+      const playerKeys = Object.keys(c.players || {});
+      const isCreator  = c.creator?.toLowerCase() === w;
+      const isPlayer   = playerKeys.some((p: string) => p.toLowerCase() === w);
+      const isFull     = playerKeys.length >= 2;
+
+      // Already a participant — go straight to lobby/game
+      if (isCreator || isPlayer) {
+        router.push(`/challenge/${code}`);
+        return;
+      }
+
+      // Challenge is full and this user has no slot
+      if (isFull) {
+        toast.error("This challenge is already full.");
+        return;
+      }
+
+      // No longer accepting
+      if (c.status === "active" || c.status === "finished") {
+        toast.error("This challenge is no longer open.");
+        return;
+      }
+
+      // Open slot — negotiate in pre-lobby
+      router.push(`/challenge/${code}/pre-lobby`);
+    } else {
+      router.push(`/challenge/${code}/pre-lobby`);
+    }
+  } catch {
+    router.push(`/challenge/${code}/pre-lobby`);
+  }
+}, [address, router]);
 
   // WebSocket push
   useEffect(() => {
@@ -480,15 +519,9 @@ const enqueueChallengePopup = useCallback((notif: Notification) => {
                       key={n.id}
                       onClick={() => {
                         if (!n.isRead) markOneRead(n.id);
-                        
-                        if (
-                          n.type === "public_challenge" ||
-                          n.type === "challenge_invite" ||   // ← ADD THIS
-                          n.type === "friend_invite" 
-                        ) {
-                          router.push(`/challenge/${challengeCode}/pre-lobby`);
-                        } else {
-                          router.push(`/challenge/${challengeCode}`);
+                        if (isInteractive && challengeCode) {
+                          setOpen(false);
+                          navigateToChallenge(challengeCode, n.type);
                         }
                       }}
                       className={cn(

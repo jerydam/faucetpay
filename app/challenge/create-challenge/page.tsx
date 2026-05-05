@@ -32,7 +32,7 @@ import { QUIZ_HUB_ABI } from "@/lib/abis";
 // Config
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API_BASE_URL = "https://faucetpay-backend.koyeb.app";
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 const QUIZ_HUB_ADDRESSES: Record<number, `0x${string}`> = {
   42220: (process.env.NEXT_PUBLIC_QUIZ_HUB_CELO ?? "0x9088298cd07BE0cAA1e256d3f3761313e1a1447E") as `0x${string}`,

@@ -260,7 +260,7 @@ export default function RanksPage() {
           cursor: pointer; transition: border-color 0.2s, transform 0.2s;
         }
         .podium-card:hover { border-color: rgba(37,99,235,0.4); }
-        .podium-first { border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.06); transform: translateY(-10px); }
+        .podium-first { border-color: rgba(37,99,235,0.4); background:  rgba(37,99,235,0.06); transform: translateY(-10px); }
         .podium-avatar {
           border-radius: 12px; display: flex; align-items: center; justify-content: center;
           font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; flex-shrink: 0;
@@ -500,7 +500,7 @@ export default function RanksPage() {
                   >
                     {/* Rank */}
                     <span className="rank-num" style={{
-                      color: globalRank === 1 ? "#fbbf24" : globalRank === 2 ? "#9ca3af" : globalRank === 3 ? "#d97706" : "var(--dd-dim)",
+                      color: globalRank === 1 ? "var(--dd-blue)" : globalRank === 2 ? "#9ca3af" : globalRank === 3 ? "#60a5fa" : "var(--dd-dim)",
                     }}>
                       {globalRank <= 3 ? ["🥇", "🥈", "🥉"][globalRank - 1] : `#${globalRank}`}
                     </span>

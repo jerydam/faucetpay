@@ -96,13 +96,13 @@ function ChallengeRow({
   const isWinner = item.winner_address?.toLowerCase() === myWallet
 
   const outcomeIcon = isWinner
-    ? <Trophy className="h-4 w-4 text-amber-500 shrink-0" />
+    ? <Trophy className="h-4 w-4 text-blue-500 shrink-0" />
     : <XCircle className="h-4 w-4 text-muted-foreground/50 shrink-0" />
 
   const outcomeLabel = isWinner ? "Won" : "Lost"
 
   const outcomeColor = isWinner
-    ? "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-400/30"
+    ? "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-400/30"
     : "text-muted-foreground bg-muted/30 border-border"
 
   return (
@@ -113,7 +113,7 @@ function ChallengeRow({
       <div className={cn(
         "w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
         isWinner
-          ? "bg-amber-500/10 border-amber-400/30"
+          ? "bg-blue-500/10 border-blue-400/30"
           : "bg-muted/40 border-border",
       )}>
         {outcomeIcon}
@@ -400,7 +400,7 @@ export default function DashboardPage() {
                     {displayName}
                   </h1>
                   {won.length >= 5 && (
-                    <Crown className="h-4 w-4 text-amber-500 shrink-0" title="5+ wins" />
+                    <Crown className="h-4 w-4 text-blue-500 shrink-0" title="5+ wins" />
                   )}
                 </div>
 
@@ -460,7 +460,7 @@ export default function DashboardPage() {
                 icon={Trophy}
                 label="Won"
                 value={won.length}
-                accent="text-amber-500"
+                accent="text-blue-500"
               />
               <StatPill
                 icon={CheckCircle2}

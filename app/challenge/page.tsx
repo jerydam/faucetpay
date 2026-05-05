@@ -289,16 +289,16 @@ export default function QuizListPage() {
                 ) : (
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     {wins.map(item=>(
-                      <button key={item.code} className="history-row" onClick={()=>router.push(`/challenge/${item.code}`)} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px", borderRadius:14, border:"1.5px solid rgba(251,191,36,0.3)", background:"rgba(251,191,36,0.03)", cursor:"pointer", textAlign:"left", width:"100%" }}>
-                        <div style={{ width:36, height:36, borderRadius:10, flexShrink:0, background:"rgba(251,191,36,0.1)", border:"1.5px solid rgba(251,191,36,0.3)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                          <Trophy size={15} style={{ color:"#fbbf24" }}/>
+                      <button key={item.code} className="history-row" onClick={()=>router.push(`/challenge/${item.code}`)} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px", borderRadius:14, border:"1.5px solid rgba(37,99,235,0.3)", background:"rgba(37,99,235,0.04)", cursor:"pointer", textAlign:"left", width:"100%" }}>
+                        <div style={{ width:36, height:36, borderRadius:10, flexShrink:0, background:"rgba(37,99,235,0.08)", border:"1.5px solid rgba(37,99,235,0.3)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                          <Trophy size={15} style={{ color:"var(--dd-blue)" }}/>
                         </div>
                         <div style={{ flex:1, minWidth:0 }}>
                           <p style={{ fontSize:13, fontWeight:700, color:"var(--dd-text)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"'Figtree',sans-serif" }}>{item.topic}</p>
                           <p style={{ fontSize:10, color:"var(--dd-text-mute)", fontFamily:"monospace", marginTop:2 }}>#{item.code}{item.finished_at&&` · ${timeAgo(item.finished_at)}`}</p>
                         </div>
                         <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3, flexShrink:0 }}>
-                          <span style={{ fontSize:10, fontWeight:900, padding:"2px 7px", borderRadius:20, background:"rgba(251,191,36,0.1)", border:"1px solid rgba(251,191,36,0.3)", color:"#1d4ed8" }}>WON</span>
+                          <span style={{ fontSize:10, fontWeight:900, padding:"2px 7px", borderRadius:20, background:"rgba(37,99,235,0.08)", border:"1px solid rgba(37,99,235,0.3)", color:"#1d4ed8" }}>WON</span>
                           <span style={{ fontSize:10, fontWeight:700, color:"var(--dd-text-dim)" }}>{fmt(item.stake_amount)} {item.token_symbol}</span>
                           <span style={{ fontSize:10, fontWeight:900, color:"#1d4ed8" }}>+{fmt(item.stake_amount*2)} {item.token_symbol}</span>
                         </div>

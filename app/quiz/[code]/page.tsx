@@ -19,7 +19,6 @@
   } from "lucide-react";
   import { getContractFundedStatus } from "@/lib/quiz";
   import { Wallet, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
-  import { useWallets } from "@privy-io/react-auth";
   import { BrowserProvider, Contract, JsonRpcProvider, parseUnits, Interface, formatUnits, TransactionRequest } from "ethers";
   import { fundQuizReward } from "@/lib/quiz";
   import { toast } from "sonner";
@@ -251,11 +250,11 @@
   interface PayoutRecord { wallet_address: string; username: string; rank: number; points: number; amount: number; token_symbol: string; status: string; tx_hash: string | null; }
   interface PayoutsData { success: boolean; faucetAddress: string; chainId: number; payouts: PayoutRecord[]; }
 
-  function QuizGameOver({
-  quizMeta, code, leaderboard, myWallet, isCreator, showConfetti, router,
-  initialResults, loadingInitialResults, rewardsReady,
-  wallets
-}: any) {
+    function QuizGameOver({
+    quizMeta, code, leaderboard, myWallet, isCreator, showConfetti, router,
+    initialResults, loadingInitialResults, rewardsReady,
+    
+  }: any) {
   const [payoutsData, setPayoutsData] = useState<PayoutsData | null>(null);
   const { address: userWalletAddress } = useWallet();
   const [loadingPayouts, setLoadingPayouts] = useState(true);
@@ -264,6 +263,7 @@
   const [showFullResults, setShowFullResults] = useState(!!initialResults);
   const [resultsData, setResultsData] = useState<any>(initialResults ?? null);
   const [loadingResults, setLoadingResults] = useState(false);
+  const { provider: walletProvider, ensureCorrectNetwork } = useWallet();
 
   const [claimStatus, setClaimStatus] = useState<"loading" | "not_eligible" | "pending" | "claim" | "claimed" | "expired">("loading");
   const [rewardAmount, setRewardAmount] = useState<string>("");
@@ -283,11 +283,7 @@
     56:    "https://bsc-dataseed.binance.org",
   };
 
-  const activeWallet =
-    wallets.find((w: any) => w.walletClientType === "privy") ||
-    wallets.find((w: any) => w.address.toLowerCase() === userWalletAddress?.toLowerCase()) ||
-    wallets?.[0];
-
+  
   const [viewingProfile, setViewingProfile] = useState<{
     walletAddress: string;
     username: string;
@@ -495,23 +491,20 @@
   }, [payoutsData]);
 
   const handleSwitchAndClaim = async () => {
-    if (!activeWallet || !contractInfo) { toast.error("Wallet not connected"); return; }
-    const currentChainId = parseInt(activeWallet.chainId.split(":")[1] ?? "0");
-    if (currentChainId !== contractInfo.chainId) {
-      try {
-        toast.info("Switching to the correct network...");
-        await activeWallet.switchChain(contractInfo.chainId);
-        await new Promise(r => setTimeout(r, 1500));
-      } catch {
-        toast.error("Please switch to the correct network in your wallet");
-        return;
-      }
-    }
-    handleClaim();
-  };
+  if (!contractInfo) { toast.error("Wallet not connected"); return; }
+  
+  try {
+    await ensureCorrectNetwork(contractInfo.chainId);
+  } catch {
+    toast.error("Please switch to the correct network in your wallet.");
+    return;
+  }
+  
+  handleClaim();
+};
 
   const handleClaim = async () => {
-    if (!activeWallet) { toast.error("Wallet not connected"); return; }
+    if (!walletProvider) { toast.error("Wallet not connected"); return; }
     setIsClaiming(true);
     toast.info("Processing claim...");
     try {
@@ -1496,11 +1489,8 @@
     const router = useRouter();
     const [showShareModal, setShowShareModal] = useState(false);
     const { address: userWalletAddress } = useWallet();
-    const { wallets } = useWallets();
-    const activeWallet = 
-      wallets.find((w) => w.walletClientType === 'privy') || 
-      wallets.find((w) => w.address.toLowerCase() === userWalletAddress?.toLowerCase()) || 
-      wallets?.[0];
+    const { provider: walletProvider, chainId, ensureCorrectNetwork } = useWallet();
+
     const code = (params.code as string || "").toUpperCase();
     const sessionKeyRef = useRef<CryptoKey | null>(null);
     const seenMessageIds = useRef<Set<string>>(new Set());
@@ -1562,9 +1552,7 @@
     const hasSubmittedOnChain = useRef(false);
     const wsRef = useRef<WebSocket | null>(null);
     const myWallet = useMemo(() => userWalletAddress?.toLowerCase() ?? "", [userWalletAddress]);
-    const chainId = activeWallet
-      ? parseInt(activeWallet.chainId.split(":")[1] ?? "0")
-      : 0;
+    
 
     // ── Load profile ──
     useEffect(() => {
@@ -1578,8 +1566,8 @@
 
     // ── Smart Funding Check & Auto-Heal ──
     useEffect(() => {
-      // Only run if the user is the creator, the contract is known, and a wallet is connected
-      if (!isCreator || !quizReward?.contractAddress || !wallets[0]) return;
+        if (!isCreator || !quizReward?.contractAddress || !walletProvider) return;
+
 
       let cancelled = false;
       let intervalId: ReturnType<typeof setInterval>;
@@ -1588,8 +1576,7 @@
         setIsFundedCheckLoading(true);
         
         try {
-          const privyProvider = await wallets[0].getEthereumProvider();
-          const ethersProvider = new BrowserProvider(privyProvider);
+          const ethersProvider = walletProvider
           
           const result = await getContractFundedStatus(
             ethersProvider,
@@ -1639,7 +1626,7 @@
         clearInterval(intervalId);
       };
     // Re-run this effect ONLY if the contract address or connected wallet changes
-    }, [isCreator, quizReward?.contractAddress, wallets, code]);
+    }, [isCreator, quizReward?.contractAddress, code]);
 
     // ── Load quiz meta ──
     useEffect(() => {
@@ -2114,42 +2101,43 @@
     };
 
     const handleFundReward = async () => {
-      if (!quizReward) { toast.error("No reward configured"); return; }
-      if (!activeWallet) { toast.error("Wallet not ready"); return; }
+  if (!quizReward) { toast.error("No reward configured"); return; }
+  if (!walletProvider) { toast.error("Wallet not connected"); return; }
 
-      setIsFunding(true);
-      setFundError("");
+  setIsFunding(true);
+  setFundError("");
 
-      try {
-        const privyProvider = await activeWallet.getEthereumProvider();
-        const provider = new BrowserProvider(privyProvider);
-
-        const { txHash } = await fundQuizReward(provider, chainId, quizReward.contractAddress, {
-          tokenAddress: quizReward.tokenAddress,
-          tokenDecimals: quizReward.tokenDecimals,
-          isNativeToken: quizReward.isNativeToken,
-          poolAmount: quizReward.poolAmount,
-        });
-
-        setFundTxHash(txHash);
-        setIsFunded(true);
-        toast.success("Reward pool funded! 🎉");
-
-        await fetch(`${API_BASE_URL}/api/quiz/${code}/mark-funded`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ txHash, contractAddress: quizReward.contractAddress }),
-        }).catch(() => {});
-
-      } catch (err: any) {
-        console.error("Funding Error:", err);
-        const msg = parseOnchainError(err);
-        setFundError(msg);
-        toast.error(msg);
-      } finally {
-        setIsFunding(false);
+  try {
+    const { txHash } = await fundQuizReward(
+      walletProvider,
+      chainId ?? 0,
+      quizReward.contractAddress,
+      {
+        tokenAddress: quizReward.tokenAddress,
+        tokenDecimals: quizReward.tokenDecimals,
+        isNativeToken: quizReward.isNativeToken,
+        poolAmount: quizReward.poolAmount,
       }
-    };
+    );
+
+    setFundTxHash(txHash);
+    setIsFunded(true);
+    toast.success("Reward pool funded! 🎉");
+
+    await fetch(`${API_BASE_URL}/api/quiz/${code}/mark-funded`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ txHash, contractAddress: quizReward.contractAddress }),
+    }).catch(() => {});
+
+  } catch (err: any) {
+    const msg = parseOnchainError(err);
+    setFundError(msg);
+    toast.error(msg);
+  } finally {
+    setIsFunding(false);
+  }
+};
 
     const handleSelectAnswer = (optId: string) => {
       if (!currentQ || timeLeft <= 0 || isSpectator) return;
@@ -2220,7 +2208,6 @@
           loadingInitialResults={loadingInitialResults}
           rewardsReady={rewardsReady}
           quizReward={quizReward}
-          wallets={wallets}
         />
       );
     }

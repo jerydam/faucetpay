@@ -1,26 +1,26 @@
 "use client"
 
 import React, { useEffect, useState, useMemo, useCallback } from "react"
-import { useParams, useRouter } from "next/navigation"
 import { useWallet } from "@/components/wallet-provider"
-import { Star } from "lucide-react"
+import { ChallengeDashboardTab } from "@/components/challenge-dashboard-tab"
 import { Header } from "@/components/header"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
-  Wallet, Copy, Pencil, Mail, Phone, Trophy,
-  Swords, Loader2, ChevronRight, Crown, Zap,
-  CheckCircle2, Clock, XCircle,
-} from "lucide-react"
+    Wallet, Copy, Pencil, Mail, Phone, Trophy,
+    Swords, Loader2, ChevronRight, Crown, Zap,
+    CheckCircle2, Clock, XCircle,
+   User, Gamepad2,Star
+  } from "lucide-react"
 import { toast } from "sonner"
 import { ProfileSettingsModal } from "@/components/profile-settings-modal"
 import { usePrivy } from "@privy-io/react-auth"
 import Loading from "@/app/loading"
 import { cn } from "@/lib/utils"
-
-const BACKEND_URL = "https://faucetpay-backend.koyeb.app"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
+const BACKEND_URL = "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -197,7 +197,30 @@ export default function DashboardPage() {
     if (!connectedAddress || !profile?.wallet_address) return false
     return connectedAddress.toLowerCase() === profile.wallet_address.toLowerCase()
   }, [connectedAddress, profile])
+  const searchParams = useSearchParams()
+const tabParam     = searchParams.get("tab")
+const subtabParam  = searchParams.get("subtab")
 
+const [pageTab, setPageTab] = useState<"profile" | "challenge">(
+  tabParam === "challenge" ? "challenge" : "profile"
+)
+const [challengeRefreshKey, setChallengeRefreshKey] = useState(0)
+
+// Keep in sync if the URL changes underneath us (e.g. external link with ?tab=challenge)
+useEffect(() => {
+  if (tabParam === "challenge" && pageTab !== "challenge") setPageTab("challenge")
+}, [tabParam]) // eslint-disable-line react-hooks/exhaustive-deps
+
+const handleTabChange = (tab: "profile" | "challenge") => {
+  setPageTab(tab)
+  if (tab === "challenge") setChallengeRefreshKey(k => k + 1) // force a fresh balance/stakes pull each visit
+  router.replace(
+    tab === "challenge"
+      ? `/dashboard/${targetUsernameOrAddress}?tab=challenge`
+      : `/dashboard/${targetUsernameOrAddress}`,
+    { scroll: false },
+  )
+}
   // ── Privy-derived identity ────────────────────────────────────────────────
   const privyEmail: string = (() => {
     if (!privyUser) return ""
@@ -373,7 +396,32 @@ export default function DashboardPage() {
           pageTitle={isOwner ? "My Dashboard" : `${displayName}'s Profile`}
           hideAction
         />
-
+  <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-2xl border border-border">
+  <button
+    onClick={() => handleTabChange("profile")}
+    className={cn(
+      "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all",
+      pageTab === "profile"
+        ? "bg-background shadow text-foreground"
+        : "text-muted-foreground hover:text-foreground",
+    )}
+  >
+    <User className="h-3.5 w-3.5" /> Profile
+  </button>
+  <button
+    onClick={() => handleTabChange("challenge")}
+    className={cn(
+      "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all",
+      pageTab === "challenge"
+        ? "bg-background shadow text-foreground"
+        : "text-muted-foreground hover:text-foreground",
+    )}
+  >
+    <Gamepad2 className="h-3.5 w-3.5" /> Duel Arena
+  </button>
+</div>  
+    {pageTab === "profile" && (
+      <>
         {/* ── Profile Card ──────────────────────────────────────────────── */}
         <Card className="border border-border bg-card rounded-3xl overflow-hidden shadow-sm">
           <div className="h-1.5 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
@@ -575,11 +623,19 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+        </>
+        )}
+        {pageTab === "challenge" && (
+   <ChallengeDashboardTab
+     walletAddress={profile.wallet_address}
+     initialSubtab={subtabParam}     refreshKey={challengeRefreshKey}
+   />)}
       </div>
 
       {isOwner && (
         <ProfileSettingsModal open={editOpen} onOpenChange={setEditOpen} />
       )}
     </main>
+    
   )
 }

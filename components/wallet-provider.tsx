@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react"
 import { BrowserProvider, type JsonRpcSigner } from "ethers"
 import { toast } from "sonner"
+import { CELO_CHAIN_ID, ensureCeloNetwork } from "@/lib/chain"
 
 interface WalletContextType {
   provider: BrowserProvider | null
@@ -13,8 +14,12 @@ interface WalletContextType {
   isConnecting: boolean
   connect: () => Promise<void>
   disconnect: () => Promise<void>
-  ensureCorrectNetwork: (requiredChainId: number) => Promise<boolean>
+  /** Ensures the wallet is on Celo. MiniPay is always on Celo already;
+   *  this exists mainly to catch the rare non-MiniPay injected wallet. */
+  ensureCorrectNetwork: () => Promise<boolean>
   refreshProvider: () => Promise<void>
+  /** Returns a ready-to-use signer, connecting first if necessary. */
+  getActiveSigner: () => Promise<JsonRpcSigner>
 }
 
 export const WalletContext = createContext<WalletContextType>({
@@ -28,6 +33,7 @@ export const WalletContext = createContext<WalletContextType>({
   disconnect: async () => {},
   ensureCorrectNetwork: async () => false,
   refreshProvider: async () => {},
+  getActiveSigner: async () => { throw new Error("Wallet not initialized") },
 })
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -65,34 +71,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await setupProvider()
   }, [setupProvider])
 
-  // EFFECT 1: Handle MiniPay Auto-connect ONLY
+  // MiniPay is always-on within the Opera browser — auto-connect.
   useEffect(() => {
     if (typeof window === "undefined") return
-    
-    // MiniPay is designed to be "always connected" within the Opera browser
     if (window.ethereum?.isMiniPay) {
       setupProvider()
     }
-    // Note: If MetaMask is present, we do NOT auto-connect here. 
-    // The user must click "Connect Wallet".
   }, [setupProvider])
 
-  // EFFECT 2: Sync UI with Wallet Changes
   useEffect(() => {
     const eth = window.ethereum
     if (!eth) return
 
     const handleAccountsChanged = (accounts: string[]) => {
-      if (accounts.length === 0) {
-        disconnect()
-      } else {
-        setupProvider()
-      }
+      if (accounts.length === 0) disconnect()
+      else setupProvider()
     }
-
-    const handleChainChanged = () => {
-      setupProvider()
-    }
+    const handleChainChanged = () => setupProvider()
 
     eth.on?.("accountsChanged", handleAccountsChanged)
     eth.on?.("chainChanged", handleChainChanged)
@@ -105,22 +100,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const connect = async () => {
     if (typeof window === "undefined" || !window.ethereum) {
-      toast.error("No Ethereum wallet detected. Please install MetaMask or use MiniPay.")
+      toast.error("No Ethereum wallet detected. Please open this in MiniPay.")
       return
     }
 
     setIsConnecting(true)
     try {
-      // Trigger the wallet popup (MetaMask or MiniPay account selector)
       await window.ethereum.request({ method: "eth_requestAccounts" })
       await setupProvider()
       toast.success("Wallet connected!")
     } catch (err: any) {
-      if (err?.code === 4001) {
-        toast.error("Connection rejected by user.")
-      } else {
-        toast.error("Failed to connect wallet.")
-      }
+      if (err?.code === 4001) toast.error("Connection rejected by user.")
+      else toast.error("Failed to connect wallet.")
     } finally {
       setIsConnecting(false)
     }
@@ -133,26 +124,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setChainId(null)
   }
 
-  const ensureCorrectNetwork = async (requiredChainId: number): Promise<boolean> => {
+  const ensureCorrectNetwork = async (): Promise<boolean> => {
     if (!isConnected) {
       await connect()
       return false
     }
-    if (chainId !== requiredChainId) {
+    if (chainId !== CELO_CHAIN_ID) {
       try {
-        await window.ethereum?.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: `0x${requiredChainId.toString(16)}` }],
-        })
+        await ensureCeloNetwork()
         await setupProvider()
         return true
-      } catch (err: any) {
-        toast.error("Please switch to the correct network in your wallet.")
+      } catch (err) {
+        toast.error("Please switch to Celo in your wallet.")
         throw err
       }
     }
     return true
   }
+
+  const getActiveSigner = useCallback(async (): Promise<JsonRpcSigner> => {
+    if (signer) return signer
+    if (!window.ethereum) throw new Error("No wallet detected.")
+    await connect()
+    const ethersProvider = new BrowserProvider(window.ethereum)
+    const s = await ethersProvider.getSigner()
+    if (!s) throw new Error("Could not get signer — wallet not connected.")
+    return s
+  }, [signer])
 
   return (
     <WalletContext.Provider
@@ -167,6 +165,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         disconnect,
         ensureCorrectNetwork,
         refreshProvider,
+        getActiveSigner,
       }}
     >
       {children}

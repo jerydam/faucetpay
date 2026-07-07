@@ -6,7 +6,7 @@ import { useWallet } from "@/hooks/use-wallet";
 import { ArrowLeft, Swords, Search, ChevronUp, ChevronDown, Minus } from "lucide-react";
 import { usePresence } from "@/components/presence-provider"; // ← Global presence hook
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://faucetpay-backend.koyeb.app";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app";
 
 // ─── Tier system ──────────────────────────────────────────────────────────────
 

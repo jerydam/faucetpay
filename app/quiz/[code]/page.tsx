@@ -19,13 +19,18 @@
   } from "lucide-react";
   import { getContractFundedStatus } from "@/lib/quiz";
   import { Wallet, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+  import { useWallets } from "@privy-io/react-auth";
   import { BrowserProvider, Contract, JsonRpcProvider, parseUnits, Interface, formatUnits, TransactionRequest } from "ethers";
   import { fundQuizReward } from "@/lib/quiz";
   import { toast } from "sonner";
   import { cn } from "@/lib/utils";
   import { WalletConnectButton } from "@/components/wallet-connect";
   import Loading from "@/app/loading";
-
+  import { SOLANA_CHAIN_ID } from "@/hooks/use-network"
+  import { createSolanaConnection } from "@/lib/solana-connection"
+  import { fundQuiz as solanaFundQuiz } from "@/lib/solana"
+  import { getAnchorWalletFromPrivy } from "@/lib/privy-solana-wallet"
+  import { useSolanaWallet } from "@/hooks/use-solana"
   // ── On-chain error parser ──────────────────────────────────────
   function parseOnchainError(err: any): string {
     // User rejected the transaction in their wallet
@@ -92,7 +97,7 @@
     return raw.length > 120 ? raw.slice(0, 120) + "…" : raw;
   }
   const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
-
+  const DEFAULT_QUIZ_COVER = "/quiz.jpeg";
   // ── Safe WS URL ──
   function getWsBaseUrl(): string {
     if (typeof window === "undefined") return "wss://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
@@ -250,11 +255,11 @@
   interface PayoutRecord { wallet_address: string; username: string; rank: number; points: number; amount: number; token_symbol: string; status: string; tx_hash: string | null; }
   interface PayoutsData { success: boolean; faucetAddress: string; chainId: number; payouts: PayoutRecord[]; }
 
-    function QuizGameOver({
-    quizMeta, code, leaderboard, myWallet, isCreator, showConfetti, router,
-    initialResults, loadingInitialResults, rewardsReady,
-    
-  }: any) {
+  function QuizGameOver({
+  quizMeta, code, leaderboard, myWallet, isCreator, showConfetti, router,
+  initialResults, loadingInitialResults, rewardsReady,
+  wallets
+}: any) {
   const [payoutsData, setPayoutsData] = useState<PayoutsData | null>(null);
   const { address: userWalletAddress } = useWallet();
   const [loadingPayouts, setLoadingPayouts] = useState(true);
@@ -263,7 +268,6 @@
   const [showFullResults, setShowFullResults] = useState(!!initialResults);
   const [resultsData, setResultsData] = useState<any>(initialResults ?? null);
   const [loadingResults, setLoadingResults] = useState(false);
-  const { provider: walletProvider, ensureCorrectNetwork } = useWallet();
 
   const [claimStatus, setClaimStatus] = useState<"loading" | "not_eligible" | "pending" | "claim" | "claimed" | "expired">("loading");
   const [rewardAmount, setRewardAmount] = useState<string>("");
@@ -281,9 +285,14 @@
     42161: "https://arb1.arbitrum.io/rpc",
     8453:  "https://mainnet.base.org",
     56:    "https://bsc-dataseed.binance.org",
+    677:   "https://rpc.botchain.ai"
   };
 
-  
+  const activeWallet =
+    wallets.find((w: any) => w.walletClientType === "privy") ||
+    wallets.find((w: any) => w.address.toLowerCase() === userWalletAddress?.toLowerCase()) ||
+    wallets?.[0];
+
   const [viewingProfile, setViewingProfile] = useState<{
     walletAddress: string;
     username: string;
@@ -491,20 +500,29 @@
   }, [payoutsData]);
 
   const handleSwitchAndClaim = async () => {
-  if (!contractInfo) { toast.error("Wallet not connected"); return; }
-  
-  try {
-    await ensureCorrectNetwork(contractInfo.chainId);
-  } catch {
-    toast.error("Please switch to the correct network in your wallet.");
-    return;
+  if (!activeWallet || !contractInfo) { toast.error("Wallet not connected"); return }
+
+  // Solana: no chain-switching needed, go straight to claim
+  const isSolana = contractInfo.chainId === SOLANA_CHAIN_ID
+  if (!isSolana) {
+    const currentChainId = parseInt(activeWallet.chainId.split(":")[1] ?? "0")
+    if (currentChainId !== contractInfo.chainId) {
+      try {
+        toast.info("Switching to the correct network...")
+        await activeWallet.switchChain(contractInfo.chainId)
+        await new Promise(r => setTimeout(r, 1500))
+      } catch {
+        toast.error("Please switch to the correct network in your wallet")
+        return
+      }
+    }
   }
-  
-  handleClaim();
-};
+
+  handleClaim()
+}
 
   const handleClaim = async () => {
-    if (!walletProvider) { toast.error("Wallet not connected"); return; }
+    if (!activeWallet) { toast.error("Wallet not connected"); return; }
     setIsClaiming(true);
     toast.info("Processing claim...");
     try {
@@ -587,6 +605,7 @@
     42161: "https://arbiscan.io/tx/",
     8453:  "https://basescan.org/tx/",
     56:    "https://bscscan.com/tx/",
+    677:   "https://scan.botchain.ai/tx/"
   };
 
   // ── Reusable claim status badge ──
@@ -759,22 +778,15 @@
 
           <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 space-y-6 pb-20">
             <div className="text-center space-y-2">
-              {rQuiz?.coverImageUrl ? (
-                <div className="relative w-full max-w-md mx-auto aspect-video rounded-2xl overflow-hidden shadow-lg border border-surface mb-4">
-                  <img src={rQuiz.coverImageUrl} alt={rQuiz.title} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <h1 className="text-white font-black text-lg sm:text-2xl text-left [text-shadow:0_2px_8px_rgba(0,0,0,0.9),0_1px_3px_rgba(0,0,0,1)]">
-                      {rQuiz.title}
-                    </h1>
-                  </div>
+              <div className="relative w-full max-w-md mx-auto aspect-video rounded-2xl overflow-hidden shadow-lg border border-surface mb-4">
+                <img src={rQuiz?.coverImageUrl || DEFAULT_QUIZ_COVER} alt={rQuiz?.title} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                <div className="absolute bottom-3 left-3 right-3">
+                  <h1 className="text-white font-black text-lg sm:text-2xl text-left [text-shadow:0_2px_8px_rgba(0,0,0,0.9),0_1px_3px_rgba(0,0,0,1)]">
+                    {rQuiz?.title || quizMeta?.title}
+                  </h1>
                 </div>
-              ) : (
-                <>
-                  <div className="text-4xl sm:text-6xl mb-2">🏆</div>
-                  <h1 className="text-2xl sm:text-3xl font-black text-surface-primary">{rQuiz?.title || quizMeta?.title}</h1>
-                </>
-              )}
+              </div>
               <div className="flex items-center justify-center gap-3 flex-wrap text-surface-secondary text-sm">
                 <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{totalPlayers} players</span>
                 <span className="text-slate-300 dark:text-slate-700">•</span>
@@ -1170,6 +1182,7 @@
       42161: "https://arbiscan.io/tx/",
       8453: "https://basescan.org/tx/",
       56: "https://bscscan.com/tx/",
+      677: "https://scan.botchain.ai/tx/"
     };
 
     return (
@@ -1489,8 +1502,11 @@
     const router = useRouter();
     const [showShareModal, setShowShareModal] = useState(false);
     const { address: userWalletAddress } = useWallet();
-    const { provider: walletProvider, chainId, ensureCorrectNetwork } = useWallet();
-
+    const { wallets } = useWallets();
+    const activeWallet = 
+      wallets.find((w) => w.walletClientType === 'privy') || 
+      wallets.find((w) => w.address.toLowerCase() === userWalletAddress?.toLowerCase()) || 
+      wallets?.[0];
     const code = (params.code as string || "").toUpperCase();
     const sessionKeyRef = useRef<CryptoKey | null>(null);
     const seenMessageIds = useRef<Set<string>>(new Set());
@@ -1505,7 +1521,7 @@
       isFunded: boolean;
       chainId?: number;
     } | null>(null);
-
+    const { activeSolanaWallet } = useSolanaWallet()
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [chatInput, setChatInput] = useState("");
     const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -1552,7 +1568,10 @@
     const hasSubmittedOnChain = useRef(false);
     const wsRef = useRef<WebSocket | null>(null);
     const myWallet = useMemo(() => userWalletAddress?.toLowerCase() ?? "", [userWalletAddress]);
-    
+    const chainId = activeWallet
+      ? parseInt(activeWallet.chainId.split(":")[1] ?? "0")
+      : 0;
+    const isSolana = (quizReward?.chainId ?? chainId) === SOLANA_CHAIN_ID
 
     // ── Load profile ──
     useEffect(() => {
@@ -1566,8 +1585,8 @@
 
     // ── Smart Funding Check & Auto-Heal ──
     useEffect(() => {
-        if (!isCreator || !quizReward?.contractAddress || !walletProvider) return;
-
+      // Only run if the user is the creator, the contract is known, and a wallet is connected
+      if (!isCreator || !quizReward?.contractAddress || !wallets[0]) return;
 
       let cancelled = false;
       let intervalId: ReturnType<typeof setInterval>;
@@ -1576,7 +1595,8 @@
         setIsFundedCheckLoading(true);
         
         try {
-          const ethersProvider = walletProvider
+          const privyProvider = await wallets[0].getEthereumProvider();
+          const ethersProvider = new BrowserProvider(privyProvider);
           
           const result = await getContractFundedStatus(
             ethersProvider,
@@ -1626,7 +1646,7 @@
         clearInterval(intervalId);
       };
     // Re-run this effect ONLY if the contract address or connected wallet changes
-    }, [isCreator, quizReward?.contractAddress, code]);
+    }, [isCreator, quizReward?.contractAddress, wallets, code]);
 
     // ── Load quiz meta ──
     useEffect(() => {
@@ -2100,44 +2120,67 @@
       wsRef.current.send(JSON.stringify({ type: "chat_message", text }));
     };
 
-    const handleFundReward = async () => {
-  if (!quizReward) { toast.error("No reward configured"); return; }
-  if (!walletProvider) { toast.error("Wallet not connected"); return; }
-
-  setIsFunding(true);
-  setFundError("");
+  const handleFundReward = async () => {
+  if (!quizReward) { toast.error("No reward configured"); return }
+  setIsFunding(true)
+  setFundError("")
 
   try {
-    const { txHash } = await fundQuizReward(
-      walletProvider,
-      chainId ?? 0,
-      quizReward.contractAddress,
-      {
-        tokenAddress: quizReward.tokenAddress,
-        tokenDecimals: quizReward.tokenDecimals,
-        isNativeToken: quizReward.isNativeToken,
-        poolAmount: quizReward.poolAmount,
+    // ── Solana path ──────────────────────────────────────────────
+    if (isSolana) {
+      if (!activeSolanaWallet) {
+        toast.error("Connect your Solana wallet first.")
+        return
       }
-    );
+      const anchorWallet = await getAnchorWalletFromPrivy(activeSolanaWallet)
+      const connection = createSolanaConnection()
+      const rawAmount = Math.round(
+        parseFloat(quizReward.poolAmount) * 10 ** quizReward.tokenDecimals
+      )
+      toast.info("Confirm funding in your Solana wallet...")
+      const txHash = await solanaFundQuiz(
+        connection,
+        anchorWallet,
+        quizReward.contractAddress,
+        rawAmount,
+      )
+      setFundTxHash(txHash)
+      setIsFunded(true)
+      toast.success("Reward pool funded! 🎉")
+      await fetch(`${API_BASE_URL}/api/quiz/${code}/mark-funded`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ txHash, contractAddress: quizReward.contractAddress }),
+      }).catch(() => {})
+      return
+    }
 
-    setFundTxHash(txHash);
-    setIsFunded(true);
-    toast.success("Reward pool funded! 🎉");
-
+    // ── EVM path (existing) ──────────────────────────────────────
+    if (!activeWallet) { toast.error("Wallet not ready"); return }
+    const privyProvider = await activeWallet.getEthereumProvider()
+    const provider = new BrowserProvider(privyProvider)
+    const { txHash } = await fundQuizReward(provider, chainId, quizReward.contractAddress, {
+      tokenAddress: quizReward.tokenAddress,
+      tokenDecimals: quizReward.tokenDecimals,
+      isNativeToken: quizReward.isNativeToken,
+      poolAmount: quizReward.poolAmount,
+    })
+    setFundTxHash(txHash)
+    setIsFunded(true)
+    toast.success("Reward pool funded! 🎉")
     await fetch(`${API_BASE_URL}/api/quiz/${code}/mark-funded`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ txHash, contractAddress: quizReward.contractAddress }),
-    }).catch(() => {});
-
+    }).catch(() => {})
   } catch (err: any) {
-    const msg = parseOnchainError(err);
-    setFundError(msg);
-    toast.error(msg);
+    const msg = parseOnchainError(err)
+    setFundError(msg)
+    toast.error(msg)
   } finally {
-    setIsFunding(false);
+    setIsFunding(false)
   }
-};
+}
 
     const handleSelectAnswer = (optId: string) => {
       if (!currentQ || timeLeft <= 0 || isSpectator) return;
@@ -2208,6 +2251,7 @@
           loadingInitialResults={loadingInitialResults}
           rewardsReady={rewardsReady}
           quizReward={quizReward}
+          wallets={wallets}
         />
       );
     }
@@ -2224,16 +2268,14 @@
           </div>
 
           {/* Cover image */}
-          {quizMeta?.coverImageUrl && (
-            <div className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-xl border border-white/10">
-              <img
-                src={quizMeta.coverImageUrl}
-                alt={quizMeta.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-            </div>
-          )}
+          <div className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-xl border border-white/10">
+            <img
+              src={quizMeta?.coverImageUrl || DEFAULT_QUIZ_COVER}
+              alt={quizMeta?.title}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+          </div>
 
           {/* Meta */}
           <div className="space-y-1">
@@ -2578,21 +2620,14 @@
               <div className="space-y-5">
 
                 {/* Quiz cover + info hero */}
-                {quizMeta?.coverImageUrl ? (
-                  <div className="relative w-full max-w-2xl mx-auto aspect-video rounded-2xl overflow-hidden border border-surface shadow-xl">
-                    <img src={quizMeta.coverImageUrl} alt={quizMeta.title} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <h1 className="text-surface-primary font-black text-xl sm:text-2xl drop-shadow">{quizMeta.title}</h1>
-                      <p className="text-surface-secondary text-sm">{quizMeta.totalQuestions} questions</p>
-                    </div>
+                <div className="relative w-full max-w-2xl mx-auto aspect-video rounded-2xl overflow-hidden border border-surface shadow-xl">
+                  <img src={quizMeta?.coverImageUrl || DEFAULT_QUIZ_COVER} alt={quizMeta?.title} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <h1 className="text-surface-primary font-black text-xl sm:text-2xl drop-shadow">{quizMeta?.title}</h1>
+                    <p className="text-surface-secondary text-sm">{quizMeta?.totalQuestions} questions</p>
                   </div>
-                ) : (
-                  <div className="text-center py-4">
-                    <h1 className="text-surface-primary font-black text-2xl sm:text-3xl">{quizMeta?.title}</h1>
-                    <p className="text-surface-secondary text-sm mt-1">{quizMeta?.totalQuestions} questions</p>
-                  </div>
-                )}
+                </div>
 
                 {/* Players grid */}
                 <div className="bg-surface-card border border-surface rounded-2xl overflow-hidden">

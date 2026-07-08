@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { BrowserProvider, type JsonRpcSigner } from "ethers"
 import { toast } from "sonner"
 import { CELO_CHAIN_ID, ensureCeloNetwork } from "@/lib/chain"
+import { registerSignerGetter } from "@/lib/getSigner"
 
 interface WalletContextType {
   provider: BrowserProvider | null
@@ -152,6 +153,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return s
   }, [signer])
 
+  useEffect(() => {
+    registerSignerGetter(getActiveSigner)
+  }, [getActiveSigner])
   return (
     <WalletContext.Provider
       value={{

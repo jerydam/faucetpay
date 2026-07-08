@@ -26,15 +26,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getNetworkByChainId } from "@/hooks/use-network";
 // Add these imports at the top of create-quiz/page.tsx
-import { SOLANA_CHAIN_ID } from "@/hooks/use-network"
-import { createSolanaConnection } from "@/lib/solana-connection"
-import {
-  initializeQuiz as solanaInitializeQuiz,
-  fundQuiz as solanaFundQuiz,
-} from "@/lib/solana"
-import { getAnchorWalletFromPrivy } from "@/lib/privy-solana-wallet"
-import { useSolanaWallet } from "@/hooks/use-solana"
-import { zeroAddress } from "viem";
+
 
 // Inside the component, add alongside existing hooks:
 
@@ -739,8 +731,7 @@ export default function CreateQuizPage() {
   const chainId = chainId_ ?? 0;
   const availableTokens = ALL_TOKENS_BY_CHAIN[chainId] ?? [];
   const chainName = CHAIN_NAMES[chainId] ?? "Unknown Network";
-  const { activeSolanaWallet } = useSolanaWallet()
-  const isSolana = chainId === SOLANA_CHAIN_ID
+  
   
   const targetNetwork = getNetworkByChainId(chainId);
   const isSupportedNetwork = !!targetNetwork?.factories?.quiz;
@@ -995,43 +986,12 @@ const handlePdfUpload = async () => {
   let toastId = toast.loading("⛓️ Deploying quiz contract...")
 
   try {
-    let contractAddress = ""
-    let deployTxHash = ""
-
+    
     // ── Solana path ────────────────────────────────────────────
-    if (isSolana) {
-      if (!activeSolanaWallet) throw new Error("Connect your Solana wallet first.")
-      const anchorWallet = await getAnchorWalletFromPrivy(activeSolanaWallet)
-      const connection = createSolanaConnection()
+    const activeSigner = await getActiveSigner()
+      if (!activeSigner) throw new Error("No signer available — please reconnect your wallet.")
+      const { contractAddress, txHash: deployTxHash } = await deployQuizReward(activeSigner, chainId, getQuizRewardConfig())
 
-      const quizName = (title.trim() || "Quiz Reward").slice(0, 32)
-      const tokenMint = reward.tokenAddress  // SPL mint address
-      const claimWindowSecs = reward.claimWindowDuration
-
-      const { tx, quizState } = await solanaInitializeQuiz(
-        connection,
-        anchorWallet,
-        quizName,
-        tokenMint,
-        claimWindowSecs,
-      )
-      contractAddress = quizState
-      deployTxHash = tx
-
-      // Fund immediately after deploy
-      toast.loading("💰 Funding quiz vault on Solana...", { id: toastId })
-      const decimals = reward.tokenDecimals
-      const rawAmount = Math.round(parseFloat(reward.poolAmount) * 10 ** decimals)
-      await solanaFundQuiz(connection, anchorWallet, quizState, rawAmount)
-
-    // ── EVM path ───────────────────────────────────────────────
-    } else {
-  const activeSigner = await getActiveSigner(chainId)
-  if (!activeSigner) throw new Error("No signer available — please reconnect your wallet.")
-  const result = await deployQuizReward(activeSigner, chainId, getQuizRewardConfig())
-  contractAddress = result.contractAddress
-  deployTxHash = result.txHash
-}
 
     setRewardContractAddress(contractAddress)
     toast.loading("💾 Contract deployed! Saving quiz...", { id: toastId })
@@ -1045,7 +1005,7 @@ const handlePdfUpload = async () => {
         contractAddress,
         deployTxHash,
         isOnChain: true,
-        isFunded: isSolana, // Solana funds at deploy time
+        isFunded: false, // Solana funds at deploy time
       },
     }
 
@@ -1089,34 +1049,14 @@ const handleGenerateAI = async () => {
     let deployTxHash = ""
 
     // ── Solana path ────────────────────────────────────────────
-    if (isSolana) {
-      if (!activeSolanaWallet) throw new Error("Connect your Solana wallet first.")
-      const anchorWallet = await getAnchorWalletFromPrivy(activeSolanaWallet)
-      const connection = createSolanaConnection()
-
-      const quizName = (title.trim() || aiTopic.trim()).slice(0, 32)
-      const { tx, quizState } = await solanaInitializeQuiz(
-        connection,
-        anchorWallet,
-        quizName,
-        reward.tokenAddress,
-        reward.claimWindowDuration,
-      )
-      contractAddress = quizState
-      deployTxHash = tx
-
-      toast.loading("💰 Funding quiz vault on Solana...", { id: toastId })
-      const rawAmount = Math.round(parseFloat(reward.poolAmount) * 10 ** reward.tokenDecimals)
-      await solanaFundQuiz(connection, anchorWallet, quizState, rawAmount)
-
-    // ── EVM path ───────────────────────────────────────────────
-    } else {
-  const activeSigner = await getActiveSigner(chainId)
+   
+   
+  const activeSigner = await getActiveSigner()
   if (!activeSigner) throw new Error("No signer available — please reconnect your wallet.")
   const result = await deployQuizReward(activeSigner, chainId, getQuizRewardConfig())
   contractAddress = result.contractAddress
   deployTxHash = result.txHash
-}
+
 
     setRewardContractAddress(contractAddress)
     toast.loading("🤖 Deployed! AI generating questions...", { id: toastId })
@@ -1141,7 +1081,7 @@ const handleGenerateAI = async () => {
           contractAddress,
           deployTxHash,
           isOnChain: true,
-          isFunded: isSolana,
+          isFunded: false,
         },
       }),
     })

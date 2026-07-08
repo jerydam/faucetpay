@@ -26,10 +26,7 @@
   import { cn } from "@/lib/utils";
   import { WalletConnectButton } from "@/components/wallet-connect";
   import Loading from "@/app/loading";
-  import { SOLANA_CHAIN_ID } from "@/hooks/use-network"
-  import { createSolanaConnection } from "@/lib/solana-connection"
-  import { fundQuiz as solanaFundQuiz } from "@/lib/solana"
-  import { getAnchorWalletFromPrivy } from "@/lib/privy-solana-wallet"
+  
   import { useSolanaWallet } from "@/hooks/use-solana"
   // ── On-chain error parser ──────────────────────────────────────
   function parseOnchainError(err: any): string {
@@ -503,21 +500,7 @@
   if (!activeWallet || !contractInfo) { toast.error("Wallet not connected"); return }
 
   // Solana: no chain-switching needed, go straight to claim
-  const isSolana = contractInfo.chainId === SOLANA_CHAIN_ID
-  if (!isSolana) {
-    const currentChainId = parseInt(activeWallet.chainId.split(":")[1] ?? "0")
-    if (currentChainId !== contractInfo.chainId) {
-      try {
-        toast.info("Switching to the correct network...")
-        await activeWallet.switchChain(contractInfo.chainId)
-        await new Promise(r => setTimeout(r, 1500))
-      } catch {
-        toast.error("Please switch to the correct network in your wallet")
-        return
-      }
-    }
-  }
-
+  
   handleClaim()
 }
 
@@ -1571,8 +1554,7 @@
     const chainId = activeWallet
       ? parseInt(activeWallet.chainId.split(":")[1] ?? "0")
       : 0;
-    const isSolana = (quizReward?.chainId ?? chainId) === SOLANA_CHAIN_ID
-
+    
     // ── Load profile ──
     useEffect(() => {
       if (!userWalletAddress) return;
@@ -2126,35 +2108,6 @@
   setFundError("")
 
   try {
-    // ── Solana path ──────────────────────────────────────────────
-    if (isSolana) {
-      if (!activeSolanaWallet) {
-        toast.error("Connect your Solana wallet first.")
-        return
-      }
-      const anchorWallet = await getAnchorWalletFromPrivy(activeSolanaWallet)
-      const connection = createSolanaConnection()
-      const rawAmount = Math.round(
-        parseFloat(quizReward.poolAmount) * 10 ** quizReward.tokenDecimals
-      )
-      toast.info("Confirm funding in your Solana wallet...")
-      const txHash = await solanaFundQuiz(
-        connection,
-        anchorWallet,
-        quizReward.contractAddress,
-        rawAmount,
-      )
-      setFundTxHash(txHash)
-      setIsFunded(true)
-      toast.success("Reward pool funded! 🎉")
-      await fetch(`${API_BASE_URL}/api/quiz/${code}/mark-funded`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ txHash, contractAddress: quizReward.contractAddress }),
-      }).catch(() => {})
-      return
-    }
-
     // ── EVM path (existing) ──────────────────────────────────────
     if (!activeWallet) { toast.error("Wallet not ready"); return }
     const privyProvider = await activeWallet.getEthereumProvider()

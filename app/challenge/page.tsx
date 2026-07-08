@@ -71,6 +71,15 @@ const S = `
     0%   { transform: translateY(-10px) rotate(0deg);   opacity: 1; }
     100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
   }
+
+  @keyframes dangerBlink {
+  0%, 100% { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.9); color: #ef4444; box-shadow: 0 0 0px rgba(239,68,68,0); }
+  50%      { background: rgba(239,68,68,0.35); border-color: #ef4444; color: #fff; box-shadow: 0 0 14px 3px rgba(239,68,68,0.6); }
+}
+.danger-blink {
+  animation: dangerBlink 1s ease-in-out infinite;
+  font-weight: 900 !important;
+}
   @keyframes popIn {
     0%   { transform: scale(0.4) translateY(60px); opacity: 0; }
     70%  { transform: scale(1.06) translateY(-8px); }
@@ -654,14 +663,22 @@ useEffect(() => {
                 </button>
                 <button
                   onClick={() => router.push(`/dashboard/${userWalletAddress}?tab=challenge&subtab=buy-drop`)}
+                  className={dropsBalance.gameDrops < 50 ? "danger-blink" : ""}
                   style={{
                     fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8,
-                    background: "var(--dd-surface)", color: "var(--dd-text)",
-                    border: "1px solid var(--dd-card-border)", cursor: "pointer",
-                    fontFamily: "'Figtree',sans-serif", whiteSpace: "nowrap",
+                    ...(dropsBalance.gameDrops < 50
+                      ? {}
+                      : {
+                          background: "var(--dd-surface)",
+                          color: "var(--dd-text)",
+                          border: "1px solid var(--dd-card-border)",
+                        }),
+                    cursor: "pointer",
+                    fontFamily: "'Figtree',sans-serif",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  Buy DROPS
+                  {dropsBalance.gameDrops < 50 ? "⚠️ Top Up Drops" : "Buy DROPS"}
                 </button>
                 <span className="drops-pill" style={{ background: `${tierColor}15`, color: tierColor, border: `1px solid ${tierColor}30` }}>
                   {dropsBalance.tier}

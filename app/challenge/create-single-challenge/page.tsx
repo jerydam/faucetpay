@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getChainConfig } from "@/lib/chain";
+import { CELO_CHAIN_ID, getChainConfig } from "@/lib/chain";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
@@ -187,6 +187,7 @@ export default function CreateSinglePage() {
         creatorAddress:  address,
         creatorUsername: username ?? address.slice(0, 8),
         difficulty,
+        chainId:         CELO_CHAIN_ID,
         createTxHash:    receipt.hash,
         reservedCode:    code,   // backend uses this exact code
       }),

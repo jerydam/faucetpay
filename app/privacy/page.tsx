@@ -196,7 +196,7 @@ const SECTIONS: Section[] = [
     content: (
       <>
         <p>
-          PrimeIQ ("we," "us," or "our") operates pay.faucetdrops.io — a quiz dueling platform
+          PrimeIQ ("we," "us," or "our") operates minipay.faucetdrops.io — a quiz dueling platform
           built on Celo Mainnet by FaucetDrops. Players compete in 1v1 multiplayer duels or
           single-player challenges using DROPS, the platform's native token. All game outcomes
           are settled on-chain by the QuizHub smart contract. The platform is accessible

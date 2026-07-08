@@ -1848,7 +1848,7 @@ const handleStake = useCallback(async () => {
           )}
         </div>
 
-        {userWalletAddress && (
+        {userWalletAddress && phase === "lobby" && (
           <FloatingChat
             messages={chatMessages} myWallet={myWallet}
             chatInput={chatInput} setChatInput={setChatInput}

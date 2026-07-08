@@ -51,7 +51,6 @@ const S = `
 
   .privacy-body { padding: 24px 20px; display: flex; flex-direction: column; gap: 8px; }
 
-  /* Hero card */
   .hero-card {
     background: rgba(37,99,235,0.08);
     border: 1.5px solid rgba(37,99,235,0.25);
@@ -85,7 +84,6 @@ const S = `
     color: #22c55e;
   }
 
-  /* Accordion */
   .section {
     border: 1.5px solid var(--dd-line);
     border-radius: 14px; overflow: hidden;
@@ -153,7 +151,6 @@ const S = `
   }
   .section-body h4:first-child { border-top: none; padding-top: 14px; margin-top: 0; }
 
-  /* Contact */
   .contact-row {
     display: flex; align-items: center; gap: 12px;
     padding: 14px 16px; border-radius: 14px;
@@ -199,14 +196,16 @@ const SECTIONS: Section[] = [
     content: (
       <>
         <p>
-          PrimeIQ ("we," "us," or "our") operates pay.faucetdrops.io — a peer-to-peer quiz
-          dueling platform where players compete using staked tokens on supported EVM blockchains.
-          This Privacy Policy explains how we collect, use, and protect your information when you
-          use our platform ("Service").
+          PrimeIQ ("we," "us," or "our") operates pay.faucetdrops.io — a quiz dueling platform
+          built on Celo Mainnet by FaucetDrops. Players compete in 1v1 multiplayer duels or
+          single-player challenges using DROPS, the platform's native token. All game outcomes
+          are settled on-chain by the QuizHub smart contract. The platform is accessible
+          exclusively through MiniPay on Celo Mainnet.
         </p>
         <p>
-          By connecting your wallet or using any feature of the platform, you acknowledge and
-          agree to the practices described in this policy.
+          This Privacy Policy explains what information we collect, how we use it, and your
+          rights regarding it. By connecting your wallet or using any feature of the platform,
+          you acknowledge and agree to the practices described here.
         </p>
       </>
     ),
@@ -217,21 +216,23 @@ const SECTIONS: Section[] = [
       <>
         <h4>On-Chain Data</h4>
         <ul>
-          <li>Your public wallet address — used to identify you as a player, track wins/losses, and process payouts.</li>
-          <li>Transaction hashes for stake deposits, challenge creation, and reward claims.</li>
-          <li>All on-chain data is public by nature of the blockchain.</li>
+          <li>Your public wallet address — used to identify you, track game history, and process DROPS payouts.</li>
+          <li>Transaction hashes for <code>createQuiz()</code>, <code>redeem()</code>, <code>confirmBurn()</code>, <code>setWinner()</code>, <code>declareTie()</code>, and <code>mintTo()</code> calls.</li>
+          <li>All on-chain data is public by the nature of the Celo blockchain.</li>
         </ul>
         <h4>Off-Chain Data</h4>
         <ul>
-          <li>Username and optional avatar URL you set in your profile.</li>
+          <li>Username and optional avatar URL set in your profile.</li>
           <li>Optional email or phone number if provided in profile settings.</li>
-          <li>Quiz answers and scores — stored to resolve disputes and power the leaderboard.</li>
-          <li>Challenge history: topics played, opponents, outcomes, and timestamps.</li>
+          <li>Quiz answers, scores, and per-round timing — stored to resolve disputes and power the leaderboard.</li>
+          <li>Game history: topics, opponents (human or bot), difficulty tiers, outcomes, and timestamps.</li>
+          <li>DROPS balance activity: game_drops and reward_drops credits, debits, stake events, and redemptions.</li>
+          <li>Single-player session data: bot difficulty chosen, question count, bot accuracy outcomes.</li>
         </ul>
         <h4>Automatic Data</h4>
         <ul>
           <li>IP address, browser type, and device info — used for security and abuse prevention.</li>
-          <li>WebSocket connection events for presence tracking (online/offline status).</li>
+          <li>WebSocket connection events for session presence and game synchronisation.</li>
         </ul>
       </>
     ),
@@ -242,11 +243,13 @@ const SECTIONS: Section[] = [
       <>
         <p>We use collected data strictly to operate and improve the platform:</p>
         <ul>
-          <li>Matching players, running game sessions, and resolving outcomes on-chain.</li>
-          <li>Powering the leaderboard, rank snapshots, and tier progression system.</li>
-          <li>Sending in-app notifications (challenge invites, game results, rematch requests).</li>
-          <li>Detecting and preventing cheating, collusion, or abuse of the platform.</li>
-          <li>Improving AI question quality by analyzing topics and difficulty spread.</li>
+          <li>Matching players, running game sessions (multiplayer and single-player), and settling outcomes on-chain.</li>
+          <li>Processing DROPS stakes, minting payouts, and recording activity in the player_activity_log.</li>
+          <li>Simulating bot opponent stakes and managing single-player game flows end-to-end.</li>
+          <li>Powering the leaderboard, rank snapshots, and tier progression.</li>
+          <li>Sending in-app notifications: challenge invites, results, rematch requests, and stake maturity alerts.</li>
+          <li>Detecting and preventing cheating, multi-account abuse, or exploit attempts.</li>
+          <li>Improving AI question quality by analysing topics and difficulty distribution.</li>
           <li>Complying with legal obligations where applicable.</li>
         </ul>
       </>
@@ -259,16 +262,16 @@ const SECTIONS: Section[] = [
         <p>We do not sell your personal information. We may share data only in these cases:</p>
         <ul>
           <li>
-            <strong>Blockchain networks</strong> — stake and payout transactions are submitted
-            publicly to Celo, Base, or Lisk.
+            <strong>Celo blockchain</strong> — stake, payout, and resolution transactions are
+            submitted publicly to Celo Mainnet. DROPS token burns and mints are visible on-chain.
           </li>
           <li>
-            <strong>AI providers</strong> — quiz topics (not wallet addresses) are sent to
-            Google Gemini, Groq, or Anthropic to generate questions.
+            <strong>AI providers</strong> — quiz topics (not wallet addresses) are sent to Google
+            Gemini 2.5 Flash or Groq to generate questions.
           </li>
           <li>
             <strong>Database infrastructure</strong> — Supabase/PostgreSQL stores your profile,
-            game history, and notifications under our control.
+            game history, activity log, and notifications under our control.
           </li>
           <li>
             <strong>Legal requirements</strong> — if required by law, court order, or to protect
@@ -276,8 +279,8 @@ const SECTIONS: Section[] = [
           </li>
         </ul>
         <p>
-          Your username and rank are publicly visible to all platform users as part of the
-          leaderboard feature.
+          Your username, rank, and leaderboard position are publicly visible to all platform users.
+          Bot opponent wallet addresses are published in the platform. Bot wallets hold real DROPS and submit genuine on-chain transactions when staking or receiving winnings.
         </p>
       </>
     ),
@@ -288,7 +291,8 @@ const SECTIONS: Section[] = [
       <>
         <p>We retain your data for as long as your wallet is active on the platform:</p>
         <ul>
-          <li>Challenge history and scores are kept indefinitely to maintain leaderboard integrity.</li>
+          <li>Challenge history, scores, and the player_activity_log are kept indefinitely to maintain leaderboard integrity.</li>
+          <li>Single-player game records (bot tier, outcome, payout) are retained permanently alongside multiplayer history.</li>
           <li>Notification inbox items are retained for 90 days then auto-deleted.</li>
           <li>Profile data (username, avatar, bio) is kept until you request deletion.</li>
           <li>On-chain transaction data is permanent and outside our control.</li>
@@ -324,9 +328,10 @@ const SECTIONS: Section[] = [
     content: (
       <>
         <p>
-          PrimeIQ sends in-app notifications for game events such as challenge invites,
-          duel results, rematch requests, and rank changes. These are delivered via WebSocket
-          and stored in your notification inbox.
+          PrimeIQ sends in-app notifications for game events including challenge invites, duel
+          results, rematch requests, single-player game outcomes, stake maturity alerts, badge
+          unlocks, and weekly leaderboard updates. These are delivered via WebSocket and stored
+          in your notification inbox.
         </p>
         <ul>
           <li>Notifications are only sent to your connected wallet address.</li>
@@ -341,8 +346,8 @@ const SECTIONS: Section[] = [
     content: (
       <>
         <p>
-          PrimeIQ uses minimal browser storage (localStorage/sessionStorage) to maintain
-          your wallet connection state and UI preferences (e.g. dark/light theme). We do not
+          PrimeIQ uses minimal browser storage (localStorage/sessionStorage) to maintain your
+          MiniPay wallet connection state and UI preferences (e.g. dark/light theme). We do not
           use third-party advertising cookies or tracking pixels.
         </p>
         <ul>
@@ -363,8 +368,9 @@ const SECTIONS: Section[] = [
         <ul>
           <li>All API communication uses HTTPS/TLS encryption.</li>
           <li>Database connections require SSL and are restricted by IP allowlisting.</li>
-          <li>Resolver private keys are stored as environment secrets, never in code.</li>
+          <li>Resolver private keys and bot wallet keys are stored as environment secrets, never in code.</li>
           <li>WebSocket connections are authenticated by wallet address per session.</li>
+          <li>Bot private keys are used only by the server-side resolver; no key material is ever exposed to clients.</li>
         </ul>
         <p>
           No system is completely secure. We cannot guarantee the absolute security of data
@@ -388,9 +394,9 @@ const SECTIONS: Section[] = [
     num: "11", title: "Policy Updates", icon: <RefreshCw size={14} />,
     content: (
       <p>
-        We may update this Privacy Policy from time to time to reflect changes in our
-        practices or applicable laws. Material changes will be posted on the platform with at
-        least 7 days' notice. Continued use of the Service after the effective date constitutes
+        We may update this Privacy Policy from time to time to reflect changes in our practices
+        or applicable laws. Material changes will be posted on the platform with at least 7
+        days' notice. Continued use of the Service after the effective date constitutes
         acceptance of the revised policy.
       </p>
     ),
@@ -426,20 +432,18 @@ export default function PrivacyPage() {
       <style>{S}</style>
       <div className="privacy-page">
 
-        {/* Header */}
         <div className="privacy-header">
           <button className="back-btn" onClick={() => router.back()}>
             <ArrowLeft size={16} />
           </button>
           <div className="header-text">
             <div className="page-title">Privacy Policy</div>
-            <div className="page-meta">Last updated: April 27, 2026</div>
+            <div className="page-meta">Last updated: July 8, 2026</div>
           </div>
         </div>
 
         <div className="privacy-body">
 
-          {/* Hero card */}
           <div className="hero-card">
             <div className="hero-icon-row">
               <div className="hero-icon"><Shield size={18} /></div>
@@ -450,23 +454,22 @@ export default function PrivacyPage() {
             </div>
             <div className="hero-text">
               We collect only what's needed to run the platform. We never sell your data,
-              never send marketing spam, and your wallet address is the only identifier we
-              require. Blockchain transactions are public by nature — everything else stays private.
+              never send marketing spam, and your MiniPay wallet address is the only
+              identifier we require. Blockchain transactions are public by nature — everything
+              else stays private.
             </div>
             <div className="pill-row">
               <span className="pill">✓ No data selling</span>
               <span className="pill">✓ No ad tracking</span>
               <span className="pill">✓ Wallet-only ID</span>
-              <span className="pill">✓ Open-source contract</span>
+              <span className="pill">✓ Celo Mainnet only</span>
             </div>
           </div>
 
-          {/* Accordion sections */}
           {SECTIONS.map(s => (
             <AccordionSection key={s.num} section={s} />
           ))}
 
-          {/* Contact */}
           <div className="contact-row">
             <div className="contact-icon">
               <Mail size={16} color="var(--dd-blue, #2563eb)" />
@@ -480,7 +483,7 @@ export default function PrivacyPage() {
           </div>
 
           <p className="footer-note">
-            By connecting your wallet to PrimeIQ, you acknowledge that you have read
+            By connecting your MiniPay wallet to PrimeIQ, you acknowledge that you have read
             and understood this Privacy Policy and consent to the data practices described herein.
           </p>
 

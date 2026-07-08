@@ -338,7 +338,6 @@ const adminMode = isOwner && isAdmin(connectedAddress);
     ...(isOwner ? [{ key: "redeem" as InnerTab, label: "Redeem" }] : []),
     { key: "pools",    label: "Pools"    },
     { key: "history",  label: "History"  },
-    { key: "buy",      label: "Buy Drop" },
     ...(isOwner ? [{ key: "buy" as InnerTab, label: "Buy Drop" }] : []),
     ...(adminMode ? [{ key: "admin" as InnerTab, label: "Admin" }] : []),
   ];

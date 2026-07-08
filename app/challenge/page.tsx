@@ -6,7 +6,8 @@ import { useWallet } from "@/hooks/use-wallet";
 import { Header } from "@/components/header";
 import {
    Plus, Trophy, Loader2, Gamepad2,
-   RefreshCw, ChevronRight, Zap, Gift, CheckCircle2, AlertCircle, Swords,} from "lucide-react";
+   RefreshCw, ChevronRight, Zap, Gift, CheckCircle2, Swords,
+   HelpCircle,} from "lucide-react";
 import { toast } from "sonner";
 import Loading from "@/app/loading";
 import { BottomNav } from "@/components/bottom-nav";
@@ -1244,8 +1245,43 @@ useEffect(() => {
           </div>
         </div>
       )}
-
-      <BottomNav />
+      {/* ── Floating Support Button ─────────────────────────────────────────── */}
+     <button
+  onClick={() => router.push("/support")}
+  title="Support & FAQ"
+  style={{
+    position: "fixed",
+    bottom: 80,
+    right: 20,
+    width: 46,
+    height: 46,
+    borderRadius: "50%",
+    background: "#1e4ed8",
+    border: "none",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    zIndex: 100,
+    boxShadow: "0 4px 16px rgba(30,78,216,0.4)",
+    transition: "box-shadow .2s, transform .15s, background .2s",
+  }}
+  onMouseEnter={e => {
+    const b = e.currentTarget;
+    b.style.background = "#1d4ed8";
+    b.style.boxShadow = "0 6px 24px rgba(30,78,216,0.55)";
+    b.style.transform = "scale(1.08)";
+  }}
+  onMouseLeave={e => {
+    const b = e.currentTarget;
+    b.style.background = "#1e4ed8";
+    b.style.boxShadow = "0 4px 16px rgba(30,78,216,0.4)";
+    b.style.transform = "scale(1)";
+  }}
+>
+  <HelpCircle size={20} color="#ffffff" strokeWidth={2.5} />
+</button>
+<BottomNav />
     </>
   );
 }

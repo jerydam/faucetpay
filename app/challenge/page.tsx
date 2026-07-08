@@ -704,7 +704,7 @@ useEffect(() => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {dropsBalance.gameDrops < 50
+                  {dropsBalance.gameDrops <= 50
                     ? (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                         <span style={{ fontSize: 12 }}>⚠️</span>

@@ -601,16 +601,17 @@ export default function ChallengePage() {
   useEffect(() => () => { if (cdIntervalRef.current) clearInterval(cdIntervalRef.current); }, []);
 
   // ── Profile ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!userWalletAddress) return;
-    fetch(`${API_BASE_URL}/api/players/${userWalletAddress}`)
-      .then(r => r.json())
-      .then(d => {
-        setUsername(d.username ?? `User${userWalletAddress.slice(-4).toUpperCase()}`);
-        setAvatarUrl(d.avatar_url ?? "");
-      })
-      .catch(() => setUsername(`User${userWalletAddress.slice(-4).toUpperCase()}`));
-  }, [userWalletAddress]);
+  // Around line where you fetch profile on mount
+useEffect(() => {
+  if (!userWalletAddress) return;
+  fetch(`${API_BASE_URL}/api/players/${userWalletAddress}`)
+    .then(r => r.json())
+    .then(d => {
+      setUsername(d.username ?? `User${userWalletAddress.slice(-4).toUpperCase()}`);
+      setAvatarUrl(d.avatar_url ?? "");  // ← already correct, confirm this line exists
+    })
+    .catch(() => setUsername(`User${userWalletAddress.slice(-4).toUpperCase()}`));
+}, [userWalletAddress]);
 
   // ── Load challenge ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -793,10 +794,16 @@ useEffect(() => {
             setCreatedAt(ts);
           }
           setPlayers(prev => {
-            const incoming: PlayerState[] = Object.entries(c.players ?? {}).map(([w, d]: [string, any]) => ({
-              walletAddress: w, username: d.username, points: d.points, ready: d.ready,
-              txVerified: d.txVerified, avatarUrl: d.avatar_url ?? "",
-            }));
+            const incoming: PlayerState[] = Object.entries(c.players ?? {}).map(
+              ([w, d]: [string, any]) => ({
+                walletAddress: w,
+                username:      d.username,
+                points:        d.points,
+                ready:         d.ready,
+                txVerified:    d.txVerified,
+                avatarUrl:     d.avatar_url ?? "",  // ← confirm this line
+              })
+            );
             if (prev.length === 0) return incoming;
             return incoming.map(newP => {
               const existing = prev.find(p => p.walletAddress.toLowerCase() === newP.walletAddress.toLowerCase());
@@ -810,7 +817,14 @@ useEffect(() => {
           const p = msg.player;
           setPlayers(prev => {
             if (prev.some(e => e.walletAddress === p.walletAddress)) return prev;
-            return [...prev, { walletAddress: p.walletAddress, username: p.username, points: 0, ready: false, txVerified: false, avatarUrl: p.avatar_url ?? "" }];
+            return [...prev, {
+              walletAddress: p.walletAddress,
+              username:      p.username,
+              points:        0,
+              ready:         false,
+              txVerified:    false,
+              avatarUrl:     p.avatar_url ?? "",  // ← already there, just confirm
+            }];
           });
           toast.info(`${p.username} joined the lobby!`);
           break;
@@ -1460,35 +1474,49 @@ const handleStake = useCallback(async () => {
                 </span>
               </div>
               <div className="divide-y divide-border">
-                {sortedPlayers.map(([wallet, data], i) => {
-                  const isMe         = wallet.toLowerCase() === myWallet;
-                  const isThisWinner = wallet.toLowerCase() === winner?.toLowerCase();
-                  const medals       = ["🥇", "🥈", "🥉"];
-                  return (
-                    <div key={wallet} className={cn(
-                      "flex items-center gap-3 px-4 py-4 transition-colors",
-                      isMe && "bg-blue-50 dark:bg-blue-950/20",
-                      isThisWinner && !isMe && "bg-blue-50/50 dark:bg-blue-950/10"
-                    )}>
-                      <div className="text-xl w-8 text-center shrink-0">{medals[i] ?? `${i + 1}`}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-bold text-foreground text-sm">{data.username}</p>
-                          {isMe && <Badge className="text-[9px] h-4 px-1.5 bg-primary text-primary-foreground border-0">YOU</Badge>}
-                          {isThisWinner && <Badge className="text-[9px] h-4 px-1.5 bg-blue-400 text-blue-900 border-0">WINNER</Badge>}
-                          {isTie && <Badge variant="outline" className="text-[9px] h-4 px-1.5">TIE</Badge>}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
-                          {wallet.slice(0, 6)}…{wallet.slice(-4)}
-                        </p>
+              {sortedPlayers.map(([wallet, data], i) => {
+                const isMe         = wallet.toLowerCase() === myWallet;
+                const isThisWinner = wallet.toLowerCase() === winner?.toLowerCase();
+                const medals       = ["🥇", "🥈", "🥉"];
+                
+                // ← ADD THIS: look up avatar from players state
+                const playerEntry = players.find(p => p.walletAddress.toLowerCase() === wallet.toLowerCase());
+                const playerAvatar = playerEntry?.avatarUrl ?? (data as any).avatar_url ?? "";
+
+                return (
+                  <div key={wallet} className={cn(
+                    "flex items-center gap-3 px-4 py-4 transition-colors",
+                    isMe && "bg-blue-50 dark:bg-blue-950/20",
+                    isThisWinner && !isMe && "bg-blue-50/50 dark:bg-blue-950/10"
+                  )}>
+                    <div className="text-xl w-8 text-center shrink-0">{medals[i] ?? `${i + 1}`}</div>
+                    
+                    {/* ← ADD avatar here */}
+                    <Avatar className="h-9 w-9 shrink-0">
+                      <AvatarImage src={playerAvatar || undefined} />
+                      <AvatarFallback className="text-xs font-bold">
+                        {data.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-foreground text-sm">{data.username}</p>
+                        {isMe && <Badge className="text-[9px] h-4 px-1.5 bg-primary text-primary-foreground border-0">YOU</Badge>}
+                        {isThisWinner && <Badge className="text-[9px] h-4 px-1.5 bg-blue-400 text-blue-900 border-0">WINNER</Badge>}
+                        {isTie && <Badge variant="outline" className="text-[9px] h-4 px-1.5">TIE</Badge>}
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-black text-2xl text-foreground leading-none">{data.points}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">pts</p>
-                      </div>
+                      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                        {wallet.slice(0, 6)}…{wallet.slice(-4)}
+                      </p>
                     </div>
-                  );
-                })}
+                    <div className="text-right shrink-0">
+                      <p className="font-black text-2xl text-foreground leading-none">{data.points}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">pts</p>
+                    </div>
+                  </div>
+                );
+              })}
               </div>
             </div>
 

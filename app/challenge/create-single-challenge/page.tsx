@@ -343,35 +343,35 @@ export default function CreateSinglePage() {
       </div>
 
       {/* Fixed bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          <button
-            disabled={!canSubmit}
-            onClick={handleCreate}
-            className={cn(
-              "w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm transition-all",
-              canSubmit
-                ? "bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98]"
-                : "bg-muted text-muted-foreground cursor-not-allowed",
-            )}
-          >
-            {submitting ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</>
-            ) : (
-              <>
-                <Zap className="h-4 w-4" />
-                {selectedTier ? `Start ${selectedTier.tierName} Challenge` : "Select a difficulty"}
-                {selectedTier && <ChevronRight className="h-4 w-4" />}
-              </>
-            )}
-          </button>
-          {selectedTier && (
-            <p className="text-center text-[10px] text-muted-foreground font-bold mt-1.5">
-              {selectedTier.stake} DROPS deducted from your game wallet
-            </p>
-          )}
-        </div>
-      </div>
+<div className="fixed bottom-16 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
+  <div className="max-w-2xl mx-auto px-4 py-3">
+    <button
+      disabled={!canSubmit}
+      onClick={handleCreate}
+      className={cn(
+        "w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm transition-all",
+        canSubmit
+          ? "bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98]"
+          : "bg-muted text-muted-foreground cursor-not-allowed",
+      )}
+    >
+      {submitting ? (
+        <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</>
+      ) : (
+        <>
+          <Zap className="h-4 w-4" />
+          {selectedTier ? `Start ${selectedTier.tierName} Challenge` : "Select a difficulty"}
+          {selectedTier && <ChevronRight className="h-4 w-4" />}
+        </>
+      )}
+    </button>
+    {selectedTier && (
+      <p className="text-center text-[10px] text-muted-foreground font-bold mt-1.5">
+        {selectedTier.stake} DROPS deducted from your game wallet
+      </p>
+    )}
+  </div>
+</div>
     </div>
   );
 }

@@ -612,6 +612,8 @@ export default function ChallengePage() {
   const [rematchCountdown, setRematchCountdown]       = useState<number | null>(null);
   const rematchTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const rematchTimeoutRef = useRef<ReturnType<typeof setTimeout>  | null>(null);
+  const gameOverAudioRef    = useRef<HTMLAudioElement | null>(null);
+  const gameOverAudioKeyRef = useRef<"winner" | "loser" | null>(null);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const myPlayerEntry = players.find(p => p.walletAddress.toLowerCase() === myWallet);
@@ -782,6 +784,15 @@ useEffect(() => {
       .catch(() => {});
   }
 }, [phase, myWallet, finalScores]);
+
+  const stopGameOverAudio = useCallback(() => {
+  if (gameOverAudioRef.current) {
+    gameOverAudioRef.current.pause();
+    gameOverAudioRef.current.currentTime = 0;
+    gameOverAudioRef.current = null;
+  }
+  gameOverAudioKeyRef.current = null;
+}, []);
 
   const handleInviteDismiss = useCallback(() => {
     if (inviteTimerRef.current) clearInterval(inviteTimerRef.current);
@@ -956,6 +967,7 @@ useEffect(() => {
           break;
         }
         case "challenge_expired": {
+          stopGameOverAudio();
           toast.error("Challenge expired — any staked DROPS have been refunded.");
           router.push("/challenge");
           break;
@@ -999,6 +1011,7 @@ useEffect(() => {
         }
         case "rematch_ready": {
           if (msg.requesterWallet?.toLowerCase() !== currentMyWallet) {
+            stopGameOverAudio();
             toast.success("Rematch ready! Heading to pre-lobby…");
             router.push(`/challenge/${msg.newCode}/pre-lobby`);
           }
@@ -1052,20 +1065,31 @@ useEffect(() => {
 }, [phase, currentQ, hasSubmitted, selectedId, revealCorrectId, players, myWallet]);
 
 // ── Sound: winner / loser on game over ──────────────────────────────────────
+// ── Winner / loser music — loops while on the results screen ───────────────
 useEffect(() => {
-  if (phase !== "game_over") { gameOverSoundPlayedRef.current = false; return; }
-  if (gameOverSoundPlayedRef.current) return;
-  gameOverSoundPlayedRef.current = true;
+  if (phase !== "game_over") {
+    stopGameOverAudio();
+    return;
+  }
 
-  if (winner?.toLowerCase() === myWallet) playSound("winner");
-  else if (gameOutcome !== "tie") playSound("loser");
-}, [phase, winner, gameOutcome, myWallet]);
-  // ── Handle expiry when timer hits zero in lobby ───────────────────────────
-  useEffect(() => {
-    if (expiry.isExpired && phase === "lobby" && userWalletAddress) {
-      expiry.cancelExpired(userWalletAddress);
-    }
-  }, [expiry.isExpired, phase, userWalletAddress]);
+  const isTieNow    = gameOutcome === "tie";
+  const isWinnerNow = winner?.toLowerCase() === myWallet;
+  const soundKey: "winner" | "loser" | null = isTieNow ? null : isWinnerNow ? "winner" : "loser";
+
+  if (!soundKey) return; // no music for ties
+  if (gameOverAudioKeyRef.current === soundKey) return; // already playing this track
+
+  stopGameOverAudio();
+  const audio = new Audio(SOUND_FILES[soundKey]);
+  audio.loop = true;
+  audio.volume = 0.5;
+  audio.play().catch(() => {});
+  gameOverAudioRef.current = audio;
+  gameOverAudioKeyRef.current = soundKey;
+
+  // Runs when phase/winner/outcome changes AND on component unmount
+  return () => stopGameOverAudio();
+}, [phase, winner, gameOutcome, myWallet, stopGameOverAudio]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -1529,7 +1553,7 @@ const handleStake = useCallback(async () => {
           <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
             <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
               <button
-                onClick={() => router.back()}
+                 onClick={() => { stopGameOverAudio(); router.back(); }}
                 className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm font-bold transition-colors"
               >
                 <ArrowLeft className="h-4 w-4" /> Back
@@ -1541,9 +1565,9 @@ const handleStake = useCallback(async () => {
           <div className="max-w-2xl mx-auto w-full px-4 py-8 pb-24 space-y-5">
 
             <div className="text-center space-y-2">
-              <div className="text-6xl">{isTie ? "🤝" : isWinner ? "🏆" : "🎯"}</div>
+              <div className="text-6xl">{isTie ? "🤝" : isWinner ? "🏆" : "😔"}</div>
               <h1 className="text-3xl font-black text-foreground">
-                {isTie ? "It's a tie!" : isWinner ? "You won!" : "Game over"}
+                {isTie ? "It's a tie!" : isWinner ? "You won!" : "You lost"}
               </h1>
               <p className="text-muted-foreground text-sm">{challenge?.topic}</p>
               <div className="inline-flex items-center gap-1.5 bg-muted/50 border border-border rounded-full px-3 py-1 text-xs font-bold text-muted-foreground">
@@ -1695,11 +1719,12 @@ const handleStake = useCallback(async () => {
               )}
 
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/challenge")}>
+                <Button variant="outline" className="flex-1 h-12" onClick={() => { stopGameOverAudio(); router.push("/challenge"); }}>
                   <Home className="mr-2 h-4 w-4" /> Hub
                 </Button>
-                <Button variant="outline" className="flex-1 h-12" onClick={() => router.push("/challenge/create-challenge")}>
-                  <Plus className="mr-2 h-4 w-4" /> New
+                <Button variant="outline" className="flex-1 h-12" onClick={() => { stopGameOverAudio(); router.push("/challenge/create-challenge"); }}>
+                <Plus className="mr-2 h-4 w-4" /> New
+                  
                 </Button>
               </div>
             </div>

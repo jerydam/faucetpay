@@ -1363,15 +1363,6 @@ const handleStake = useCallback(async () => {
             );
           })}
         </div>
-
-        {userWalletAddress && (
-          <FloatingChat
-            messages={chatMessages} myWallet={myWallet}
-            chatInput={chatInput} setChatInput={setChatInput}
-            onSend={handleSendChat} chatBottomRef={chatBottomRef}
-            unreadCount={unreadCount}
-          />
-        )}
       </div>
     );
   }

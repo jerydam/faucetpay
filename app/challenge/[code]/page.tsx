@@ -137,6 +137,33 @@ function Confetti({ active }: { active: boolean }) {
 // createdAt is a unix timestamp (seconds). We just count down locally.
 // Only when it hits zero do we call the backend to confirm + cancel.
 function BadgeUnlockedPopup({ onDismiss }: BadgeUnlockedPopupProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio("/sounds/winner.mp3");
+    audio.loop = true;
+    audio.volume = 0.5;
+    audio.play().catch(() => {});
+    audioRef.current = audio;
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleDismiss = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    onDismiss();
+  };
+
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
       <div
@@ -161,7 +188,7 @@ function BadgeUnlockedPopup({ onDismiss }: BadgeUnlockedPopupProps) {
         <p className="text-xs text-muted-foreground">
           Keep playing to climb tiers and earn higher APY on your DROPS.
         </p>
-        <Button className="w-full h-11 font-bold" onClick={onDismiss}>
+        <Button className="w-full h-11 font-bold" onClick={handleDismiss}>
           Nice! 🎉
         </Button>
       </div>
@@ -169,7 +196,32 @@ function BadgeUnlockedPopup({ onDismiss }: BadgeUnlockedPopupProps) {
     </div>
   );
 }
+// ── Sound Effects ─────────────────────────────────────────────────────────────
 
+const SOUND_FILES: Record<string, string> = {
+  correct: "/sounds/correct.mp3",
+  wrong: "/sounds/wrong.mp3",
+  "rank-up": "/sounds/rank-up.mp3",
+  "rank-down": "/sounds/rank-down.mp3",
+  winner: "/sounds/war.mp3",
+  loser: "/sounds/loser.mp3",
+};
+
+const soundCache: Record<string, HTMLAudioElement> = {};
+
+function playSound(key: keyof typeof SOUND_FILES, volume = 0.6) {
+  if (typeof window === "undefined") return;
+  try {
+    let audio = soundCache[key];
+    if (!audio) {
+      audio = new Audio(SOUND_FILES[key]);
+      soundCache[key] = audio;
+    }
+    audio.currentTime = 0;
+    audio.volume = volume;
+    audio.play().catch(() => {});
+  } catch {}
+}
 const BURN_WINDOW_SECONDS = 2 * 3600; // 2 hours — matches QuizHub contract
 // Keep STALE_WINDOW_SECONDS = 5 * 3600 for DB cleanup only
 
@@ -549,7 +601,9 @@ export default function ChallengePage() {
   const wsRef             = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
   const joinCalledRef     = useRef(false);
-
+  const prevRankRef          = useRef<number | null>(null);
+  const lastRevealKeyRef     = useRef<string | null>(null);
+  const gameOverSoundPlayedRef = useRef(false);
   const [rematchInvite, setRematchInvite]             = useState<RematchInvite | null>(null);
   const [isRequestingRematch, setIsRequestingRematch] = useState(false);
   const [rematchPending, setRematchPending]           = useState(false);
@@ -968,7 +1022,44 @@ useEffect(() => {
   }, [userWalletAddress, connectWS]);
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
+  
+  // ── Sound: correct / wrong answer + rank change on reveal ──────────────────
+useEffect(() => {
+  if (phase !== "reveal" || !currentQ) return;
+  const revealKey = `${currentQ.roundIndex}-${currentQ.questionIndex}`;
+  if (lastRevealKeyRef.current === revealKey) return; // already handled this reveal
+  lastRevealKeyRef.current = revealKey;
 
+  // Correct / wrong
+  if (hasSubmitted && selectedId === revealCorrectId) {
+    playSound("correct");
+  } else {
+    playSound("wrong");
+  }
+
+  // Rank up / rank down (based on current standings vs. previous reveal)
+  const sortedByPoints = [...players].sort((a, b) => b.points - a.points);
+  const myRankIndex = sortedByPoints.findIndex(
+    p => p.walletAddress.toLowerCase() === myWallet
+  );
+  if (myRankIndex !== -1) {
+    if (prevRankRef.current !== null) {
+      if (myRankIndex < prevRankRef.current) playSound("rank-up");
+      else if (myRankIndex > prevRankRef.current) playSound("rank-down");
+    }
+    prevRankRef.current = myRankIndex;
+  }
+}, [phase, currentQ, hasSubmitted, selectedId, revealCorrectId, players, myWallet]);
+
+// ── Sound: winner / loser on game over ──────────────────────────────────────
+useEffect(() => {
+  if (phase !== "game_over") { gameOverSoundPlayedRef.current = false; return; }
+  if (gameOverSoundPlayedRef.current) return;
+  gameOverSoundPlayedRef.current = true;
+
+  if (winner?.toLowerCase() === myWallet) playSound("winner");
+  else if (gameOutcome !== "tie") playSound("loser");
+}, [phase, winner, gameOutcome, myWallet]);
   // ── Handle expiry when timer hits zero in lobby ───────────────────────────
   useEffect(() => {
     if (expiry.isExpired && phase === "lobby" && userWalletAddress) {

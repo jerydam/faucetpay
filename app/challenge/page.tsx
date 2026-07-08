@@ -93,6 +93,31 @@ const S = `
     0%,100% { box-shadow: 0 0 8px 2px rgba(37,99,235,0.4), 0 0 0px rgba(37,99,235,0); border-color: rgba(37,99,235,0.5); }
     50%      { box-shadow: 0 0 18px 6px rgba(37,99,235,0.9), 0 0 32px 8px rgba(99,102,241,0.4); border-color: rgba(99,102,241,0.9); }
   }
+
+  @keyframes dangerGlow {
+  0%,100% { box-shadow: 0 0 8px 2px rgba(239,68,68,0.4), 0 0 0px rgba(239,68,68,0); border-color: rgba(239,68,68,0.6); }
+  50%      { box-shadow: 0 0 18px 6px rgba(239,68,68,0.9), 0 0 32px 8px rgba(220,38,38,0.4); border-color: #ef4444; }
+}
+@keyframes dangerPulseText {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.65; }
+}
+.danger-btn-glow {
+  animation: dangerGlow 1.4s ease-in-out infinite;
+  border: 1.5px solid rgba(239,68,68,0.6) !important;
+  background: rgba(239,68,68,0.1) !important;
+  color: #ef4444 !important;
+  position: relative;
+  overflow: hidden;
+}
+.danger-btn-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.6s infinite;
+}
   @keyframes checkinPulseText {
     0%,100% { opacity: 1; }
     50%      { opacity: 0.7; }
@@ -136,6 +161,7 @@ const S = `
     from { transform: translateY(24px); opacity: 0; }
     to   { transform: translateY(0);    opacity: 1; }
   }
+
   .checkin-popup { animation: popIn 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards; }
   .party-icon { animation: partyBounce 0.6s ease-in-out infinite; display: inline-block; }
   .confetti-piece { position: absolute; animation: confettiFall linear forwards; pointer-events: none; }
@@ -663,7 +689,7 @@ useEffect(() => {
                 </button>
                 <button
                   onClick={() => router.push(`/dashboard/${userWalletAddress}?tab=challenge&subtab=buy-drop`)}
-                  className={dropsBalance.gameDrops < 50 ? "danger-blink" : ""}
+                  className={dropsBalance.gameDrops < 50 ? "danger-btn-glow" : ""}
                   style={{
                     fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8,
                     ...(dropsBalance.gameDrops < 50
@@ -678,7 +704,16 @@ useEffect(() => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {dropsBalance.gameDrops < 50 ? "⚠️ Top Up Drops" : "Buy DROPS"}
+                  {dropsBalance.gameDrops < 50
+                    ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 12 }}>⚠️</span>
+                        <span style={{ animation: "dangerPulseText 1.4s ease-in-out infinite" }}>
+                          Top Up Drops
+                        </span>
+                      </span>
+                    )
+                    : "Buy DROPS"}
                 </button>
                 <span className="drops-pill" style={{ background: `${tierColor}15`, color: tierColor, border: `1px solid ${tierColor}30` }}>
                   {dropsBalance.tier}

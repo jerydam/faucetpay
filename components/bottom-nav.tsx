@@ -104,7 +104,7 @@ export function BottomNav() {
               onMouseEnter={e => (e.currentTarget.style.background = "var(--dd-line)")}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
             >
-              <Gavel size={16} color="var(--dd-blue)" /> 1v1 Duel
+              <Gavel size={16} color="var(--dd-blue)" /> Duel
             </button>
             <div style={{ height: 1, background: "var(--dd-line)", margin: "0 12px" }} />
             <button

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/use-wallet";
 import { Header } from "@/components/header";
@@ -8,12 +8,12 @@ import { getActiveSigner } from "@/lib/getSigner";
 import { keccak256, toUtf8Bytes } from "ethers";
 import {
   Loader2, Zap, ChevronRight, AlertCircle,
-  HelpCircle, Swords,
+  HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CELO_CHAIN_ID, getChainConfig } from "@/lib/chain";
-import { withAttribution, LEGACY_TX } from "@/lib/attribution-tag";
+import { sendTaggedRaw } from "@/lib/attribution-tag";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
@@ -136,7 +136,7 @@ function TierCard({
 
 export default function CreateSinglePage() {
   const router = useRouter();
-  const { address, chainId } = useWallet();
+  const { address } = useWallet();
   const [topic,      setTopic]      = useState("");
   const [difficulty, setDifficulty] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -177,7 +177,7 @@ export default function CreateSinglePage() {
     const calldata = iface.encodeFunctionData("createQuiz", [quizId])
     const chainCfg = getChainConfig()
 
-    const tx      = await activeSigner.sendTransaction({ to: chainCfg.contracts.quizHub, data: withAttribution(calldata), ...LEGACY_TX })
+    const tx      = await sendTaggedRaw(activeSigner, { to: chainCfg.contracts.quizHub, data: calldata })
     toast.loading("Waiting for confirmation…", { id: "sp-create" })
     const receipt = await tx.wait()
     if (!receipt || receipt.status !== 1) throw new Error("createQuiz tx reverted")

@@ -16,7 +16,9 @@ if (!hash) {
 }
 
 const client = createPublicClient({ chain: celo, transport: http("https://forno.celo.org") });
-const expectedCode = codeFromHostname("faucetdrops.io");
+// Subdomains produce distinct codes by design — check against the actual
+// deployed host, not the bare apex domain, or every real tag will look wrong.
+const expectedCode = codeFromHostname(process.env.ATTRIBUTION_HOSTNAME ?? "minipay.faucetdrops.io");
 
 const result = await verifyTx({ client, hash });
 

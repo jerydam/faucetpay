@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useSearchParams } from "next/navigation";
 import {getActiveSigner} from "@/lib/getSigner"
-import { withAttribution, LEGACY_TX } from "@/lib/attribution-tag"
+import { sendTaggedRaw } from "@/lib/attribution-tag"
 import {
   Loader2, CheckCircle2, AlertCircle,
   ChevronRight, ChevronLeft, Rocket, Globe, Lock,
@@ -21,7 +21,6 @@ import { cn } from "@/lib/utils";
 import {
   keccak256,
   toBytes,
-  type Address,
 } from "viem";
 import { getChainConfig, CELO_CHAIN_ID } from "@/lib/chain";
 
@@ -134,11 +133,9 @@ export default function CreateChallengePage() {
   const chainCfg = getChainConfig();
   // Step 0 — Topic & Visibility
   const [topic, setTopic]                     = useState("");
-  const [creatorUsername, setCreatorUsername] = useState("");
   const [isPublic, setIsPublic]               = useState(!searchParams.get("inviteUsername"));
   const [questionCount, setQuestionCount]     = useState(15);
   const QUIZ_HUB_ADDRESS = chainCfg.contracts.quizHub;
-  const DROPS_ADDRESS    = chainCfg.contracts.dropsToken;
   // Duel routing
   const [inviteUsername, setInviteUsername]   = useState(searchParams.get("inviteUsername") ?? "");
   const [inviteWallet, setInviteWallet]       = useState(searchParams.get("inviteWallet") ?? "");
@@ -228,12 +225,7 @@ useEffect(() => {
   let code: string | null = null
 
   try {
-    if (creatorUsername) {
-      await fetch(
-        `${API_BASE_URL}/api/players/register?wallet=${userWalletAddress}&username=${creatorUsername}`,
-        { method: "POST" },
-      ).catch(() => {})
-    }
+    const creatorUsername = `User${userWalletAddress.slice(-4).toUpperCase()}`
 
     const res = await fetch(`${API_BASE_URL}/api/challenge/create`, {
       method:  "POST",
@@ -242,7 +234,7 @@ useEffect(() => {
         topic:           topic.trim(),
         questionCount,
         creatorAddress:  userWalletAddress,
-        creatorUsername: creatorUsername || `User${userWalletAddress.slice(-4).toUpperCase()}`,
+        creatorUsername,
         stakeAmount:     stake,
         tokenSymbol:     DROPS_SYMBOL,
         chainId:         CELO_CHAIN_ID,
@@ -265,23 +257,13 @@ useEffect(() => {
 
     const quizId = deriveQuizId(code as string)
 
-    // Build a viem walletClient from the ethers signer
-    // For embedded wallets, activeSigner is an ethers Wallet (JsonRpcProvider)
-    // For external wallets, it's a JsonRpcSigner (BrowserProvider)
-    const { BrowserProvider, JsonRpcProvider } = await import("ethers")
-
-    // Sign and send via ethers directly (works for both wallet types)
     const iface = new (await import("ethers")).Interface(
       // minimal ABI for createQuiz(bytes32)
       ["function createQuiz(bytes32 quizId)"]
     )
     const calldata = iface.encodeFunctionData("createQuiz", [quizId])
 
-    const tx = await activeSigner.sendTransaction({
-      to:   QUIZ_HUB_ADDRESS,
-      data: withAttribution(calldata),
-      ...LEGACY_TX,
-    })
+    const tx = await sendTaggedRaw(activeSigner, { to: QUIZ_HUB_ADDRESS, data: calldata })
 
     toast.loading("Waiting for on-chain confirmation…", { id: "create-confirm" })
     const receipt = await tx.wait()

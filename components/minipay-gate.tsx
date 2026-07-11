@@ -1,8 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import dynamic from "next/dynamic"
 import { QRCodeSVG } from "qrcode.react"
 import { Smartphone, Copy, Check } from "lucide-react"
+
+// Code-split behind MiniPay detection: the wallet stack (ethers + co.) has
+// real weight, and non-MiniPay visitors (including PageSpeed/Lighthouse,
+// which don't set window.ethereum.isMiniPay) never render past the gate
+// screen below — so they should never pay to download it either.
+const AppShell = dynamic(() => import("@/components/app-shell"), { ssr: false })
 
 const APP_URL = "https://minipay.faucetdrops.io"
 
@@ -23,7 +30,7 @@ export function MiniPayGate({ children }: { children: React.ReactNode }) {
   // Detecting — render nothing (or a splash) to avoid gate flicker in MiniPay
   if (inMiniPay === null) return null
 
-  if (inMiniPay) return <>{children}</>
+  if (inMiniPay) return <AppShell>{children}</AppShell>
 
   // ── Not MiniPay: landing screen ──
   const copyLink = () => {

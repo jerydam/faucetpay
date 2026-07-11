@@ -5,12 +5,6 @@ import { useEffect } from "react"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "sonner"
-import { WalletProvider } from "@/components/wallet-provider"
-import { BottomNav } from "@/components/bottom-nav"
-import { PresenceProvider } from "@/components/presence-provider"
-
-import sdk from "@farcaster/miniapp-sdk"
 import { MiniPayGate } from "@/components/minipay-gate"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -20,10 +14,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  
+
   useEffect(() => {
+    // Dynamically imported — this SDK is only relevant to the small slice of
+    // users who open the app from inside a Farcaster frame, but a static
+    // import bundled its full weight into every page for every user
+    // (MiniPay included). code-split it so nobody else pays for it.
     const init = async () => {
       try {
+        const { default: sdk } = await import("@farcaster/miniapp-sdk");
         setTimeout(() => {
           sdk.actions.ready();
         }, 300);
@@ -67,17 +66,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-  <MiniPayGate>
-    <WalletProvider>
-      <PresenceProvider>
-        <div className="min-h-screen flex flex-col">
-          <main className="flex-1">{children}</main>
-        </div>
-        <BottomNav />
-        <Toaster richColors position="top-center" closeButton />
-      </PresenceProvider>
-    </WalletProvider>
-  </MiniPayGate>
+  <MiniPayGate>{children}</MiniPayGate>
 </ThemeProvider>
       </body>
     </html>

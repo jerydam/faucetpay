@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-import { useEffect } from "react"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -14,25 +13,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-
-  useEffect(() => {
-    // Dynamically imported — this SDK is only relevant to the small slice of
-    // users who open the app from inside a Farcaster frame, but a static
-    // import bundled its full weight into every page for every user
-    // (MiniPay included). code-split it so nobody else pays for it.
-    const init = async () => {
-      try {
-        const { default: sdk } = await import("@farcaster/miniapp-sdk");
-        setTimeout(() => {
-          sdk.actions.ready();
-        }, 300);
-      } catch (error) {
-        console.warn("Failed to initialize Farcaster SDK", error);
-      }
-    };
-    init();
-  }, []);
-
   return (
     <html lang="en">
       <head>

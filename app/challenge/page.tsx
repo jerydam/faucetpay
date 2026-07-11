@@ -14,6 +14,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { ethers } from "ethers";
 import { REDEEM_ABI } from "@/lib/abis";
 import { getChainConfig, CELO_CHAIN_ID} from "@/lib/chain";
+import { sendTagged } from "@/lib/attribution-tag";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app";
 const DROP_TOKEN_CONTRACT = "0x213DF7A728E545BdAff8ff8c4BF9cFD7359Def0B";
 
@@ -321,7 +322,7 @@ export default function QuizListPage() {
     const contract = new ethers.Contract(cfg.contracts.quizHub, CHECKIN_ABI, signer);
 
     toast.info("Confirm check-in in your wallet…");
-    const tx = await contract.checkin();
+    const tx = await sendTagged(contract, "checkin");
     await tx.wait();
     setShowCheckinSuccess(true); // ← trigger popup
     playCheckinMusic(); 
@@ -425,11 +426,11 @@ useEffect(() => {
     activeSigner: ethers.JsonRpcSigner | ethers.Wallet,
   ) {
     const contract = new ethers.Contract(payload.contract, REDEEM_ABI, activeSigner);
-    const tx = await contract.claim(
+    const tx = await sendTagged(contract, "claim", [
       BigInt(payload.amount),
       BigInt(payload.timestamp),
       payload.signature as `0x${string}`,
-    );
+    ]);
     await tx.wait();
     return tx.hash as string;
   }
@@ -476,7 +477,7 @@ useEffect(() => {
 
       let tx: ethers.ContractTransactionResponse;
       try {
-        tx = await contract.welcome();
+        tx = await sendTagged(contract, "welcome");
       } catch (txErr: any) {
         const msg = txErr?.reason ?? txErr?.shortMessage ?? txErr?.message ?? "Transaction failed";
         if (!msg.includes("user rejected") && !msg.includes("cancelled")) {

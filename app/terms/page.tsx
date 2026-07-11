@@ -337,7 +337,7 @@ const SECTIONS: Section[] = [
         <ul>
           <li>Smart contract bugs or exploits could result in loss of funds — use at your own risk.</li>
           <li>Blockchain network congestion or RPC failures may delay or prevent transactions.</li>
-          <li>Gas fees on Celo are separate from any DROPS staked and are borne entirely by you.</li>
+          <li>Network fees on Celo are separate from any DROPS staked and are borne entirely by you.</li>
           <li>PrimeIQ does not custody your DROPS — the contracts do.</li>
           <li>The resolver wallet can only call designated resolution functions; it cannot withdraw or redirect funds.</li>
         </ul>

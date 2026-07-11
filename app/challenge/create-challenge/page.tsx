@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useSearchParams } from "next/navigation";
 import {getActiveSigner} from "@/lib/getSigner"
+import { withAttribution, LEGACY_TX } from "@/lib/attribution-tag"
 import {
   Loader2, CheckCircle2, AlertCircle,
   ChevronRight, ChevronLeft, Rocket, Globe, Lock,
@@ -241,7 +242,7 @@ useEffect(() => {
         topic:           topic.trim(),
         questionCount,
         creatorAddress:  userWalletAddress,
-        creatorUsername: creatorUsername || userWalletAddress.slice(0, 8),
+        creatorUsername: creatorUsername || `User${userWalletAddress.slice(-4).toUpperCase()}`,
         stakeAmount:     stake,
         tokenSymbol:     DROPS_SYMBOL,
         chainId:         CELO_CHAIN_ID,
@@ -278,7 +279,8 @@ useEffect(() => {
 
     const tx = await activeSigner.sendTransaction({
       to:   QUIZ_HUB_ADDRESS,
-      data: calldata,
+      data: withAttribution(calldata),
+      ...LEGACY_TX,
     })
 
     toast.loading("Waiting for on-chain confirmation…", { id: "create-confirm" })

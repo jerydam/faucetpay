@@ -1,7 +1,4 @@
   "use client";
-  /**
-   * /app/quiz/[code]/page.tsx
-   */
   import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
   import { useParams, useRouter } from "next/navigation";
   import { useWallet } from "@/hooks/use-wallet";
@@ -19,15 +16,14 @@
   } from "lucide-react";
   import { getContractFundedStatus } from "@/lib/quiz";
   import { Wallet, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
-  import { useWallets } from "@privy-io/react-auth";
   import { BrowserProvider, Contract, JsonRpcProvider, parseUnits, Interface, formatUnits, TransactionRequest } from "ethers";
   import { fundQuizReward } from "@/lib/quiz";
+  import { showOnchainErrorToast } from "@/lib/minipay";
   import { toast } from "sonner";
   import { cn } from "@/lib/utils";
   import { WalletConnectButton } from "@/components/wallet-connect";
   import Loading from "@/app/loading";
   
-  import { useSolanaWallet } from "@/hooks/use-solana"
   // ── On-chain error parser ──────────────────────────────────────
   function parseOnchainError(err: any): string {
     // User rejected the transaction in their wallet
@@ -46,7 +42,7 @@
       err?.message?.toLowerCase().includes("insufficient funds") ||
       err?.message?.toLowerCase().includes("insufficient balance")
     ) {
-      return "Insufficient balance to cover this transaction + gas fees.";
+      return "Insufficient balance to cover this transaction + network fee.";
     }
 
     // Contract revert with a reason string
@@ -94,7 +90,7 @@
     return raw.length > 120 ? raw.slice(0, 120) + "…" : raw;
   }
   const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
-  const DEFAULT_QUIZ_COVER = "/quiz.jpeg";
+  const DEFAULT_QUIZ_COVER = "/quiz.webp";
   // ── Safe WS URL ──
   function getWsBaseUrl(): string {
     if (typeof window === "undefined") return "wss://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
@@ -285,11 +281,7 @@
     677:   "https://rpc.botchain.ai"
   };
 
-  const activeWallet =
-    wallets.find((w: any) => w.walletClientType === "privy") ||
-    wallets.find((w: any) => w.address.toLowerCase() === userWalletAddress?.toLowerCase()) ||
-    wallets?.[0];
-
+ 
   const [viewingProfile, setViewingProfile] = useState<{
     walletAddress: string;
     username: string;
@@ -497,15 +489,12 @@
   }, [payoutsData]);
 
   const handleSwitchAndClaim = async () => {
-  if (!activeWallet || !contractInfo) { toast.error("Wallet not connected"); return }
-
-  // Solana: no chain-switching needed, go straight to claim
-  
+  if (!contractInfo) { toast.error("Wallet not connected"); return }
   handleClaim()
 }
 
   const handleClaim = async () => {
-    if (!activeWallet) { toast.error("Wallet not connected"); return; }
+    if (!contractInfo) { toast.error("Wallet not connected"); return; }
     setIsClaiming(true);
     toast.info("Processing claim...");
     try {
@@ -1484,12 +1473,9 @@
     const params = useParams();
     const router = useRouter();
     const [showShareModal, setShowShareModal] = useState(false);
-    const { address: userWalletAddress } = useWallet();
-    const { wallets } = useWallets();
-    const activeWallet = 
-      wallets.find((w) => w.walletClientType === 'privy') || 
-      wallets.find((w) => w.address.toLowerCase() === userWalletAddress?.toLowerCase()) || 
-      wallets?.[0];
+    const { address: userWalletAddress, chainId: rawChainId, getActiveSigner } = useWallet();
+
+
     const code = (params.code as string || "").toUpperCase();
     const sessionKeyRef = useRef<CryptoKey | null>(null);
     const seenMessageIds = useRef<Set<string>>(new Set());
@@ -1504,7 +1490,6 @@
       isFunded: boolean;
       chainId?: number;
     } | null>(null);
-    const { activeSolanaWallet } = useSolanaWallet()
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [chatInput, setChatInput] = useState("");
     const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -1551,10 +1536,7 @@
     const hasSubmittedOnChain = useRef(false);
     const wsRef = useRef<WebSocket | null>(null);
     const myWallet = useMemo(() => userWalletAddress?.toLowerCase() ?? "", [userWalletAddress]);
-    const chainId = activeWallet
-      ? parseInt(activeWallet.chainId.split(":")[1] ?? "0")
-      : 0;
-    
+    const chainId = rawChainId ?? 42220;
     // ── Load profile ──
     useEffect(() => {
       if (!userWalletAddress) return;
@@ -1568,7 +1550,7 @@
     // ── Smart Funding Check & Auto-Heal ──
     useEffect(() => {
       // Only run if the user is the creator, the contract is known, and a wallet is connected
-      if (!isCreator || !quizReward?.contractAddress || !wallets[0]) return;
+      if (!isCreator || !quizReward?.contractAddress) return;
 
       let cancelled = false;
       let intervalId: ReturnType<typeof setInterval>;
@@ -1577,11 +1559,8 @@
         setIsFundedCheckLoading(true);
         
         try {
-          const privyProvider = await wallets[0].getEthereumProvider();
-          const ethersProvider = new BrowserProvider(privyProvider);
-          
-          const result = await getContractFundedStatus(
-            ethersProvider,
+          const signer = await getActiveSigner();
+          const result = await getContractFundedStatus(signer,
             quizReward.contractAddress,
             quizReward.tokenAddress,
             quizReward.tokenDecimals,
@@ -1628,7 +1607,7 @@
         clearInterval(intervalId);
       };
     // Re-run this effect ONLY if the contract address or connected wallet changes
-    }, [isCreator, quizReward?.contractAddress, wallets, code]);
+    }, [isCreator, quizReward?.contractAddress, code]);
 
     // ── Load quiz meta ──
     useEffect(() => {
@@ -2103,21 +2082,21 @@
     };
 
   const handleFundReward = async () => {
-  if (!quizReward) { toast.error("No reward configured"); return }
-  setIsFunding(true)
+    if (!quizReward) { toast.error("No reward configured"); return }
+    if (!getActiveSigner) { toast.error("Wallet not connected"); return }
+    setIsFunding(true)
   setFundError("")
 
   try {
     // ── EVM path (existing) ──────────────────────────────────────
-    if (!activeWallet) { toast.error("Wallet not ready"); return }
-    const privyProvider = await activeWallet.getEthereumProvider()
-    const provider = new BrowserProvider(privyProvider)
-    const { txHash } = await fundQuizReward(provider, chainId, quizReward.contractAddress, {
-      tokenAddress: quizReward.tokenAddress,
-      tokenDecimals: quizReward.tokenDecimals,
-      isNativeToken: quizReward.isNativeToken,
-      poolAmount: quizReward.poolAmount,
-    })
+    if (!quizReward) { toast.error("Wallet not ready"); return }
+    const signer = await getActiveSigner()
+      const { txHash } = await fundQuizReward(signer, chainId, quizReward.contractAddress, {
+        tokenAddress: quizReward.tokenAddress,
+        tokenDecimals: quizReward.tokenDecimals,
+        isNativeToken: quizReward.isNativeToken,
+        poolAmount: quizReward.poolAmount,
+      })
     setFundTxHash(txHash)
     setIsFunded(true)
     toast.success("Reward pool funded! 🎉")
@@ -2129,7 +2108,7 @@
   } catch (err: any) {
     const msg = parseOnchainError(err)
     setFundError(msg)
-    toast.error(msg)
+    showOnchainErrorToast(msg)
   } finally {
     setIsFunding(false)
   }
@@ -2204,7 +2183,6 @@
           loadingInitialResults={loadingInitialResults}
           rewardsReady={rewardsReady}
           quizReward={quizReward}
-          wallets={wallets}
         />
       );
     }

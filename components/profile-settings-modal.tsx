@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useWallet } from "@/components/wallet-provider"
-import { usePrivy } from "@privy-io/react-auth"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -34,7 +33,6 @@ export function ProfileSettingsModal({
   onOpenChange: externalOnOpenChange,
 }: ProfileSettingsModalProps) {
   const { address, isConnected, signer } = useWallet()
-  const { user } = usePrivy()
   const router = useRouter()
 
   const isControlled = externalOpen !== undefined && externalOnOpenChange !== undefined
@@ -53,51 +51,6 @@ export function ProfileSettingsModal({
   const [avatarMode, setAvatarMode]     = useState<"generate" | "upload">("generate")
   const hasLoaded = useRef(false)
 
-  // ── Identity resolution from Privy ───────────────────────────────────
-  // Silently collected from whichever login method the user used (email,
-  // Google OAuth, phone/SMS) — including the account used to set up MiniPay.
-  const resolvedEmail: string = (() => {
-    if (!user) return ""
-    if (user.google?.email) return user.google.email as string
-    if (user.email?.address) return user.email.address
-    for (const acc of user.linkedAccounts ?? []) {
-      const a = acc as any
-      if (a.email)        return a.email
-      if (a.emailAddress) return a.emailAddress
-      if (a.type === "google_oauth" && a.email) return a.email
-      if (a.type === "email"        && a.address) return a.address
-    }
-    return ""
-  })()
-
-  const resolvedPhone: string = (() => {
-    if (!user) return ""
-    for (const acc of user.linkedAccounts ?? []) {
-      const a = acc as any
-      if (a.type === "phone" && (a.phoneNumber || a.number))
-        return a.phoneNumber || a.number
-    }
-    return ""
-  })()
-
-  // Identity label shown in the "Connected as" chip
-  const identityLabel = resolvedEmail || resolvedPhone || ""
-
-  // Fallback avatar / username from Privy social data
-  const fallbackAvatar = (() => {
-    if (!user) return ""
-    const g = user.google as any
-    return g?.picture || g?.profilePictureUrl || ""
-  })()
-
-  const fallbackUsername = (() => {
-    if (!user) return ""
-    if (user.google?.name) return (user.google.name as string).replace(/\s+/g, "")
-    if (user.email?.address) return user.email.address.split("@")[0]
-    if (resolvedPhone) return `user${resolvedPhone.slice(-4)}`
-    return ""
-  })()
-
   // ── Fetch existing profile ────────────────────────────────────────────
   const loadProfile = useCallback(async () => {
     if (!address) return
@@ -106,15 +59,15 @@ export function ProfileSettingsModal({
       const res  = await fetch(`${API_BASE_URL}/api/profile/${address}`)
       const data = await res.json()
       const p    = data.profile
-      setUsername(p?.username  || fallbackUsername || "")
-      setAvatarUrl(p?.avatar_url || fallbackAvatar || "")
+      setUsername(p?.username  || "")
+      setAvatarUrl(p?.avatar_url || "")
     } catch {
-      setUsername(fallbackUsername || "")
-      setAvatarUrl(fallbackAvatar  || "")
+      setUsername("")
+      setAvatarUrl("")
     } finally {
       setPageLoading(false)
     }
-  }, [address, fallbackUsername, fallbackAvatar])
+  }, [address])
 
   useEffect(() => {
     if (isOpen && address && !hasLoaded.current) {
@@ -158,43 +111,43 @@ export function ProfileSettingsModal({
 
   // ── Avatar upload ─────────────────────────────────────────────────────
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0]
-  if (!file) return
+    const file = e.target.files?.[0]
+    if (!file) return
 
-  // Validate size (2MB limit)
-  if (file.size > 2 * 1024 * 1024) {
-    toast.error("Image must be under 2MB")
-    return
-  }
-
-  setUploading(true)
-  try {
-    const fd = new FormData()
-    fd.append("file", file)
-    const res = await fetch(`${API_BASE_URL}/upload-image`, { method: "POST", body: fd })
-
-    if (!res.ok) {
-      const text = await res.text()
-      console.error("Upload error:", res.status, text)
-      throw new Error(`Server error ${res.status}`)
+    // Validate size (2MB limit)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must be under 2MB")
+      return
     }
 
-    const data = await res.json()
-    if (data.success) {
-      setAvatarUrl(data.imageUrl)
-      toast.success("Photo uploaded!")
-    } else {
-      throw new Error(data.message || "Upload failed")
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch(`${API_BASE_URL}/upload-image`, { method: "POST", body: fd })
+
+      if (!res.ok) {
+        const text = await res.text()
+        console.error("Upload error:", res.status, text)
+        throw new Error(`Server error ${res.status}`)
+      }
+
+      const data = await res.json()
+      if (data.success) {
+        setAvatarUrl(data.imageUrl)
+        toast.success("Photo uploaded!")
+      } else {
+        throw new Error(data.message || "Upload failed")
+      }
+    } catch (err: any) {
+      console.error("Upload failed:", err)
+      toast.error(err.message || "Upload failed — check your connection")
+    } finally {
+      setUploading(false)
+      // Reset input so same file can be re-selected
+      e.target.value = ""
     }
-  } catch (err: any) {
-    console.error("Upload failed:", err)
-    toast.error(err.message || "Upload failed — check your connection")
-  } finally {
-    setUploading(false)
-    // Reset input so same file can be re-selected
-    e.target.value = ""
   }
-}
 
   // ── Save ──────────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -205,9 +158,14 @@ export function ProfileSettingsModal({
 
     setSaving(true)
     try {
+      // MiniPay's WebView does not support personal_sign / eth_signTypedData —
+      // signer.signMessage() would hang or reject there. MiniPay's injected
+      // provider already guarantees the connected address, so we skip the
+      // signature challenge and authenticate by address alone in that case.
+      const isMiniPay = typeof window !== "undefined" && !!(window.ethereum as any)?.isMiniPay
       const nonce   = Math.floor(Math.random() * 1_000_000).toString()
       const message = `Update Profile\nWallet: ${address}\nNonce: ${nonce}`
-      const signature = await signer.signMessage(message)
+      const signature = isMiniPay ? undefined : await signer.signMessage(message)
 
       const res = await fetch(`${API_BASE_URL}/api/profile/update`, {
         method: "POST",
@@ -216,9 +174,9 @@ export function ProfileSettingsModal({
           wallet_address: address,
           username:       username.trim(),
           avatar_url:     avatarUrl,
-          // Auto-attach the identity from the user's MiniPay / Privy login
-          email:          resolvedEmail,
-          phone:          resolvedPhone,
+          // Wallet-only identity on MiniPay — no social login data
+          email:          "",
+          phone:          "",
           // kept for schema compatibility
           bio: "", solana_address: "", twitter_handle: "", discord_handle: "",
           telegram_handle: "", farcaster_handle: "", twitter_id: "",
@@ -349,29 +307,27 @@ export function ProfileSettingsModal({
 
               {/* Upload area */}
               {avatarMode === "upload" && (
-                <label className="w-full cursor-pointer">
-                  <div className="w-full space-y-2">
-  <label htmlFor="avatar-upload" className="w-full cursor-pointer">
-    <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-7 hover:bg-muted/40 transition-colors">
-      {uploading
-        ? <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        : <Upload className="h-8 w-8 text-muted-foreground" />
-      }
-      <p className="text-xs text-muted-foreground font-medium text-center">
-        {uploading ? "Uploading…" : "Tap to choose a photo"}
-      </p>
-    </div>
-  </label>
-  <input
-    id="avatar-upload"
-    type="file"
-    accept="image/*"
-    onChange={handleUpload}
-    disabled={uploading}
-    className="hidden"
-  />
-</div>
-                </label>
+                <div className="w-full space-y-2">
+                  <label htmlFor="avatar-upload" className="w-full cursor-pointer">
+                    <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-7 hover:bg-muted/40 transition-colors">
+                      {uploading
+                        ? <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        : <Upload className="h-8 w-8 text-muted-foreground" />
+                      }
+                      <p className="text-xs text-muted-foreground font-medium text-center">
+                        {uploading ? "Uploading…" : "Tap to choose a photo"}
+                      </p>
+                    </div>
+                  </label>
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUpload}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+                </div>
               )}
             </div>
 
@@ -415,18 +371,20 @@ export function ProfileSettingsModal({
               )}
             </div>
 
-            {/* ── Connected account (auto-detected, read-only) ─────────── */}
-            {identityLabel && (
+            {/* ── Connected wallet (read-only) ──────────────────────────── */}
+            {address && (
               <div className="flex items-center gap-3 px-3.5 py-3 rounded-xl bg-primary/5 border border-primary/15">
                 <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider mb-0.5">
-                    Account
+                    Wallet
                   </p>
-                  <p className="text-sm font-semibold text-foreground truncate">{identityLabel}</p>
+                  <p className="text-sm font-semibold text-foreground truncate font-mono">
+                    {address.slice(0, 6)}…{address.slice(-4)}
+                  </p>
                 </div>
                 <span className="text-[10px] font-bold text-primary/70 bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
-                  Linked
+                  Connected
                 </span>
               </div>
             )}

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { WalletConnectButton } from "@/components/wallet-connect";
 import Link from "next/link";
-import { Menu, X, ChevronLeft, Plus, RefreshCw } from "lucide-react";
+import { Menu, X, ChevronLeft, Plus, RefreshCw, LifeBuoy } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useWallet } from "@/hooks/use-wallet";
 import { cn } from "@/lib/utils";
@@ -176,6 +176,15 @@ export function Header({
           <div className="hidden lg:flex items-center gap-4">
             <ThemeToggle />
             <NotificationBell />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push("/support")}
+              aria-label="Support"
+              title="Support"
+            >
+              <LifeBuoy className="h-4 w-4" />
+            </Button>
 
             {isConnected && !hideAction && (
               <Button
@@ -202,6 +211,15 @@ export function Header({
           <div className="lg:hidden flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
             <NotificationBell />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push("/support")}
+              aria-label="Support"
+              title="Support"
+            >
+              <LifeBuoy className="h-4 w-4" />
+            </Button>
 
             {/* MiniPay: profile avatar replaces wallet connect */}
             {isMiniPay ? (

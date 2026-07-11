@@ -20,6 +20,9 @@ import { REDEEM_ABI } from "@/lib/abis";
 import { getGTokenPrice } from "@/lib/getToken";
 import { getActiveSigner } from "@/lib/getSigner";
 import { getChainConfig, CELO_CHAIN_ID} from "@/lib/chain";
+import { sendTagged } from "@/lib/attribution-tag";
+import { isMiniPay, isInsufficientBalanceMessage, openAddCash } from "@/lib/minipay";
+import { ToastAction } from "@/components/ui/toast";
 const BACKEND_URL = "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app";
 
 /** ─── Contract config ────────────────────────────────────────────────────── */
@@ -61,11 +64,11 @@ async function submitDropsClaim(
   activeSigner: ethers.JsonRpcSigner | ethers.Wallet,
 ): Promise<string> {
   const contract = new ethers.Contract(payload.contract, REDEEM_ABI, activeSigner);
-  const tx = await contract.claim(
+  const tx = await sendTagged(contract, "claim", [
     BigInt(payload.amount),
     BigInt(payload.timestamp),
     payload.signature as `0x${string}`,
-  );
+  ]);
   await tx.wait();
   return tx.hash as string;
 }
@@ -511,7 +514,7 @@ const adminMode = isOwner && isAdmin(connectedAddress);
       }
 
       toast({ title: `⏳ Confirm ${tokenSymbol} transfer in your wallet…` });
-      const tx = await gToken.transfer(DROPS_REDEEM_POOL_ADDRESS, gAmountWei);
+      const tx = await sendTagged(gToken, "transfer", [DROPS_REDEEM_POOL_ADDRESS, gAmountWei]);
       toast({ title: "📡 Transfer sent, waiting for confirmation…" });
 
       const receipt = await tx.wait();
@@ -554,7 +557,14 @@ const adminMode = isOwner && isAdmin(connectedAddress);
     } catch (err: any) {
       console.error("handleConfirmDeposit error:", err);
       const msg = err?.reason ?? err?.shortMessage ?? err?.message ?? "Unknown error";
-      toast({ title: "Transaction failed", description: msg, variant: "destructive" });
+      toast({
+        title: "Transaction failed",
+        description: msg,
+        variant: "destructive",
+        action: isMiniPay() && isInsufficientBalanceMessage(msg)
+          ? <ToastAction altText="Deposit" onClick={openAddCash}>Deposit</ToastAction>
+          : undefined,
+      });
       setBuyStep("deposit");
     } finally {
       setBuyLoading(false);
@@ -748,11 +758,11 @@ const adminMode = isOwner && isAdmin(connectedAddress);
       const allowance: bigint = await gToken.allowance(walletAddress, DROPS_REDEEM_POOL_ADDRESS);
       if (allowance < amtWei) {
         toast({ title: `⏳ Approving ${tokenSymbol} spend…` });
-        const approveTx = await gToken.approve(DROPS_REDEEM_POOL_ADDRESS, amtWei);
+        const approveTx = await sendTagged(gToken, "approve", [DROPS_REDEEM_POOL_ADDRESS, amtWei]);
         await approveTx.wait();
         toast({ title: "✅ Approval confirmed" });
       }
-      return contract.depositG(amtWei);
+      return sendTagged(contract, "depositG", [amtWei]);
     }, () => setDepositAmount(""));
   };
 
@@ -760,7 +770,7 @@ const adminMode = isOwner && isAdmin(connectedAddress);
     const amt = parseFloat(withdrawAmount);
     if (!amt || amt <= 0) return;
     contractWrite("withdraw", `Withdraw ${tokenSymbol}`, (contract) =>
-      contract.withdrawG(ethers.parseUnits(withdrawAmount, 18)),
+      sendTagged(contract, "withdrawG", [ethers.parseUnits(withdrawAmount, 18)]),
     () => setWithdrawAmount(""));
   };
 
@@ -769,7 +779,7 @@ const adminMode = isOwner && isAdmin(connectedAddress);
     if (!priceUsd || priceUsd <= 0) return;
     const priceWei = ethers.parseUnits(newGPrice, 18);
     contractWrite("price", `Set ${tokenSymbol} Price`, (contract) =>
-      contract.setGPrice(priceWei),
+      sendTagged(contract, "setGPrice", [priceWei]),
     () => setNewGPrice(""));
   };
 
@@ -778,7 +788,7 @@ const adminMode = isOwner && isAdmin(connectedAddress);
       toast({ title: "Invalid address", variant: "destructive" }); return;
     }
     contractWrite("resolver", `Set ${tokenSymbol} Resolver`, (contract) =>
-      contract.setResolver(newResolver),
+      sendTagged(contract, "setResolver", [newResolver]),
     () => setNewResolver(""));
   };
 
@@ -787,7 +797,7 @@ const adminMode = isOwner && isAdmin(connectedAddress);
       toast({ title: "Invalid address", variant: "destructive" }); return;
     }
     contractWrite("service", "Set Service Address", (contract) =>
-      contract.setServiceAddress(newServiceAddress),
+      sendTagged(contract, "setServiceAddress", [newServiceAddress]),
     () => setNewServiceAddress(""));
   };
 
@@ -796,7 +806,7 @@ const adminMode = isOwner && isAdmin(connectedAddress);
       toast({ title: "Invalid address", variant: "destructive" }); return;
     }
     contractWrite("dropsToken", "Set DROPS Token", (contract) =>
-      contract.setDropsToken(newDropsToken),
+      sendTagged(contract, "setDropsToken", [newDropsToken]),
     () => setNewDropsToken(""));
   };
 
@@ -861,7 +871,7 @@ const adminMode = isOwner && isAdmin(connectedAddress);
       );
 
       const totalWei = ethers.parseUnits(drops.toString(), 18);
-      const burnTx   = await dropsContract.redeem(totalWei, `redeem_${Date.now()}`);
+      const burnTx   = await sendTagged(dropsContract, "redeem", [totalWei, `redeem_${Date.now()}`]);
 
       toast({ title: "📡 Burn sent, waiting for confirmation…" });
       const receipt = await burnTx.wait();

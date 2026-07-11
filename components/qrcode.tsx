@@ -592,7 +592,7 @@ export function QRCodeShareDialog({
   const [dlQrOnly, setDlQrOnly]             = useState(false);
 
   const faucetName  = faucetDetails?.name      || "Token Faucet";
-  const faucetImage = faucetMetadata?.imageUrl || "/default.jpeg";
+  const faucetImage = faucetMetadata?.imageUrl || "/default.webp";
 
   const qrColors = {
     web:       { dark: "#2563eb", light: "#ffffff" },
@@ -641,7 +641,7 @@ useEffect(() => {
     faucetImage,
     networkName:    selectedNetwork?.name    || "Mainnet",
     networkLogoUrl: selectedNetwork?.logoUrl || "",
-    logoPath:       "/lightlogo.png",
+    logoPath:       "/lightlogo.webp",
     isDropCode:     faucetType === "dropcode",
     secretCode:     secretCode || "",
   });

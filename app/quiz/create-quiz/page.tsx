@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo, useRef } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/use-wallet";
 import { Header } from "@/components/header";
@@ -24,7 +24,8 @@ import {
 
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getNetworkByChainId } from "@/hooks/use-network";
+import { getNetworkByChainId } from "@/lib/chain";
+import { showOnchainErrorToast } from "@/lib/minipay";
 // Add these imports at the top of create-quiz/page.tsx
 
 
@@ -48,7 +49,7 @@ function parseOnchainError(err: any): string {
     err?.message?.toLowerCase().includes("insufficient funds") ||
     err?.message?.toLowerCase().includes("insufficient balance")
   ) {
-    return "Insufficient balance to cover this transaction + gas fees.";
+    return "Insufficient balance to cover this transaction + network fee.";
   }
 
   // Contract revert with a reason string
@@ -90,7 +91,7 @@ function parseOnchainError(err: any): string {
   return raw.length > 120 ? raw.slice(0, 120) + "…" : raw;
 }
 const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
-const DEFAULT_QUIZ_COVER = "/quiz.jpeg";
+const DEFAULT_QUIZ_COVER = "/quiz.webp";
 
 interface QuizOption { id: "A" | "B" | "C" | "D"; text: string }
 interface QuizQuestion {
@@ -122,59 +123,23 @@ interface TokenConfiguration {
   isNative?: boolean; logoUrl: string; description: string;
 }
 
+// Celo-only — PrimeIQ dropped multi-chain support (see lib/chain.ts, hooks/use-network.tsx
+// was deleted entirely). MiniPay also requires CELO itself to stay out of user-facing
+// selectors, which is enforced below via the isMiniPay filter.
 const ALL_TOKENS_BY_CHAIN: Record<number, TokenConfiguration[]> = {
   42220: [
-    { address: "0x471EcE3750Da237f93B8E339c536989b8978a438", name: "Celo", symbol: "CELO", decimals: 18, isNative: true, logoUrl: "/celo.jpeg", description: "Native Celo token" },
+    { address: "0x471EcE3750Da237f93B8E339c536989b8978a438", name: "Celo", symbol: "CELO", decimals: 18, isNative: true, logoUrl: "/celo.webp", description: "Native Celo token" },
     { address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", name: "Celo Dollar", symbol: "cUSD", decimals: 18, logoUrl: "/cusd.png", description: "USD-pegged stablecoin" },
     { address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", name: "Tether", symbol: "USDT", decimals: 6, logoUrl: "/usdt.jpg", description: "Tether USD stablecoin" },
     { address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", name: "USD Coin", symbol: "USDC", decimals: 6, logoUrl: "/usdc.jpg", description: "USD Coin stablecoin" },
   ],
-  1135: [
-    { address: "0x0000000000000000000000000000000000000000", name: "Ethereum", symbol: "ETH", decimals: 18, isNative: true, logoUrl: "/ether.jpeg", description: "Native Ethereum" },
-    { address: "0xac485391EB2d7D88253a7F1eF18C37f4242D1A24", name: "Lisk", symbol: "LSK", decimals: 18, logoUrl: "/lsk.png", description: "Lisk native token" },
-  ],
-  42161: [
-    { address: "0x0000000000000000000000000000000000000000", name: "Ethereum", symbol: "ETH", decimals: 18, isNative: true, logoUrl: "/ether.jpeg", description: "Native Ethereum" },
-    { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", name: "USD Coin", symbol: "USDC", decimals: 6, logoUrl: "/usdc.jpg", description: "Native USD Coin" },
-  ],
-  8453: [
-    { address: "0x0000000000000000000000000000000000000000", name: "Ethereum", symbol: "ETH", decimals: 18, isNative: true, logoUrl: "/ether.jpeg", description: "Native Ethereum" },
-    { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", name: "USD Coin", symbol: "USDC", decimals: 6, logoUrl: "/usdc.jpg", description: "Native USD Coin" },
-  ],
-  56: [
-    { address: "0x0000000000000000000000000000000000000000", name: "BNB", symbol: "BNB", decimals: 18, isNative: true, logoUrl: "/bnb.png", description: "Native BNB" },
-    { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", name: "USD Coin", symbol: "USDC", decimals: 18, logoUrl: "/usdc.jpg", description: "Binance-Peg USD Coin" },
-    { address: "0x55d398326f99059fF775485246999027B3197955", name: "Tether USD", symbol: "USDT", decimals: 18, logoUrl: "/usdt.jpg", description: "Binance-Peg BSC-USD" },
-    { address: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", name: "BUSD", symbol: "BUSD", decimals: 18, logoUrl: "/busd.png", description: "Binance-Peg BUSD Token" },
-    { address: "0x33A3d962955A3862C8093D1273344719f03cA17C", name: "SPORE", symbol: "SPR", decimals: 9, logoUrl: "/spore.png", description: "Binance meme Token" },
-  ],
-  677:[
-          {
-            address: "0x0000000000000000000000000000000000000000",
-            name: "BOT",
-            symbol: "BOT",
-            decimals: 18,
-            isNative: true,
-            logoUrl: "/bot.png", 
-            description: "Native BOT for transaction fees",
-          },
-          {
-            address: "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C",
-            name: "Tether USD",
-            symbol: "USDT",
-            decimals: 18,
-            logoUrl: "/usdt.jpg", 
-            description: "Tether USD stablecoin",
-          },
-         ]
 };
 
 const COINGECKO_IDS: Record<string, string> = {
   CELO: "celo", cUSD: "celo-dollar", USDT: "tether", USDC: "usd-coin",
-  ETH: "ethereum", LSK: "lisk", BNB: "binance-coin", BUSD: "binance-usd", BOT: "bot-chain"
 };
 const CHAIN_NAMES: Record<number, string> = {
-  42220: "Celo", 1135: "Lisk", 42161: "Arbitrum", 8453: "Base", 56: "BNB Chain", 677: "BOTCHAIN"
+  42220: "Celo",
 };
 
 // Kahoot-inspired option colors — bright and fun
@@ -729,7 +694,19 @@ export default function CreateQuizPage() {
   const router = useRouter();
   const { address: userWalletAddress, getActiveSigner, chainId: chainId_ } = useWallet();
   const chainId = chainId_ ?? 0;
-  const availableTokens = ALL_TOKENS_BY_CHAIN[chainId] ?? [];
+
+  // MiniPay hides CELO (and every other native gas token) from users and pays
+  // network fees via fee abstraction — a reward pool denominated in CELO/ETH/BNB
+  // would show users a token their wallet UI doesn't even surface. Stablecoins only.
+  const [isMiniPay, setIsMiniPay] = useState(false);
+  useEffect(() => {
+    setIsMiniPay(!!(window.ethereum as any)?.isMiniPay);
+  }, []);
+
+  const availableTokens = useMemo(() => {
+    const tokens = ALL_TOKENS_BY_CHAIN[chainId] ?? [];
+    return isMiniPay ? tokens.filter((t) => !t.isNative) : tokens;
+  }, [chainId, isMiniPay]);
   const chainName = CHAIN_NAMES[chainId] ?? "Unknown Network";
   
   
@@ -1028,7 +1005,7 @@ const handlePdfUpload = async () => {
     setDeployStep("error")
     const msg = parseOnchainError(err)
     setDeployError(msg)
-    toast.error(`❌ Failed: ${msg}`, { id: toastId })
+    showOnchainErrorToast(`❌ Failed: ${msg}`, { id: toastId })
   } finally {
     setIsSubmitting(false)
   }
@@ -1099,7 +1076,7 @@ const handleGenerateAI = async () => {
     setDeployStep("error")
     const msg = parseOnchainError(err)
     setDeployError(msg)
-    toast.error(`❌ Failed: ${msg}`, { id: toastId })
+    showOnchainErrorToast(`❌ Failed: ${msg}`, { id: toastId })
   } finally {
     setIsGenerating(false)
   }

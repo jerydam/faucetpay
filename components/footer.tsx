@@ -74,7 +74,7 @@ export const Footer: React.FC<FooterProps> = ({ className = "" }) => {
                 Built By FaucetDrops
               </span>
               <Image
-                src="/favicon.png"
+                src="/favicon.webp"
                 alt="FaucetDrops Logo"
                 width={40}
                 height={40}
@@ -124,7 +124,7 @@ export const Footer: React.FC<FooterProps> = ({ className = "" }) => {
             >
               <span>&copy; {new Date().getFullYear()}</span>
               <div className="flex items-center gap-3">
-                {[{ label: "Privacy", href: "/privacy" }, { label: "Terms", href: "/terms" }].map(({ label, href }) => (
+                {[{ label: "Support", href: "/support" }, { label: "Stats", href: "/stats" }, { label: "Privacy", href: "/privacy" }, { label: "Terms", href: "/terms" }].map(({ label, href }) => (
                   <Link
                     key={label}
                     href={href}

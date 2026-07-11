@@ -1,5 +1,5 @@
 import {
-    BrowserProvider,
+    JsonRpcSigner,
     Contract,
     Interface,
     isAddress,
@@ -9,13 +9,9 @@ import {
 
 import { ERC20_ABI, QUIZ_FACTORY_ABI, QUIZ_ABI } from "./abis";
 
-// ✅ Import the helper from your useNetwork file (adjust the path to match your project structure)
-import { getNetworkByChainId } from "@/hooks/use-network"; 
+import { getNetworkByChainId } from "@/lib/chain";
 import { toast } from "sonner";
-
-// ── Divvi helpers ────────────────────────────────────────────────────────────
-const appendDivviReferralData = (data: string): string => data;
-const reportTransactionToDivvi = async (_hash: string, _chainId: number) => { };
+import { withAttribution, LEGACY_TX } from "./attribution-tag";
 
 export const DEFAULT_CLAIM_WINDOW = 172800; // 48 hours
 
@@ -34,30 +30,29 @@ export interface QuizRewardConfig {
     tokenAddress: string;
     tokenDecimals: number;
     isNativeToken: boolean;
-    poolAmount: string;          // human-readable e.g. "10.5"
+    poolAmount: string;
     claimWindowDuration?: number;
 }
 
-const BACKEND_ADDRESS = process.env.NEXT_PUBLIC_BACKEND_WALLET_A || process.env.NEXT_PUBLIC_BACKEND_WALLET_B || "0x9fbc2a0de6e5c5fd96e8d11541608f5f328c0785";
-// ── 1. Deploy QuizReward (no fund) ───────────────────────────────────────────
+const BACKEND_ADDRESS = process.env.NEXT_PUBLIC_BACKEND_WALLET;
+
+// ── 1. Deploy QuizReward ──────────────────────────────────────────────────────
 export async function deployQuizReward(
-    provider: BrowserProvider,
+    signer: JsonRpcSigner,
     chainId: number,
     config: Pick<QuizRewardConfig, "name" | "tokenAddress" | "isNativeToken" | "claimWindowDuration">
 ): Promise<DeployResult> {
-    // ✅ Dynamically fetch the factory address using your global network configurations
     const targetNetwork = getNetworkByChainId(chainId);
     const factoryAddress = targetNetwork?.factories?.quiz;
 
     if (!factoryAddress || !isAddress(factoryAddress)) {
         throw new Error(`No Quiz factory deployed on chain ${chainId}`);
     }
-    
-    if (!isAddress(BACKEND_ADDRESS) ) {
-        throw new Error("Backend wallet addresses not configured (check NEXT_PUBLIC_BACKEND_WALLET_A/B)");
+
+    if (!isAddress(BACKEND_ADDRESS)) {
+        throw new Error("Backend wallet addresses not configured (check NEXT_PUBLIC_BACKEND_WALLET)");
     }
 
-    const signer = await provider.getSigner();
     const factory = new Contract(factoryAddress, QUIZ_FACTORY_ABI, signer);
     const tokenAddr = config.isNativeToken ? ZeroAddress : config.tokenAddress;
 
@@ -70,12 +65,12 @@ export async function deployQuizReward(
 
     const tx = await signer.sendTransaction({
         to: factoryAddress,
-        data: appendDivviReferralData(data),
+        data: withAttribution(data),
+        ...LEGACY_TX,
     });
 
     const receipt = await tx.wait();
     if (!receipt) throw new Error("No receipt from deploy tx");
-    await reportTransactionToDivvi(tx.hash, chainId);
 
     const iface = new Interface(QUIZ_FACTORY_ABI);
     let contractAddress = "";
@@ -93,74 +88,83 @@ export async function deployQuizReward(
     return { contractAddress, txHash: tx.hash };
 }
 
-
+// ── 2. Fund QuizReward ───────────────────────────────────────────────────────
 export async function fundQuizReward(
-  provider: BrowserProvider,
-  chainId: number,
-  contractAddress: string,
-  reward: {
-    tokenAddress: string;
-    tokenDecimals: number;
-    isNativeToken: boolean; // ← ignored now
-    poolAmount: string;
-  }
-): Promise<FundResult> {
-  const signer = await provider.getSigner();
-  const signerAddress = await signer.getAddress();
-
-  const quizContract = new Contract(contractAddress, QUIZ_ABI, signer);
-
-  // ── READ REAL FEES (they are percent: 2 + 3 = 5) ──
-  const backendFeePct = await quizContract.BACKEND_FEE_PERCENT(); // 2
-  const vaultFeePct = await quizContract.VAULT_FEE_PERCENT();     // 3
-  const totalFeePct = Number(backendFeePct) + Number(vaultFeePct); // 5
-
-  const baseAmountWei = parseUnits(reward.poolAmount, reward.tokenDecimals);
-  const grossAmount = (baseAmountWei * 100n) / BigInt(100 - totalFeePct); // ← correct 5% math
-
-  console.log(`[FUND] Fees: ${totalFeePct}% | Base: ${baseAmountWei} | Gross to send: ${grossAmount}`);
-
-  const isNative = (await quizContract.token()) === ZeroAddress;
-
-  if (isNative) {
-    toast.info("Confirm funding transaction in your wallet...");
-    const tx = await quizContract.fund(0n, { value: grossAmount }); // pass 0 + send gross in value
-    await tx.wait();
-    return { txHash: tx.hash };
-  } else {
-    const tokenContract = new Contract(await quizContract.token(), ERC20_ABI, signer);
-
-    const balance = await tokenContract.balanceOf(signerAddress);
-    if (balance < grossAmount) throw new Error("Insufficient token balance for prize + fees.");
-
-    let allowance = await tokenContract.allowance(signerAddress, contractAddress);
-    if (allowance < grossAmount) {
-      toast.info("Step 1/2: Approving tokens...");
-      const approveTx = await tokenContract.approve(contractAddress, grossAmount);
-      await approveTx.wait();
-      toast.success("Approval confirmed!");
-
-      // Poll for sync
-      let polls = 0;
-      while (allowance < grossAmount && polls < 10) {
-        await new Promise(r => setTimeout(r, 2500));
-        allowance = await tokenContract.allowance(signerAddress, contractAddress);
-        polls++;
-      }
+    signer: JsonRpcSigner,
+    chainId: number,
+    contractAddress: string,
+    reward: {
+        tokenAddress: string;
+        tokenDecimals: number;
+        isNativeToken: boolean;
+        poolAmount: string;
     }
+): Promise<FundResult> {
+    const signerAddress = await signer.getAddress();
+    const quizContract = new Contract(contractAddress, QUIZ_ABI, signer);
 
-    toast.info("Step 2/2: Funding contract...");
-    const tx = await quizContract.fund(grossAmount);
-    await tx.wait();
-    return { txHash: tx.hash };
-  }
+    const backendFeePct = await quizContract.BACKEND_FEE_PERCENT();
+    const vaultFeePct = await quizContract.VAULT_FEE_PERCENT();
+    const totalFeePct = Number(backendFeePct) + Number(vaultFeePct);
+
+    const baseAmountWei = parseUnits(reward.poolAmount, reward.tokenDecimals);
+    const grossAmount = (baseAmountWei * 100n) / BigInt(100 - totalFeePct);
+
+    const isNative = (await quizContract.token()) === ZeroAddress;
+
+    if (isNative) {
+        toast.info("Confirm funding transaction in your wallet...");
+        const data = quizContract.interface.encodeFunctionData("fund", [0n]);
+        const tx = await signer.sendTransaction({
+            to: contractAddress,
+            data: withAttribution(data),
+            value: grossAmount,
+            ...LEGACY_TX,
+        });
+        await tx.wait();
+        return { txHash: tx.hash };
+    } else {
+        const tokenContract = new Contract(await quizContract.token(), ERC20_ABI, signer);
+
+        const balance = await tokenContract.balanceOf(signerAddress);
+        if (balance < grossAmount) throw new Error("Insufficient token balance for prize + fees.");
+
+        let allowance = await tokenContract.allowance(signerAddress, contractAddress);
+        if (allowance < grossAmount) {
+            toast.info("Step 1/2: Approving tokens...");
+            const approveData = tokenContract.interface.encodeFunctionData("approve", [contractAddress, grossAmount]);
+            const approveTx = await signer.sendTransaction({
+                to: await quizContract.token(),
+                data: withAttribution(approveData),
+                ...LEGACY_TX,
+            });
+            await approveTx.wait();
+            toast.success("Approval confirmed!");
+
+            let polls = 0;
+            while (allowance < grossAmount && polls < 10) {
+                await new Promise(r => setTimeout(r, 2500));
+                allowance = await tokenContract.allowance(signerAddress, contractAddress);
+                polls++;
+            }
+        }
+
+        toast.info("Step 2/2: Funding contract...");
+        const fundData = quizContract.interface.encodeFunctionData("fund", [grossAmount]);
+        const tx = await signer.sendTransaction({
+            to: contractAddress,
+            data: withAttribution(fundData),
+            ...LEGACY_TX,
+        });
+        await tx.wait();
+        return { txHash: tx.hash };
+    }
 }
 
-
+// ── 3. Check funded status ───────────────────────────────────────────────────
 export async function getContractFundedStatus(
-    provider: BrowserProvider,
+    signer: JsonRpcSigner,
     contractAddress: string,
-    // These params are kept for compatibility but ignored
     _tokenAddress: string,
     _tokenDecimals: number,
     _isNativeToken: boolean,
@@ -171,32 +175,26 @@ export async function getContractFundedStatus(
     }
 
     try {
-        const quizContract = new Contract(contractAddress, QUIZ_ABI, provider);
+        const provider = signer.provider;
+        if (!provider) return { isFunded: false, balance: "0", balanceRaw: 0n };
+
+        const quizContract = new Contract(contractAddress, QUIZ_ABI, signer);
         const contractToken = await quizContract.token();
         const isNative = contractToken === ZeroAddress;
-
-        console.log(`[FUNDED CHECK] Contract token: ${contractToken} → ${isNative ? "NATIVE" : "ERC20"}`);
 
         let balanceBig: bigint;
         if (isNative) {
             balanceBig = await provider.getBalance(contractAddress);
         } else {
-            const tokenContract = new Contract(contractToken, ERC20_ABI, provider);
+            const tokenContract = new Contract(contractToken, ERC20_ABI, signer);
             balanceBig = await tokenContract.balanceOf(contractAddress);
         }
 
         const required = parseUnits(requiredAmount || "0", _tokenDecimals);
         const balanceFormatted = (Number(balanceBig) / 10 ** _tokenDecimals).toFixed(4);
-
         const isFunded = balanceBig >= required && balanceBig > 0n;
 
-        console.log(`[FUNDED CHECK] Required: ${required}, Actual balance: ${balanceBig} → Funded: ${isFunded}`);
-
-        return {
-            isFunded,
-            balance: balanceFormatted,
-            balanceRaw: balanceBig,
-        };
+        return { isFunded, balance: balanceFormatted, balanceRaw: balanceBig };
     } catch (e) {
         console.error("Funded status check failed:", e);
         return { isFunded: false, balance: "0", balanceRaw: 0n };

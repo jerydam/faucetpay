@@ -1,53 +1,40 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { toast } from "sonner"
+import { CELO_CHAIN_ID, ensureCeloNetwork } from "@/lib/chain"
 
-import { useToast } from "@/hooks/use-toast"
-import { useNetwork } from "@/hooks/use-network"
-import { useChainId } from "wagmi"
-
-export const ensureCorrectNetwork = async (requiredChainId: number): Promise<boolean> => {
-  const { toast } = useToast()
-  const { network, switchNetwork } = useNetwork()
-  const chainId = useChainId()
-
-  if (!chainId) {
-    toast({
-      title: "Wallet not connected",
+/**
+ * Ensure the injected wallet is on Celo Mainnet.
+ * PrimeIQ is Celo-only — MiniPay is always on Celo already, so this is
+ * mostly a safety net for generic injected wallets.
+ * Hook-free: safe to call from any async handler.
+ */
+export const ensureCorrectNetwork = async (
+  requiredChainId: number = CELO_CHAIN_ID
+): Promise<boolean> => {
+  if (typeof window === "undefined" || !window.ethereum) {
+    toast.error("Wallet not connected", {
       description: "Please connect your wallet.",
-      variant: "destructive",
     })
     return false
   }
 
-  if (chainId !== requiredChainId) {
-    try {
-      await switchNetwork(requiredChainId)
+  try {
+    const currentHex: string = await (window.ethereum as any).request({
+      method: "eth_chainId",
+    })
+    if (parseInt(currentHex, 16) === requiredChainId) return true
 
-      // Wait for the chain to be switched
-      return new Promise((resolve) => {
-        const checkChain = () => {
-          if (chainId === requiredChainId) {
-            resolve(true)
-          } else {
-            setTimeout(checkChain, 500)
-          }
-        }
-
-        // Start checking after a short delay to allow for the chain to switch
-        setTimeout(checkChain, 1000)
-      })
-    } catch (error) {
-      console.error("Error switching network:", error)
-      toast({
-        title: "Network switch failed",
-        description: `Please switch to the ${network?.name || "required"} network manually.`,
-        variant: "destructive",
-      })
-      return false
-    }
+    // ensureCeloNetwork handles wallet_switchEthereumChain + add-chain fallback
+    await ensureCeloNetwork()
+    return true
+  } catch (error) {
+    console.error("Error switching network:", error)
+    toast.error("Network switch failed", {
+      description: "Please switch to Celo Mainnet manually in your wallet.",
+    })
+    return false
   }
-
-  return true
 }
 
 export function cn(...inputs: ClassValue[]) {

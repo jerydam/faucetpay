@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { formatUnits, Contract, ZeroAddress, JsonRpcProvider } from "ethers"
 import { ERC20_ABI } from "@/lib/abis"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useNetwork } from "@/hooks/use-network"
+import { CELO_CONFIG, CELO_CHAIN_ID } from "@/lib/chain"
 import { WalletConnectButton } from "@/components/wallet-connect"
 
 interface TokenBalanceProps {
@@ -25,20 +25,16 @@ export function TokenBalance({
   networkChainId,
 }: TokenBalanceProps) {
   const { address, chainId } = useWallet()
-  const { networks } = useNetwork()
   const [balance, setBalance] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // Check if we're on the correct network
-  const isCorrectNetwork = !networkChainId || chainId === networkChainId
 
   useEffect(() => {
     if (address) {
       fetchBalance()
     } else {
       setLoading(false)
-      setError(null) // Reset error when wallet is not connected
+      setError(null)
     }
   }, [address, tokenAddress, isNativeToken, networkChainId])
 
@@ -49,38 +45,25 @@ export function TokenBalance({
       setLoading(true)
       setError(null)
 
-      // Find the network configuration for this chain ID
-      const network = networks.find((n) => n.chainId === networkChainId)
-
-      if (!network) {
-        setError("Network not configured")
+      // Celo-only — reject anything else
+      if (networkChainId && networkChainId !== CELO_CHAIN_ID) {
+        setError("Network not supported")
         setLoading(false)
         return
       }
 
-      // Safely extract the first RPC URL whether it's a string or array
-      const safeRpcUrl = Array.isArray(network.rpcUrl) 
-        ? network.rpcUrl[0] 
-        : network.rpcUrl;
-
-      // Create a dedicated provider for this network using the safe URL
-      const provider = new JsonRpcProvider(safeRpcUrl)
+      const provider = new JsonRpcProvider(CELO_CONFIG.rpcUrl)
 
       let balanceValue
-
       if (isNativeToken || tokenAddress === ZeroAddress) {
-        // Fetch native token balance
         balanceValue = await provider.getBalance(address)
       } else {
-        // Fetch ERC20 token balance
         const tokenContract = new Contract(tokenAddress, ERC20_ABI, provider)
         balanceValue = await tokenContract.balanceOf(address)
       }
 
-      // 💡 FIX: Format to units, then parse to float and fix to 2 decimal places
       const formattedBalance = formatUnits(balanceValue, tokenDecimals)
       setBalance(parseFloat(formattedBalance).toFixed(4))
-
     } catch (error) {
       console.error("Error fetching token balance:", error)
       setBalance("Error")

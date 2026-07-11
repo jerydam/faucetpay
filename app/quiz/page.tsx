@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import Loading from "../loading/page";
 
 const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
-const DEFAULT_QUIZ_COVER = "/quiz.jpeg";
+const DEFAULT_QUIZ_COVER = "/quiz.webp";
 
 interface QuizCard {
   code: string;

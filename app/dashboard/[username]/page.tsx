@@ -1,5 +1,4 @@
 "use client"
-
 import React, { useEffect, useState, useMemo, useCallback } from "react"
 import { useWallet } from "@/components/wallet-provider"
 import { ChallengeDashboardTab } from "@/components/challenge-dashboard-tab"
@@ -12,18 +11,15 @@ import {
     Wallet, Copy, Pencil, Mail, Phone, Trophy,
     Swords, Loader2, ChevronRight, Crown, Zap,
     CheckCircle2, Clock, XCircle,
-   User, Gamepad2,Star
+   User, Gamepad2, Star
   } from "lucide-react"
 import { toast } from "sonner"
 import { ProfileSettingsModal } from "@/components/profile-settings-modal"
-import { usePrivy } from "@privy-io/react-auth"
 import Loading from "@/app/loading"
 import { cn } from "@/lib/utils"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 const BACKEND_URL = "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app"
-
 // ── Types ─────────────────────────────────────────────────────────────────────
-
 interface UserProfileData {
   wallet_address: string
   username: string
@@ -32,7 +28,6 @@ interface UserProfileData {
   bio?: string
   avatar_url?: string
 }
-
 interface ChallengeHistoryItem {
   code: string
   topic: string
@@ -45,16 +40,12 @@ interface ChallengeHistoryItem {
   opponent_username?: string
   opponent_wallet?: string
 }
-
 // ── Only these statuses count as "played" ──
 type FinishedGame = ChallengeHistoryItem & { status: "finished" }
-
 type HistoryTab = "all" | "won"
-
 function fmt(n: number) {
   return n % 1 === 0 ? n.toString() : n.toFixed(n < 1 ? 2 : 1)
 }
-
 function timeAgo(iso: string) {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
   if (diff < 60)     return `${diff}s ago`
@@ -62,9 +53,7 @@ function timeAgo(iso: string) {
   if (diff < 86400)  return `${Math.floor(diff / 3600)}h ago`
   return `${Math.floor(diff / 86400)}d ago`
 }
-
 // ── Stat pill ─────────────────────────────────────────────────────────────────
-
 function StatPill({ icon: Icon, label, value, accent }: {
   icon: React.ElementType
   label: string
@@ -81,9 +70,7 @@ function StatPill({ icon: Icon, label, value, accent }: {
     </div>
   )
 }
-
 // ── Challenge row card ────────────────────────────────────────────────────────
-
 function ChallengeRow({
   item,
   myWallet,
@@ -94,17 +81,13 @@ function ChallengeRow({
   onClick: () => void
 }) {
   const isWinner = item.winner_address?.toLowerCase() === myWallet
-
   const outcomeIcon = isWinner
     ? <Trophy className="h-4 w-4 text-blue-500 shrink-0" />
     : <XCircle className="h-4 w-4 text-muted-foreground/50 shrink-0" />
-
   const outcomeLabel = isWinner ? "Won" : "Lost"
-
   const outcomeColor = isWinner
     ? "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-400/30"
     : "text-muted-foreground bg-muted/30 border-border"
-
   return (
     <button
       onClick={onClick}
@@ -118,7 +101,6 @@ function ChallengeRow({
       )}>
         {outcomeIcon}
       </div>
-
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm text-foreground truncate leading-tight">
           {item.topic}
@@ -134,7 +116,6 @@ function ChallengeRow({
           </span>
         </div>
       </div>
-
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className={cn(
           "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-black",
@@ -151,14 +132,11 @@ function ChallengeRow({
           </span>
         )}
       </div>
-
       <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-muted-foreground shrink-0 transition-colors" />
     </button>
   )
 }
-
 // ── Tier system ───────────────────────────────────────────────────────────────
-
 const TIERS = [
   { label: "Rookie",   minWins: 0,  stars: 1, color: "#9ca3af" },
   { label: "Hustler",  minWins: 3,  stars: 2, color: "#60a5fa" },
@@ -166,24 +144,18 @@ const TIERS = [
   { label: "Veteran",  minWins: 20, stars: 4, color: "#fbbf24" },
   { label: "Champion", minWins: 50, stars: 5, color: "#f87171" },
 ]
-
 function getTier(wins: number) {
   for (let i = TIERS.length - 1; i >= 0; i--) {
     if (wins >= TIERS[i].minWins) return TIERS[i]
   }
   return TIERS[0]
 }
-
 // ── Main Page ─────────────────────────────────────────────────────────────────
-
 export default function DashboardPage() {
   const routerParams = useParams()
   const router       = useRouter()
   const { address: connectedAddress } = useWallet()
-  const { user: privyUser }           = usePrivy()
-
   const targetUsernameOrAddress = routerParams.username as string
-
   const [profile, setProfile]               = useState<UserProfileData | null>(null)
   // Raw fetch — all statuses
   const [rawHistory, setRawHistory]         = useState<ChallengeHistoryItem[]>([])
@@ -192,7 +164,6 @@ export default function DashboardPage() {
   const [initialLoadComplete, setInitialLoadComplete] = useState(false)
   const [activeTab, setActiveTab]           = useState<HistoryTab>("all")
   const [editOpen, setEditOpen]             = useState(false)
-
   const isOwner = useMemo(() => {
     if (!connectedAddress || !profile?.wallet_address) return false
     return connectedAddress.toLowerCase() === profile.wallet_address.toLowerCase()
@@ -200,17 +171,14 @@ export default function DashboardPage() {
   const searchParams = useSearchParams()
 const tabParam     = searchParams.get("tab")
 const subtabParam  = searchParams.get("subtab")
-
 const [pageTab, setPageTab] = useState<"profile" | "challenge">(
   tabParam === "challenge" ? "challenge" : "profile"
 )
 const [challengeRefreshKey, setChallengeRefreshKey] = useState(0)
-
 // Keep in sync if the URL changes underneath us (e.g. external link with ?tab=challenge)
 useEffect(() => {
   if (tabParam === "challenge" && pageTab !== "challenge") setPageTab("challenge")
 }, [tabParam]) // eslint-disable-line react-hooks/exhaustive-deps
-
 const handleTabChange = (tab: "profile" | "challenge") => {
   setPageTab(tab)
   if (tab === "challenge") setChallengeRefreshKey(k => k + 1) // force a fresh balance/stakes pull each visit
@@ -221,53 +189,14 @@ const handleTabChange = (tab: "profile" | "challenge") => {
     { scroll: false },
   )
 }
-  // ── Privy-derived identity ────────────────────────────────────────────────
-  const privyEmail: string = (() => {
-    if (!privyUser) return ""
-    if (privyUser.google?.email) return privyUser.google.email as string
-    if (privyUser.email?.address) return privyUser.email.address
-    for (const acc of privyUser.linkedAccounts ?? []) {
-      const a = acc as any
-      if (a.type === "google_oauth" && a.email)  return a.email
-      if (a.type === "email"        && a.address) return a.address
-      if (a.email) return a.email
-    }
-    return ""
-  })()
-
-  const privyPhone: string = (() => {
-    if (!privyUser) return ""
-    for (const acc of privyUser.linkedAccounts ?? []) {
-      const a = acc as any
-      if (a.type === "phone" && (a.phoneNumber || a.number))
-        return a.phoneNumber || a.number
-    }
-    return ""
-  })()
-
-  const getDisplayAvatar = () => {
-    if (profile?.avatar_url) return profile.avatar_url
-    if (isOwner && privyUser) {
-      const g = privyUser.google as any
-      return g?.picture || g?.profilePictureUrl || ""
-    }
-    return ""
-  }
-
-  const getDisplayName = () => {
-    if (profile?.username && profile.username !== "Dropee") return profile.username
-    if (isOwner && privyUser) {
-      if (privyUser.google?.name) return (privyUser.google.name as string).replace(/\s+/g, "")
-      if (privyUser.email?.address) return privyUser.email.address.split("@")[0]
-    }
-    return profile?.username || "Anonymous"
-  }
-
-  const displayAvatar = getDisplayAvatar()
-  const displayName   = getDisplayName()
-  const shownEmail    = profile?.email || (isOwner ? privyEmail : "")
-  const shownPhone    = profile?.phone || (isOwner ? privyPhone : "")
-
+  // ── Display identity — profile data only (wallet-first, no social login) ──
+  const displayAvatar = profile?.avatar_url || ""
+  const displayName   =
+    profile?.username && profile.username !== "Dropee"
+      ? profile.username
+      : profile?.username || "Anonymous"
+  const shownEmail    = profile?.email || ""
+  const shownPhone    = profile?.phone || ""
   // ── Fetch profile ─────────────────────────────────────────────────────────
   const fetchProfile = useCallback(async () => {
     if (!targetUsernameOrAddress) return
@@ -276,17 +205,13 @@ const handleTabChange = (tab: "profile" | "challenge") => {
       const isAddress =
         targetUsernameOrAddress.startsWith("0x") &&
         targetUsernameOrAddress.length === 42
-
       const url = isAddress
         ? `${BACKEND_URL}/api/profile/${targetUsernameOrAddress.toLowerCase()}`
         : `${BACKEND_URL}/api/profile/user/${targetUsernameOrAddress}`
-
       const res  = await fetch(url)
       const data = await res.json()
       const p    = isAddress ? data.profile : (data.success ? data.profile : null)
-
       if (!p && !isAddress) { setProfile(null); return }
-
       setProfile({
         wallet_address: p?.wallet_address || targetUsernameOrAddress.toLowerCase(),
         username:       p?.username || "Dropee",
@@ -302,7 +227,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
       setInitialLoadComplete(true)
     }
   }, [targetUsernameOrAddress])
-
   // ── Fetch challenge history ───────────────────────────────────────────────
   const fetchHistory = useCallback(async (wallet: string) => {
     setHistoryLoading(true)
@@ -314,53 +238,43 @@ const handleTabChange = (tab: "profile" | "challenge") => {
       setHistoryLoading(false)
     }
   }, [])
-
   useEffect(() => {
     setInitialLoadComplete(false)
     setProfile(null)
     setRawHistory([])
     fetchProfile()
   }, [targetUsernameOrAddress, fetchProfile])
-
   useEffect(() => {
     if (profile?.wallet_address) fetchHistory(profile.wallet_address)
   }, [profile?.wallet_address, fetchHistory])
-
   useEffect(() => {
     const handler = () => fetchProfile()
     window.addEventListener("profileUpdated", handler)
     return () => window.removeEventListener("profileUpdated", handler)
   }, [fetchProfile])
-
   // ── Derived stats — finished games ONLY, no pending/waiting/active ────────
   const myWallet = profile?.wallet_address?.toLowerCase() ?? ""
-
   // "played" = status is finished (game fully completed)
   const played = useMemo(
     () => rawHistory.filter((h): h is FinishedGame => h.status === "finished"),
     [rawHistory],
   )
-
   const won = useMemo(
     () => played.filter(h => h.winner_address?.toLowerCase() === myWallet),
     [played, myWallet],
   )
-
   const winRate = played.length
     ? Math.round((won.length / played.length) * 100)
     : 0
-
   // Tab filtering — both tabs only ever show finished games
   const filteredHistory = useMemo(() => {
     if (activeTab === "won") return won
     return played  // "all" = all finished games
   }, [activeTab, played, won])
-
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     toast.success("Copied!")
   }
-
   // ── Guards ────────────────────────────────────────────────────────────────
   if (loading && !initialLoadComplete) {
     return (
@@ -369,7 +283,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
       </div>
     )
   }
-
   if (!profile && initialLoadComplete) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-2">
@@ -379,16 +292,12 @@ const handleTabChange = (tab: "profile" | "challenge") => {
       </div>
     )
   }
-
   if (!profile) return null
-
   const displayAddress = profile.wallet_address
     ? `${profile.wallet_address.slice(0, 6)}…${profile.wallet_address.slice(-4)}`
     : ""
-
   // Live/active games (shown only as the online dot, never in history lists)
   const activeLive = rawHistory.filter(h => h.status === "active" || h.status === "waiting")
-
   return (
     <main className="min-h-screen bg-background pb-24">
       <div className="max-w-2xl mx-auto px-4 pt-6 space-y-6">
@@ -425,7 +334,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
         {/* ── Profile Card ──────────────────────────────────────────────── */}
         <Card className="border border-border bg-card rounded-3xl overflow-hidden shadow-sm">
           <div className="h-1.5 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
-
           <CardContent className="p-6 space-y-5">
             {/* Avatar row */}
             <div className="flex items-start gap-4">
@@ -441,7 +349,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
                   <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-background" />
                 )}
               </div>
-
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-black text-foreground truncate leading-tight">
@@ -451,7 +358,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
                     <Crown className="h-4 w-4 text-blue-500 shrink-0" title="5+ wins" />
                   )}
                 </div>
-
                 <button
                   onClick={() => copyToClipboard(profile.wallet_address)}
                   className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono hover:text-foreground transition-colors group"
@@ -460,7 +366,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
                   {displayAddress}
                   <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </button>
-
                 {(shownEmail || shownPhone) && (
                   <div className="flex flex-wrap gap-1.5 pt-0.5">
                     {shownEmail && (
@@ -476,7 +381,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
                   </div>
                 )}
               </div>
-
               {isOwner && (
                 <button
                   onClick={() => setEditOpen(true)}
@@ -491,11 +395,9 @@ const handleTabChange = (tab: "profile" | "challenge") => {
                 </button>
               )}
             </div>
-
             {profile.bio && (
               <p className="text-sm text-muted-foreground leading-relaxed">{profile.bio}</p>
             )}
-
             {/* Stats — based on finished games only */}
             <div className="grid grid-cols-4 gap-1.5">
               <StatPill
@@ -516,7 +418,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
                 value={`${winRate}%`}
                 accent="text-emerald-500"
               />
-
               {/* Tier pill */}
               {(() => {
                 const tier = getTier(won.length)
@@ -545,7 +446,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
             </div>
           </CardContent>
         </Card>
-
         {/* ── Challenge History — finished games only ────────────────────── */}
         <div className="space-y-3">
           {/* Tab bar — simplified: All Played vs Won */}
@@ -576,7 +476,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
               </button>
             ))}
           </div>
-
           {/* List */}
           {historyLoading ? (
             <div className="flex items-center justify-center py-16">
@@ -631,7 +530,6 @@ const handleTabChange = (tab: "profile" | "challenge") => {
      initialSubtab={subtabParam}     refreshKey={challengeRefreshKey}
    />)}
       </div>
-
       {isOwner && (
         <ProfileSettingsModal open={editOpen} onOpenChange={setEditOpen} />
       )}

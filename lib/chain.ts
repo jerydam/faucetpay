@@ -17,16 +17,40 @@ export const CELO_CONFIG = {
   explorerName: "CeloScan",
   nativeCurrency: { name: "CELO", symbol: "CELO", decimals: 18 },
   contracts: {
-    dropsToken: (process.env.NEXT_PUBLIC_DROPS_CONTRACT_CELO ??
+    // `||` (not `??`) on purpose — blank-but-declared env vars (e.g. an
+    // unfilled .env template) must still fall through to the real address.
+    dropsToken: (process.env.NEXT_PUBLIC_DROPS_CONTRACT_CELO ||
       "0x9825670865B896738CF8E6c98d093aD5b40F0A11") as `0x${string}`,
-    quizHub: (process.env.NEXT_PUBLIC_QUIZ_HUB_CELO ??
+    quizHub: (process.env.NEXT_PUBLIC_QUIZ_HUB_CELO ||
       "0xd73170170E002b45eA4AA51e7E93302D61c30173") as `0x${string}`,
-    dropsRedeemPool: (process.env.NEXT_PUBLIC_DROPS_REDEEM_POOL_CELO ??
+    dropsRedeemPool: (process.env.NEXT_PUBLIC_DROPS_REDEEM_POOL_CELO ||
       "0x636685bCFeEf6Baeb05872f01e69405077eAF633") as `0x${string}`,
     gToken: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as `0x${string}`,
   },
 } as const;
 
+// ── Add to lib/chain.ts ──────────────────────────────────────────
+
+export const CELO_QUIZ_FACTORY = (process.env.NEXT_PUBLIC_QUIZ_FACTORY_CELO ||
+  "0x45aF94C51188C2f1cBAa060Bd9Ee4a37e416Ed1F") as `0x${string}`;
+
+/**
+ * Drop-in replacement for the deleted use-network getNetworkByChainId.
+ * PrimeIQ is Celo-only — returns the Celo config with factory addresses,
+ * or null for any other chain so callers can show "unsupported network".
+ */
+export function getNetworkByChainId(chainId?: number | null) {
+  if (chainId !== CELO_CHAIN_ID) return null;
+  return {
+    name: CELO_CONFIG.name,
+    chainId: CELO_CHAIN_ID,
+    explorerUrl: CELO_CONFIG.explorerUrl,
+    nativeCurrency: CELO_CONFIG.nativeCurrency,
+    factories: {
+      quiz: CELO_QUIZ_FACTORY,
+    },
+  };
+}
 /** Kept as a function for drop-in compatibility with existing call sites — always returns Celo. */
 export function getChainConfig(_chainId?: number | null) {
   return CELO_CONFIG;

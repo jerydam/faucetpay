@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CELO_CHAIN_ID, getChainConfig } from "@/lib/chain";
+import { withAttribution, LEGACY_TX } from "@/lib/attribution-tag";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
@@ -142,7 +143,7 @@ export default function CreateSinglePage() {
   const [error,      setError]      = useState<string | null>(null);
 
   const selectedTier = TIERS.find(t => t.level === difficulty) ?? null;
-  const username     = address?.slice(0, 8) ?? null;
+  const username     = address ? `User${address.slice(-4).toUpperCase()}` : null;
 
   const canSubmit =
     topic.trim().length >= 3 &&
@@ -176,7 +177,7 @@ export default function CreateSinglePage() {
     const calldata = iface.encodeFunctionData("createQuiz", [quizId])
     const chainCfg = getChainConfig()
 
-    const tx      = await activeSigner.sendTransaction({ to: chainCfg.contracts.quizHub, data: calldata })
+    const tx      = await activeSigner.sendTransaction({ to: chainCfg.contracts.quizHub, data: withAttribution(calldata), ...LEGACY_TX })
     toast.loading("Waiting for confirmation…", { id: "sp-create" })
     const receipt = await tx.wait()
     if (!receipt || receipt.status !== 1) throw new Error("createQuiz tx reverted")
@@ -189,7 +190,7 @@ export default function CreateSinglePage() {
       body: JSON.stringify({
         topic:           topic.trim(),
         creatorAddress:  address,
-        creatorUsername: username ?? address.slice(0, 8),
+        creatorUsername: username ?? `User${address.slice(-4).toUpperCase()}`,
         difficulty,
         chainId:         CELO_CHAIN_ID,
         createTxHash:    receipt.hash,

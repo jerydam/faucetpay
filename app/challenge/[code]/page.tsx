@@ -9,6 +9,7 @@ import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {makePublicClient,makeWalletClient,toViemChain, getChainConfig, CELO_CHAIN_ID} from "@/lib/chain"
+import { withAttribution, LEGACY_TX } from "@/lib/attribution-tag"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -1141,7 +1142,7 @@ const handleStake = useCallback(async () => {
      ]);
      const stakeWei = ethers.parseUnits(stakeAmt.toString(), DROPS_DECIMALS);
      const data     = dropsIface.encodeFunctionData("redeem", [stakeWei, code]);
-     const tx       = await activeSigner.sendTransaction({ to: DROPS_ADDRESS, data });
+     const tx       = await activeSigner.sendTransaction({ to: DROPS_ADDRESS, data: withAttribution(data), ...LEGACY_TX });
      const receipt  = await tx.wait();
      const txHash   = receipt!.hash;
 

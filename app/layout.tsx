@@ -6,7 +6,6 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
-import { NetworkProvider } from "@/hooks/use-network"
 import { WalletProvider } from "@/components/wallet-provider"
 import { BottomNav } from "@/components/bottom-nav"
 import { PresenceProvider } from "@/components/presence-provider"
@@ -37,6 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <link rel="icon" href="/favicon.ico" />
         <title>FaucetDrops - Automated Onchain Reward and Engagement Platform</title>
         <meta name="title" content="app.faucetdrops - Automated Onchain Reward and Engagement Platform" />
@@ -66,30 +66,23 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ThemeProvider 
-          attribute="class" 
-          defaultTheme="light" 
-          enableSystem={false}
-          disableTransitionOnChange
-        >
-          <NetworkProvider>
-            <WalletProvider>
-              {/* 👇 Wrapped the app content in PresenceProvider */}
-              <PresenceProvider>
-                <div className="min-h-screen flex flex-col">
-                  <main className="flex-1">
-                    {children}
-                  </main>
-                  
-                </div>
-                
-                {/* BottomNav sits outside the flex column so it overlays everything */}
-                <BottomNav />
-
-                <Toaster richColors position="top-center" closeButton />
-              </PresenceProvider>
-            </WalletProvider>
-          </NetworkProvider>
-        </ThemeProvider>
+  attribute="class" 
+  defaultTheme="light" 
+  enableSystem={false}
+  disableTransitionOnChange
+>
+  <WalletProvider>
+    <PresenceProvider>
+      <div className="min-h-screen flex flex-col">
+        <main className="flex-1">
+          {children}
+        </main>
+      </div>
+      <BottomNav />
+      <Toaster richColors position="top-center" closeButton />
+    </PresenceProvider>
+  </WalletProvider>
+</ThemeProvider>
       </body>
     </html>
   )

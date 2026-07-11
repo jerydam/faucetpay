@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { createPublicClient, http, zeroAddress } from "viem";
 import { CELO_CONFIG, toViemChain } from "@/lib/chain";
 import { QUIZ_HUB_ABI, REDEEM_ABI } from "@/lib/abis";
-
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 // Regenerate at most every 10 minutes; stale-while-revalidate serves cached
 // data instantly while the next scan runs in the background.
-export const revalidate = 600;
+
 
 // First block containing each contract's bytecode on Celo mainnet, found via
 // binary search over eth_getCode (neither contract exposes a deploy-block getter).

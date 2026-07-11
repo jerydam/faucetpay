@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useEffect } from "react"
-import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
@@ -12,7 +11,11 @@ import { PresenceProvider } from "@/components/presence-provider"
 
 import sdk from "@farcaster/miniapp-sdk"
 
-const inter = Inter({ subsets: ["latin"] })
+import localFont from "next/font/local"
+const inter = localFont({
+  src: "./fonts/Inter-Variable.woff2",
+  display: "swap",
+})
 
 export default function RootLayout({
   children,

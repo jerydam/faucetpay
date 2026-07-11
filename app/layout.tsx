@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useEffect } from "react"
+import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
@@ -10,12 +11,9 @@ import { BottomNav } from "@/components/bottom-nav"
 import { PresenceProvider } from "@/components/presence-provider"
 
 import sdk from "@farcaster/miniapp-sdk"
+import { MiniPayGate } from "@/components/minipay-gate"
 
-import localFont from "next/font/local"
-const inter = localFont({
-  src: "./fonts/Inter-Variable.woff2",
-  display: "swap",
-})
+const inter = Inter({ subsets: ["latin"] })
 
 export default function RootLayout({
   children,
@@ -68,23 +66,18 @@ export default function RootLayout({
         <meta name="theme-color" content="#020817" />
       </head>
       <body className={inter.className}>
-        <ThemeProvider 
-  attribute="class" 
-  defaultTheme="light" 
-  enableSystem={false}
-  disableTransitionOnChange
->
-  <WalletProvider>
-    <PresenceProvider>
-      <div className="min-h-screen flex flex-col">
-        <main className="flex-1">
-          {children}
-        </main>
-      </div>
-      <BottomNav />
-      <Toaster richColors position="top-center" closeButton />
-    </PresenceProvider>
-  </WalletProvider>
+       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+  <MiniPayGate>
+    <WalletProvider>
+      <PresenceProvider>
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-1">{children}</main>
+        </div>
+        <BottomNav />
+        <Toaster richColors position="top-center" closeButton />
+      </PresenceProvider>
+    </WalletProvider>
+  </MiniPayGate>
 </ThemeProvider>
       </body>
     </html>

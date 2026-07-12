@@ -339,18 +339,6 @@ export default function StatsPage() {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">Quiz games — backend</h2>
-              <div className="grid grid-cols-2 gap-3">
-                <StatTile label="Quiz games created" value={String(off?.totalQuizzes ?? 0)} sub={`${off?.aiQuizzes ?? 0} AI-generated`} />
-                <StatTile
-                  label="Quiz games live"
-                  value={String(off?.quizzesByStatus.active ?? 0)}
-                  sub={`${off?.quizzesByStatus.finished ?? 0} finished · ${off?.quizzesByStatus.waiting ?? 0} waiting`}
-                />
-              </div>
-            </section>
-
-            <section className="space-y-2">
               <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">Reward pools by stablecoin</h2>
               <Card>
                 <CardContent className="p-4 space-y-2">

@@ -119,8 +119,18 @@ export default function StatsPage() {
   async function handleRefresh() {
     if (refreshing || retryAfter > 0) return;
     setRefreshing(true);
-    await loadHub(true);
-    setRefreshing(false);
+    try {
+      // Kick off the real backend sync (scans + upserts new wallets to
+      // Supabase) — public, no admin secret, rate-limited server-side to
+      // once per chain per 5 min. Fire-and-forget: it can take a while on
+      // a big block range, so we don't block the UI on it.
+      fetch(`${API_BASE_URL}/api/admin/sync-onchain-users?chain=celo`, { method: "POST" }).catch(() => {});
+      // Then refresh the lighter display-stats scan (its own 30s cooldown)
+      // so the numbers on this page update right away.
+      await loadHub(true);
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   // Countdown the rate-limit cooldown so the button re-enables itself.

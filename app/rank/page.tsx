@@ -451,7 +451,7 @@ export default function RanksPage() {
               className={`filter-pill${filter === f ? " active" : ""}`}
               onClick={() => setFilter(f as any)}
             >
-              {f === "top10" ? "Top 10" : f === "all" ? "All" : f === "myrank" ? "Near me" : "🟢 Online"}
+              {f === "top10" ? "Top 10" : f === "myrank" ? "Near me" : "🟢 Online"}
             </button>
           ))}
         </div>

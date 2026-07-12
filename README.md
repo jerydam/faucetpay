@@ -1,4 +1,4 @@
-# ⚡ PrimeIQ
+# PrimeIQ
 
 **A knowledge dueling and quiz platform on Celo — get free DROPS, duel bots or players, join tournaments, win and redeem for $G.**
 

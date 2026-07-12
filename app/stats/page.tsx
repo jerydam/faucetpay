@@ -54,8 +54,6 @@ interface OnchainStats {
 
 interface OnchainActivityStats {
   success: boolean;
-  source?: "database" | "onchain";   // "database" = fast Postgres snapshot, replaced by live scan
-  approximate?: boolean;
   registeredUsers: number;
   mau30d: number;
   dau24h: number;
@@ -71,10 +69,6 @@ interface OnchainActivityStats {
   rateLimited?: boolean;
   retryAfterSecs?: number;
 }
-
-// Last successful hub payload, persisted so returning visitors see numbers
-// instantly instead of skeletons while fresh data loads.
-const HUB_LS_KEY = "fd_stats_hub_v1";
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -98,46 +92,12 @@ export default function StatsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [retryAfter, setRetryAfter] = useState(0);
 
-  // ── Three-layer load ──────────────────────────────────────────────────────
-  // 1. localStorage  — last successful payload from a previous visit (instant)
-  // 2. /api/stats/db — fast Postgres snapshot of already-synced data (~100ms)
-  // 3. /api/stats/onchain — live event-log scan (slow on cold cache) replaces
-  //    everything when it lands.
-  // A fresher source never gets overwritten by a staler one, and once we have
-  // ANY data on screen a failed live scan never blanks the page — it just
-  // keeps showing the snapshot.
-
-  function persistHub(data: OnchainActivityStats) {
-    try { localStorage.setItem(HUB_LS_KEY, JSON.stringify(data)); } catch { /* private mode etc. */ }
-  }
-
-  // Mirror of `hub` readable synchronously inside async loaders — lets us
-  // check "has the live scan already landed?" without impure setState updaters.
-  const hubRef = React.useRef<OnchainActivityStats | null>(null);
-
-  function applyHub(data: OnchainActivityStats) {
-    hubRef.current = data;
-    setHub(data);
-    persistHub(data);
-  }
-
-  // Fast DB snapshot — reads challenge_player_balances / player_activity_log,
-  // no RPC. Only applied if the live on-chain scan hasn't already landed.
-  async function loadDbSnapshot() {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/stats/db?chain_id=${CELO_CHAIN_ID}`);
-      const dbRes = await res.json();
-      if (dbRes?.success && hubRef.current?.source !== "onchain") {
-        applyHub({ ...dbRes, source: "database" });
-        setHubError(null);
-      }
-    } catch {
-      /* snapshot is best-effort — the live scan below is the real source */
-    }
-  }
-
-  // Live event-log scan. Backend caches 10 min; force=true bypasses (30s/chain
-  // server-side cooldown), used by the Refresh button.
+  // Registered users, MAU/DAU, quizzes created, duels played, and DROPS
+  // claim/redeem/burn activity — backend scans QuizHub + DROPS token event
+  // logs on Celo mainnet and caches the result for 10 minutes. Pass
+  // force=true to bypass that cache (used by the Refresh button below) —
+  // the backend itself rate-limits force refreshes to once per 30s per
+  // chain, so this is safe to expose to anyone, no wallet/admin needed.
   async function loadHub(force: boolean) {
     try {
       const res = await fetch(
@@ -145,16 +105,14 @@ export default function StatsPage() {
       );
       const hubRes = await res.json();
       if (hubRes?.success) {
-        applyHub({ ...hubRes, source: "onchain" });
+        setHub(hubRes);
         setHubError(null);
         setRetryAfter(hubRes.rateLimited ? Math.ceil(hubRes.retryAfterSecs || 0) : 0);
-      } else if (!hubRef.current) {
-        // Only surface the error if we have nothing to show — otherwise keep
-        // the DB/localStorage snapshot on screen.
+      } else {
         setHubError(hubRes?.detail ?? hubRes?.error ?? "On-chain scan unavailable");
       }
     } catch (e) {
-      if (!hubRef.current) setHubError(String(e));
+      setHubError(String(e));
     }
   }
 
@@ -166,7 +124,7 @@ export default function StatsPage() {
       // Supabase) — public, no admin secret, rate-limited server-side to
       // once per chain per 5 min. Fire-and-forget: it can take a while on
       // a big block range, so we don't block the UI on it.
-      fetch(`${API_BASE_URL}/api/sync/onchain-users?chain=celo`, { method: "POST" }).catch(() => {});
+      fetch(`${API_BASE_URL}/api/admin/sync-onchain-users?chain=celo`, { method: "POST" }).catch(() => {});
       // Then refresh the lighter display-stats scan (its own 30s cooldown)
       // so the numbers on this page update right away.
       await loadHub(true);
@@ -185,23 +143,6 @@ export default function StatsPage() {
   useEffect(() => {
     let cancelled = false;
 
-    // Layer 1: last visit's payload from localStorage — paints before any fetch.
-    try {
-      const cached = localStorage.getItem(HUB_LS_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached) as OnchainActivityStats;
-        if (parsed?.success) {
-          hubRef.current = { ...parsed, source: "database" };
-          setHub(hubRef.current);
-        }
-      }
-    } catch { /* ignore corrupt cache */ }
-
-    // Layer 2 + 3: DB snapshot (fast) and live scan (slow) race safely —
-    // loadDbSnapshot never overwrites a landed on-chain result.
-    loadDbSnapshot();
-    loadHub(false);
-
     async function load() {
       try {
         // Everything below is read straight from the FastAPI backend
@@ -211,6 +152,8 @@ export default function StatsPage() {
           fetch(`${API_BASE_URL}/api/ranks?limit=10`).then((r) => r.json()).catch(() => null),
           fetch(`${API_BASE_URL}/api/quiz/list`).then((r) => r.json()).catch(() => null),
         ]);
+
+        loadHub(false);
 
         const players: Player[] = ranksRes?.success ? ranksRes.players ?? [] : [];
         const quizzes: QuizCard[] = quizRes?.success ? quizRes.quizzes ?? [] : [];
@@ -318,12 +261,6 @@ export default function StatsPage() {
               </div>
               {hub ? (
                 <>
-                  {hub.source === "database" && (
-                    <p className="text-[11px] text-amber-500 flex items-center gap-1">
-                      <RefreshCw className="h-3 w-3 animate-spin" />
-                      Showing saved data from the database — live on-chain scan updating…
-                    </p>
-                  )}
                   <div className="grid grid-cols-3 gap-3">
                     <StatTile label="All-time users" value={String(hub.registeredUsers)} sub="ever, all-time" />
                     <StatTile label="MAU" value={String(hub.mau30d)} sub="active last 30 days" />
@@ -355,12 +292,8 @@ export default function StatsPage() {
                     <StatTile label="Duels (quizzes) created" value={String(hub.quizzesCreated)} />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    {hub.source === "database" ? (
-                      <>Database snapshot · synced to block {Number(hub.scannedToBlock).toLocaleString()} · {new Date(hub.updatedAt).toLocaleString()}</>
-                    ) : (
-                      <>Scanned block {Number(hub.scannedFromBlock).toLocaleString()}–{Number(hub.scannedToBlock).toLocaleString()},
-                      updated {new Date(hub.updatedAt).toLocaleString()}.</>
-                    )}
+                    Scanned block {Number(hub.scannedFromBlock).toLocaleString()}–{Number(hub.scannedToBlock).toLocaleString()},
+                    updated {new Date(hub.updatedAt).toLocaleString()}.
                   </p>
                   <div className="flex flex-wrap gap-3">
                     <a

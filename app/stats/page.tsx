@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ERC20_ABI } from "@/lib/abis";
 import { CELO_CONFIG, makePublicClient } from "@/lib/chain";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, RefreshCw } from "lucide-react";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app";
@@ -66,6 +66,8 @@ interface OnchainActivityStats {
   scannedFromBlock: string;
   scannedToBlock: string;
   updatedAt: string;
+  rateLimited?: boolean;
+  retryAfterSecs?: number;
 }
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -87,6 +89,46 @@ export default function StatsPage() {
   const [hubError, setHubError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [retryAfter, setRetryAfter] = useState(0);
+
+  // Registered users, MAU/DAU, quizzes created, duels played, and DROPS
+  // claim/redeem/burn activity — backend scans QuizHub + DROPS token event
+  // logs on Celo mainnet and caches the result for 10 minutes. Pass
+  // force=true to bypass that cache (used by the Refresh button below) —
+  // the backend itself rate-limits force refreshes to once per 30s per
+  // chain, so this is safe to expose to anyone, no wallet/admin needed.
+  async function loadHub(force: boolean) {
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/stats/onchain?chain_id=${CELO_CHAIN_ID}${force ? "&force=true" : ""}`
+      );
+      const hubRes = await res.json();
+      if (hubRes?.success) {
+        setHub(hubRes);
+        setHubError(null);
+        setRetryAfter(hubRes.rateLimited ? Math.ceil(hubRes.retryAfterSecs || 0) : 0);
+      } else {
+        setHubError(hubRes?.detail ?? hubRes?.error ?? "On-chain scan unavailable");
+      }
+    } catch (e) {
+      setHubError(String(e));
+    }
+  }
+
+  async function handleRefresh() {
+    if (refreshing || retryAfter > 0) return;
+    setRefreshing(true);
+    await loadHub(true);
+    setRefreshing(false);
+  }
+
+  // Countdown the rate-limit cooldown so the button re-enables itself.
+  useEffect(() => {
+    if (retryAfter <= 0) return;
+    const t = setInterval(() => setRetryAfter((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [retryAfter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,17 +143,7 @@ export default function StatsPage() {
           fetch(`${API_BASE_URL}/api/quiz/list`).then((r) => r.json()).catch(() => null),
         ]);
 
-        // Registered users, MAU/DAU, quizzes created, duels played, and DROPS
-        // claim/redeem/burn activity — backend scans QuizHub + DROPS token
-        // event logs on Celo mainnet and caches the result for 10 minutes.
-        fetch(`${API_BASE_URL}/api/stats/onchain?chain_id=${CELO_CHAIN_ID}`)
-          .then((r) => r.json())
-          .then((hubRes) => {
-            if (cancelled) return;
-            if (hubRes?.success) setHub(hubRes);
-            else setHubError(hubRes?.detail ?? hubRes?.error ?? "On-chain scan unavailable");
-          })
-          .catch((e) => { if (!cancelled) setHubError(String(e)); });
+        loadHub(false);
 
         const players: Player[] = ranksRes?.success ? ranksRes.players ?? [] : [];
         const quizzes: QuizCard[] = quizRes?.success ? quizRes.quizzes ?? [] : [];
@@ -203,9 +235,20 @@ export default function StatsPage() {
         ) : (
           <>
             <section className="space-y-2">
-              <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-                Active users — on-chain
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+                  Active users — on-chain
+                </h2>
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing || retryAfter > 0}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-primary disabled:text-muted-foreground disabled:cursor-not-allowed"
+                  title="Re-scan QuizHub + DROPS token events now"
+                >
+                  <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+                  {refreshing ? "Refreshing…" : retryAfter > 0 ? `Wait ${retryAfter}s` : "Refresh"}
+                </button>
+              </div>
               {hub ? (
                 <>
                   <div className="grid grid-cols-3 gap-3">

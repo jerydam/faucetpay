@@ -12,12 +12,19 @@ import { ExternalLink } from "lucide-react";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app";
 
+// Mirrors chain_config.py's CELO_CHAIN_ID — kept as a literal here so this
+// page doesn't depend on @/lib/chain exposing a numeric chainId field.
+const CELO_CHAIN_ID = 42220;
+
 interface Player {
   wallet_address: string;
   username: string;
+  avatar_url?: string;
   total_wins: number;
   total_duels: number;
   total_earned: number;
+  rank: number;
+  rank_delta?: number;
 }
 
 interface QuizCard {
@@ -46,14 +53,13 @@ interface OnchainStats {
 }
 
 interface OnchainActivityStats {
+  success: boolean;
   registeredUsers: number;
   mau30d: number;
   dau24h: number;
   quizzesCreated: number;
   duelsRegistered: number;
-  duelsStarted: number;
   duelsCompleted: number;
-  duelsCancelled: number;
   dropsClaims: number;
   dropsRedemptions: number;
   dropsBurns: number;
@@ -87,20 +93,23 @@ export default function StatsPage() {
 
     async function load() {
       try {
+        // Everything below is read straight from the FastAPI backend
+        // (Supabase-backed ranks/quizzes + a live on-chain event scan it
+        // caches for 10 min) — no local Next.js API route in between.
         const [ranksRes, quizRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/ranks`).then((r) => r.json()).catch(() => null),
+          fetch(`${API_BASE_URL}/api/ranks?limit=10`).then((r) => r.json()).catch(() => null),
           fetch(`${API_BASE_URL}/api/quiz/list`).then((r) => r.json()).catch(() => null),
         ]);
 
         // Registered users, MAU/DAU, quizzes created, duels played, and DROPS
-        // claim/redeem/burn activity — read directly from QuizHub + DROPS
-        // token event logs on Celo mainnet, not the backend DB.
-        fetch(`/api/onchain-stats`)
+        // claim/redeem/burn activity — backend scans QuizHub + DROPS token
+        // event logs on Celo mainnet and caches the result for 10 minutes.
+        fetch(`${API_BASE_URL}/api/stats/onchain?chain_id=${CELO_CHAIN_ID}`)
           .then((r) => r.json())
           .then((hubRes) => {
             if (cancelled) return;
             if (hubRes?.success) setHub(hubRes);
-            else setHubError(hubRes?.error ?? "On-chain scan unavailable");
+            else setHubError(hubRes?.detail ?? hubRes?.error ?? "On-chain scan unavailable");
           })
           .catch((e) => { if (!cancelled) setHubError(String(e)); });
 
@@ -124,7 +133,10 @@ export default function StatsPage() {
           totalDuels: players.reduce((s, p) => s + (p.total_duels || 0), 0) / 2, // each duel counted on both sides
           totalWins: players.reduce((s, p) => s + (p.total_wins || 0), 0),
           totalDropsEarned: players.reduce((s, p) => s + (p.total_earned || 0), 0),
-          topPlayers: [...players].sort((a, b) => (b.total_wins || 0) - (a.total_wins || 0)).slice(0, 5),
+          // Backend already returns players ordered by rank (total_wins desc,
+          // total_duels desc) with a `rank`/`rank_delta` on each row — just take
+          // the top 5 as-is instead of re-sorting on the client.
+          topPlayers: players.slice(0, 5),
           totalQuizzes: quizzes.length,
           quizzesByStatus,
           aiQuizzes,
@@ -223,7 +235,7 @@ export default function StatsPage() {
               {hub ? (
                 <>
                   <div className="grid grid-cols-2 gap-3">
-                    <StatTile label="Duels completed" value={String(hub.duelsCompleted)} sub={`${hub.duelsStarted} started · ${hub.duelsCancelled} cancelled`} />
+                    <StatTile label="Duels completed" value={String(hub.duelsCompleted)} sub={`${hub.duelsRegistered} registered`} />
                     <StatTile label="Duels (quizzes) created" value={String(hub.quizzesCreated)} />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
@@ -307,11 +319,16 @@ export default function StatsPage() {
               <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">Top players</h2>
               <Card>
                 <CardContent className="p-4 space-y-3">
-                  {off && off.topPlayers.length > 0 ? off.topPlayers.map((p, i) => (
+                  {off && off.topPlayers.length > 0 ? off.topPlayers.map((p) => (
                     <div key={p.wallet_address} className="flex items-center justify-between text-sm">
                       <span className="flex items-center gap-2">
-                        <span className="w-5 text-muted-foreground font-mono">{i + 1}.</span>
+                        <span className="w-5 text-muted-foreground font-mono">{p.rank}.</span>
                         <span className="font-medium">{p.username || `${p.wallet_address.slice(0, 6)}…`}</span>
+                        {typeof p.rank_delta === "number" && p.rank_delta !== 0 && (
+                          <span className={`text-[10px] font-bold ${p.rank_delta > 0 ? "text-green-500" : "text-red-500"}`}>
+                            {p.rank_delta > 0 ? `▲${p.rank_delta}` : `▼${Math.abs(p.rank_delta)}`}
+                          </span>
+                        )}
                       </span>
                       <span className="font-bold tabular-nums">{p.total_wins} wins</span>
                     </div>

@@ -8,7 +8,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Zap, Trophy, Gavel, ArrowUpRight, ShieldCheck, Users } from "lucide-react";
+import { Zap, Trophy, Gavel, ArrowUpRight, ShieldCheck, Users, BarChart3 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme";
 import Image from "next/image";
 import { Footer } from "@/components/footer";
@@ -157,6 +157,26 @@ export default function LandingPage() {
           background: var(--dd-blue-bg) !important;
         }
 
+        /* ── stats nav button ── */
+        .dd-stats-btn {
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 10px;
+          border: 1.5px solid var(--dd-line);
+          background: transparent;
+          color: var(--dd-text);
+          transition: border-color .2s, background .2s, transform .15s;
+        }
+        .dd-stats-btn:hover {
+          border-color: rgba(37,99,235,.5);
+          background: var(--dd-blue-bg);
+          color: #2563eb;
+        }
+        .dd-stats-btn:active { transform: scale(.95); }
+
         /* ── Logo Theme Logic ── */
         .logo-light { display: block; object-fit: contain; }
         .logo-dark { display: none; object-fit: contain; }
@@ -181,9 +201,19 @@ export default function LandingPage() {
             </span>
           </div>
 
-          {/* Theme toggle — wraps the existing component, overrides border/bg for landing */}
-          <div className="dd-toggle-wrap">
-            <ThemeToggle />
+          {/* Stats + theme toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/stats")}
+              className="dd-stats-btn"
+              aria-label="View platform stats"
+              title="Stats"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </button>
+            <div className="dd-toggle-wrap">
+              <ThemeToggle />
+            </div>
           </div>
         </nav>
 

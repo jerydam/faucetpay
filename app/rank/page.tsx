@@ -158,7 +158,7 @@ export default function RanksPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState("");
-  const [filter, setFilter] = useState<"all" | "top10" | "myrank" | "online">("top10");
+  const [filter, setFilter] = useState<"top10" | "myrank" | "online">("top10");
 
   // 👇 Grab the global online set from your new provider
   const onlineSet = usePresence();

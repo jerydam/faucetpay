@@ -21,6 +21,7 @@ const DROP_TOKEN_CONTRACT = "0x213DF7A728E545BdAff8ff8c4BF9cFD7359Def0B";
 interface LobbyChallenge {
   code: string; topic: string; stake_amount: number; token_symbol: string;
   chain_id: number; created_at: string; creator_username: string;
+  tx_hash?: string | null;  // ← add this
 }
 interface HistoryChallenge {
   code: string; topic: string; stake_amount: number; token_symbol: string;
@@ -305,6 +306,35 @@ export default function QuizListPage() {
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [showCheckinSuccess, setShowCheckinSuccess] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [incomingChallenge, setIncomingChallenge] = useState<{
+  code: string; topic: string; stake: number; token: string;
+  creatorName: string; avatar?: string;
+} | null>(null);
+
+// Add this effect after your other useEffects:
+useEffect(() => {
+  if (!userWalletAddress) return;
+  const ws = new WebSocket(
+    `${API_BASE_URL.replace(/^http/, "ws")}/ws/notify/${userWalletAddress.toLowerCase()}`
+  );
+  ws.onmessage = (evt) => {
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.type === "public_challenge" || msg.type === "challenge_invite") {
+        setIncomingChallenge({
+          code:        msg.data?.code,
+          topic:       msg.data?.topic,
+          stake:       msg.data?.stake,
+          token:       msg.data?.token,
+          creatorName: msg.data?.creatorName || msg.title,
+          avatar:      msg.data?.avatar,
+        });
+      }
+    } catch { /* ignore parse errors */ }
+  };
+  return () => ws.close();
+}, [userWalletAddress]);
   const handleCheckin = async () => {
   if (!userWalletAddress || isCheckingIn) return;
   const activeChainId = chainId ?? CELO_CHAIN_ID;
@@ -534,17 +564,19 @@ useEffect(() => {
       const r = await fetch(`${API_BASE_URL}/api/challenge/lobby`);
       const d = await r.json();
       if (d.success) {
-        // Filter by checking if the chain_id from the backend exists in your supported list
         const allChallenges = d.challenges as LobbyChallenge[];
-        const filtered = allChallenges.filter(c => (c.chain_id));
+        // Only show challenges that have a tx_hash (on-chain confirmed)
+        // The lobby view returns tx_hash; filter it out if missing/null
+        const filtered = allChallenges.filter(
+          (c) => c.chain_id && (c as any).tx_hash
+        );
         setLobbyChallenges(filtered);
       }
-    } catch { 
-      toast.error("Failed to sync lobby"); 
-    }
-    finally { 
-      setIsLoading(false); 
-      setIsRefreshing(false); 
+    } catch {
+      toast.error("Failed to sync lobby");
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -570,7 +602,8 @@ useEffect(() => {
   const myWallet = userWalletAddress?.toLowerCase() ?? "";
   const wins = useMemo(() => history.filter(h => h.winner_address?.toLowerCase() === myWallet), [history, myWallet]);
 
-  const handleJoinAction = async (code: string) => {
+  // In handleJoinAction, replace the existing logic:
+const handleJoinAction = async (code: string) => {
     if (code.length < 4) return;
     setNavigating(code);
     if (!userWalletAddress) {
@@ -588,6 +621,14 @@ useEffect(() => {
         const isCreator = c.creator?.toLowerCase() === w;
         const isPlayer = playerKeys.some((p: string) => p.toLowerCase() === w);
         const isFull = playerKeys.length >= 2;
+        const hasOpponent = playerKeys.filter((p: string) => p.toLowerCase() !== c.creator?.toLowerCase()).length > 0;
+
+        // Creator with no opponent yet → always go to pre-lobby so they can manage/share
+        if (isCreator && !hasOpponent && c.status === "waiting") {
+          router.push(`/challenge/${code}/pre-lobby`);
+          return;
+        }
+        // Creator already in an active/full game → go to game page
         if (isCreator || isPlayer) { router.push(`/challenge/${code}`); return; }
         if (isFull) { setShowFullModal(true); setNavigating(null); return; }
         if (c.status === "active" || c.status === "finished") {
@@ -599,6 +640,8 @@ useEffect(() => {
       }
     } catch {
       router.push(`/challenge/${code}/pre-lobby`);
+    } finally {
+      setNavigating(null);
     }
   };
 
@@ -1334,6 +1377,63 @@ useEffect(() => {
 >
   <HelpCircle size={20} color="#ffffff" strokeWidth={2.5} />
 </button>
+{/* ── Incoming Challenge Popup ──────────────────────────────────── */}
+{incomingChallenge && (
+  <div
+    style={{
+      position: "fixed", inset: 0, zIndex: 9998,
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+      padding: "0 0 100px",
+      background: "rgba(2,6,23,0.5)", backdropFilter: "blur(4px)",
+    }}
+    onClick={() => setIncomingChallenge(null)}
+  >
+    <div
+      onClick={e => e.stopPropagation()}
+      style={{
+        width: "100%", maxWidth: 480, borderRadius: "20px 20px 0 0",
+        padding: "20px 20px 28px",
+        background: "var(--dd-bg)",
+        border: "1.5px solid var(--dd-card-border)",
+        borderBottom: "none",
+        animation: "sheetUp 0.3s ease-out forwards",
+      }}
+    >
+      <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--dd-line)", margin: "0 auto 16px" }} />
+      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--dd-blue)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>
+        🎯 New Challenge
+      </p>
+      <p className="d" style={{ fontSize: 20, fontWeight: 900, color: "var(--dd-text)", marginBottom: 4 }}>
+        {incomingChallenge.creatorName} is challenging you!
+      </p>
+      <p style={{ fontSize: 13, color: "var(--dd-text-dim)", marginBottom: 6 }}>
+        Topic: <strong>{incomingChallenge.topic}</strong>
+      </p>
+      <p style={{ fontSize: 13, color: "var(--dd-text-dim)", marginBottom: 20 }}>
+        Stake: <strong>{fmt(incomingChallenge.stake)} {incomingChallenge.token}</strong> · Prize: <strong style={{ color: "var(--dd-blue)" }}>{fmt(incomingChallenge.stake * 2)} {incomingChallenge.token}</strong>
+      </p>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button
+          className="btn-blue"
+          onClick={() => {
+            setIncomingChallenge(null);
+            router.push(`/challenge/${incomingChallenge.code}/pre-lobby`);
+          }}
+          style={{ flex: 1, height: 48, borderRadius: 12, fontSize: 14 }}
+        >
+          <Zap size={15} /> Accept Duel
+        </button>
+        <button
+          className="btn-ghost"
+          onClick={() => setIncomingChallenge(null)}
+          style={{ height: 48, padding: "0 20px", borderRadius: 12, fontSize: 13 }}
+        >
+          Ignore
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 <BottomNav />
     </>
   );

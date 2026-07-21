@@ -23,13 +23,14 @@ export interface RematchInvite {
 }
 
 interface Props {
-  invite:     RematchInvite;
-  myWallet:   string;
-  onDismiss:  () => void;
-  countdown?: number | null; // external countdown from parent (inviteCountdown)
+  invite:      RematchInvite;
+  myWallet:    string;
+  onDismiss:   () => void;
+  countdown?:  number | null; // external countdown from parent (inviteCountdown)
+  onAccepted?: () => void;    // parent takes over with its own waiting popup
 }
 
-export function RematchPopup({ invite, myWallet, onDismiss, countdown }: Props) {
+export function RematchPopup({ invite, myWallet, onDismiss, countdown, onAccepted }: Props) {
   const router                      = useRouter();
   const [ttl, setTtl]               = useState(POPUP_TTL);
   const [busy, setBusy]             = useState(false);
@@ -80,8 +81,15 @@ export function RematchPopup({ invite, myWallet, onDismiss, countdown }: Props) 
       const d = await res.json();
       if (!d.success) throw new Error(d.detail ?? "Accept failed");
 
-      setAccepted(true);
-      toast.success("Rematch accepted! Waiting for opponent to set up…");
+      toast.success("Rematch accepted!");
+
+      // Hand off to the parent's "Duel being created…" popup immediately.
+      // Fallback to the internal accepted state if no handler was provided.
+      if (onAccepted) {
+        onAccepted();
+      } else {
+        setAccepted(true);
+      }
     } catch (err: any) {
       toast.error(err?.message ?? "Could not accept rematch");
       setBusy(false);
@@ -93,7 +101,7 @@ export function RematchPopup({ invite, myWallet, onDismiss, countdown }: Props) 
         });
       }, 1000);
     }
-  }, [busy, invite, myWallet, onDismiss]);
+  }, [busy, invite, myWallet, onDismiss, onAccepted]);
 
   // ── Decline ─────────────────────────────────────────────────────────────────
   const handleDecline = useCallback(async () => {
@@ -193,15 +201,16 @@ export function RematchPopup({ invite, myWallet, onDismiss, countdown }: Props) 
             </div>
           </div>
 
-          {/* Accepted waiting state */}
+          {/* Accepted waiting state (fallback only — parent normally takes over) */}
           {accepted ? (
             <div className="flex flex-col items-center gap-3 py-2 text-center">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
               <p className="text-sm font-bold text-foreground">
-                {invite.requesterName} is setting up the challenge…
+                Duel being created…
               </p>
               <p className="text-xs text-muted-foreground">
-                You'll be routed to the pre-lobby automatically.
+                Waiting for {invite.requesterName} to confirm. You'll be routed
+                to the new game automatically.
               </p>
             </div>
           ) : (

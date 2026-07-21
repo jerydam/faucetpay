@@ -580,7 +580,9 @@ export default function ChallengePage() {
   const [winner, setWinner]                     = useState<string | null>(null);
   const [showConfetti, setShowConfetti]         = useState(false);
   const [canRematch, setCanRematch]             = useState(false);
-
+  const [rematchNewCode, setRematchNewCode]               = useState<string | null>(null);
+  const [showRematchSignPrompt, setShowRematchSignPrompt] = useState(false);
+  const [isSigningRematch, setIsSigningRematch]           = useState(false);
   // ── Badge / rematch eligibility ────────────────────────────────────────────
   const [myTotalDuels, setMyTotalDuels]             = useState<number>(0);
   const [opponentTotalDuels, setOpponentTotalDuels] = useState<number | null>(null);
@@ -635,6 +637,49 @@ export default function ChallengePage() {
       return "Your opponent hasn't earned their Rematch Badge yet.";
     return null;
   })();
+  const handleRematchOnChainSign = useCallback(async () => {
+  if (!rematchNewCode || !userWalletAddress) return;
+  setIsSigningRematch(true);
+  try {
+    const switched = await ensureCorrectNetwork();
+    if (!switched) throw new Error("Please connect your wallet first.");
+
+    const activeSigner = await getActiveSigner();
+    if (!activeSigner) throw new Error("No wallet available. Please reconnect.");
+
+    const { ethers } = await import("ethers");
+    const quizHubIface = new ethers.Interface([
+      "function createQuiz(bytes32 quizId)",
+    ]);
+    const quizId = ethers.keccak256(ethers.toUtf8Bytes(rematchNewCode));
+    const data   = quizHubIface.encodeFunctionData("createQuiz", [quizId]);
+
+    const tx      = await sendTaggedRaw(activeSigner, {
+      to: chainCfg.contracts.quizHub,
+      data,
+    });
+    const receipt = await tx.wait();
+    const txHash  = receipt!.hash;
+
+    const res = await fetch(
+      `${API_BASE_URL}/api/challenge/${rematchNewCode}/rematch-on-chain-confirmed`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creatorWallet: userWalletAddress, txHash }),
+      }
+    );
+    const d = await res.json();
+    if (!d.success) throw new Error(d.detail ?? "Failed to confirm on-chain");
+
+    setShowRematchSignPrompt(false);
+    // routing happens via rematch_ready WS message
+  } catch (err: any) {
+    toast.error(err?.message ?? "Transaction failed");
+  } finally {
+    setIsSigningRematch(false);
+  }
+}, [rematchNewCode, userWalletAddress, chainCfg, getActiveSigner, ensureCorrectNetwork]);
 
   const clearRematchTimers = useCallback(() => {
     if (rematchTimerRef.current)   clearInterval(rematchTimerRef.current);
@@ -1004,18 +1049,31 @@ useEffect(() => {
           break;
         }
         case "rematch_invite_accepted": {
-          if (msg.acceptorWallet?.toLowerCase() !== currentMyWallet) {
-            clearRematchTimers(); setRematchPending(false); setRematchCountdown(null);
-            toast.success(`${msg.acceptorName} accepted! Creating the challenge…`);
+          clearRematchTimers();
+          setRematchPending(false);
+          setRematchCountdown(null);
+
+          const newCode = msg.newCode as string;
+
+          if (msg.requesterWallet?.toLowerCase() === currentMyWallet) {
+            // I'm the requester — I need to sign the on-chain tx
+            setRematchNewCode(newCode);
+            setShowRematchSignPrompt(true);
+            toast.success(`${msg.acceptorName} accepted! Sign the transaction to open the lobby.`);
+          } else {
+            // I'm the acceptor — wait for rematch_ready
+            toast.info("Rematch accepted! Waiting for opponent to open the lobby…");
           }
           break;
         }
         case "rematch_ready": {
-          if (msg.requesterWallet?.toLowerCase() !== currentMyWallet) {
-            stopGameOverAudio();
-            toast.success("Rematch ready! Heading to pre-lobby…");
-            router.push(`/challenge/${msg.newCode}/pre-lobby`);
-          }
+          stopGameOverAudio();
+          toast.success("Rematch ready! Heading to pre-lobby…");
+          router.push(
+            `/challenge/${msg.newCode}/pre-lobby?rematch=1&isCreator=${
+              msg.requesterWallet?.toLowerCase() === currentMyWallet ? "1" : "0"
+            }`
+          );
           break;
         }
       }
@@ -1335,18 +1393,49 @@ const handleStake = useCallback(async () => {
 
   // ── Global overlays ────────────────────────────────────────────────────────
   const globalOverlays = (
-    <>
+  <>
     {showBadgeUnlocked && (
       <BadgeUnlockedPopup onDismiss={() => setShowBadgeUnlocked(false)} />
     )}
-      {rematchInvite && (
-        <RematchPopup
-          invite={rematchInvite} myWallet={myWallet}
-          onDismiss={handleInviteDismiss} countdown={inviteCountdown}
-        />
-      )}
-    </>
-  );
+    {rematchInvite && (
+      <RematchPopup
+        invite={rematchInvite} myWallet={myWallet}
+        onDismiss={handleInviteDismiss} countdown={inviteCountdown}
+      />
+    )}
+    {showRematchSignPrompt && rematchNewCode && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+        <div className="w-full max-w-sm bg-card border border-border rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+          <div className="text-5xl">🔏</div>
+          <h2 className="text-xl font-black text-foreground">Open the Rematch Lobby</h2>
+          <p className="text-sm text-muted-foreground">
+            Sign the on-chain transaction to create the rematch lobby.
+            Your opponent is waiting.
+          </p>
+          <div className="bg-muted/50 border border-border rounded-2xl px-4 py-3 font-mono text-sm font-bold text-foreground">
+            {rematchNewCode}
+          </div>
+          <Button
+            className="w-full h-12 font-bold"
+            onClick={handleRematchOnChainSign}
+            disabled={isSigningRematch}
+          >
+            {isSigningRematch
+              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing…</>
+              : "Sign & Open Lobby"
+            }
+          </Button>
+          <button
+            onClick={() => setShowRematchSignPrompt(false)}
+            className="text-xs text-muted-foreground underline"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )}
+  </>
+);
 
   // ─────────────────────────────────────────────────────────────────────────────
   //  RENDER

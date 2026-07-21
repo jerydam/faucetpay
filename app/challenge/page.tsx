@@ -909,40 +909,92 @@ const handleJoinAction = async (code: string) => {
                 : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {lobbyChallenges.map(c => (
-                      <button
-                        key={c.code}
-                        className="lobby-card"
-                        onClick={() => handleJoinAction(c.code)}
-                        style={{ padding: 16, textAlign: "left", width: "100%" }}
-                      >
-                        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                              <span style={{ padding: "4px 8px", borderRadius: 6, background: "rgba(100,116,139,0.1)", color: "var(--dd-text-dim)", fontSize: 10, fontWeight: 900 }}>
-                                {getChainConfig(c.chain_id).shortName}
-                              </span>
-                              <span style={{ padding: "4px 10px", borderRadius: 6, background: "var(--dd-blue)", color: "#fff", fontSize: 10, fontWeight: 900, textTransform: "uppercase", flexShrink: 0 }}>
-                                Join Pool
-                              </span>
-                            </div>
-                          
-                        <div style={{ display: "flex", alignItems: "center", borderTop: "1px solid var(--dd-line)", borderBottom: "1px solid var(--dd-line)", padding: "10px 0", marginBottom: 10, gap: 0 }}>
-                          <div style={{ flex: 1, textAlign: "center" }}>
-                            <p style={{ fontSize: 10, color: "var(--dd-text-mute)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Entry</p>
-                            <p className="d" style={{ fontSize: 15, fontWeight: 900, color: "var(--dd-text)" }}>{fmt(c.stake_amount)} {c.token_symbol}</p>
-                          </div>
-                          <div style={{ width: 1, background: "var(--dd-line)", alignSelf: "stretch" }} />
-                          <div style={{ flex: 1, textAlign: "center" }}>
-                            <p style={{ fontSize: 10, color: "var(--dd-blue)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Prize Pool</p>
-                            <p className="d" style={{ fontSize: 15, fontWeight: 900, color: "var(--dd-blue)" }}>🏆 {fmt(c.stake_amount * 2)} {c.token_symbol}</p>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 11, color: "var(--dd-text-mute)", fontFamily: "monospace" }}>#{c.code}</span>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--dd-blue)", fontSize: 11, fontWeight: 900 }}>
-                            {navigating === c.code ? <Loader2 size={13} className="spin" /> : <>CHALLENGE<ChevronRight size={12} /></>}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+  <button
+    key={c.code}
+    className="lobby-card"
+    onClick={() => handleJoinAction(c.code)}
+    style={{ padding: 16, textAlign: "left", width: "100%" }}
+  >
+    {/* Top row: chain badge + join pill */}
+    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: 10 }}>
+      <span style={{
+        padding: "4px 8px", borderRadius: 6,
+        background: "rgba(100,116,139,0.1)", color: "var(--dd-text-dim)",
+        fontSize: 10, fontWeight: 900,
+      }}>
+        {getChainConfig(c.chain_id).shortName}
+      </span>
+      <span style={{
+        padding: "4px 10px", borderRadius: 6,
+        background: "var(--dd-blue)", color: "#fff",
+        fontSize: 10, fontWeight: 900, textTransform: "uppercase" as const, flexShrink: 0,
+      }}>
+        Join Pool
+      </span>
+      {/* creator username */}
+      <span style={{
+        marginLeft: "auto", fontSize: 10, fontWeight: 700,
+        color: "var(--dd-text-mute)", whiteSpace: "nowrap" as const,
+        overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120,
+      }}>
+        by {c.creator_username || "Anonymous"}
+      </span>
+    </div>
+
+    {/* Topic */}
+    <p style={{
+      fontSize: 13, fontWeight: 700, color: "var(--dd-text)",
+      marginBottom: 10, lineHeight: 1.35,
+      display: "-webkit-box", WebkitLineClamp: 2,
+      WebkitBoxOrient: "vertical" as const, overflow: "hidden",
+    }}>
+      {c.topic}
+    </p>
+
+    {/* Entry / Prize row */}
+    <div style={{
+      display: "flex", alignItems: "center",
+      borderTop: "1px solid var(--dd-line)",
+      borderBottom: "1px solid var(--dd-line)",
+      padding: "10px 0", marginBottom: 10, gap: 0,
+    }}>
+      <div style={{ flex: 1, textAlign: "center" as const }}>
+        <p style={{
+          fontSize: 10, color: "var(--dd-text-mute)", fontWeight: 700,
+          textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 2,
+        }}>Entry</p>
+        <p className="d" style={{ fontSize: 15, fontWeight: 900, color: "var(--dd-text)" }}>
+          {fmt(c.stake_amount)} {c.token_symbol}
+        </p>
+      </div>
+      <div style={{ width: 1, background: "var(--dd-line)", alignSelf: "stretch" }} />
+      <div style={{ flex: 1, textAlign: "center" as const }}>
+        <p style={{
+          fontSize: 10, color: "var(--dd-blue)", fontWeight: 700,
+          textTransform: "uppercase" as const, letterSpacing: "0.1em", marginBottom: 2,
+        }}>Prize Pool</p>
+        <p className="d" style={{ fontSize: 15, fontWeight: 900, color: "var(--dd-blue)" }}>
+          🏆 {fmt(c.stake_amount * 2)} {c.token_symbol}
+        </p>
+      </div>
+    </div>
+
+    {/* Bottom row: code + CTA */}
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <span style={{ fontSize: 11, color: "var(--dd-text-mute)", fontFamily: "monospace" }}>
+        #{c.code}
+      </span>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 4,
+        color: "var(--dd-blue)", fontSize: 11, fontWeight: 900,
+      }}>
+        {navigating === c.code
+          ? <Loader2 size={13} className="spin" />
+          : <>CHALLENGE<ChevronRight size={12} /></>}
+      </div>
+    </div>
+  </button>
+))}
                   </div>
                 )
           )}

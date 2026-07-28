@@ -58,6 +58,9 @@ interface DMContextValue {
 
 const DMContext = createContext<DMContextValue | null>(null);
 
+/** Anything without a `from` can't be rendered — drop it rather than crash the panel. */
+const isValid = (m: any): m is DMMessage => !!m && typeof m.from === "string";
+
 export function DMProvider({ children }: { children: React.ReactNode }) {
   const { address } = useWallet();
   const me = address?.toLowerCase() ?? null;
@@ -76,6 +79,9 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
   const peerRef = useRef<string | null>(null);
   peerRef.current = peer;
 
+  // Thread history stays cached for the session — closing the panel never wipes it.
+  const cacheRef = useRef<Map<string, DMMessage[]>>(new Map());
+
   // ── Loaders ───────────────────────────────────────────────────────────────
   const refreshThreads = useCallback(async () => {
     if (!me) return;
@@ -83,24 +89,28 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
       const r = await fetch(`${API_BASE}/api/dm/threads/${me}`);
       const d = await r.json();
       if (d.success) {
-        setThreads(d.threads ?? []);
-        setUnreadTotal((d.threads ?? []).reduce((s: number, t: DMThread) => s + t.unread, 0));
+        const list: DMThread[] = (d.threads ?? []).filter((t: any) => t && t.peer);
+        setThreads(list);
+        setUnreadTotal(list.reduce((s: number, t: DMThread) => s + (t.unread || 0), 0));
       }
     } catch {}
   }, [me]);
 
   const loadChat = useCallback(async (p: string) => {
     if (!me) return;
+    const w = p.toLowerCase();
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/api/dm/${me}/${p.toLowerCase()}`);
+      const r = await fetch(`${API_BASE}/api/dm/${me}/${w}`);
       const d = await r.json();
       if (d.success) {
-        setMessages(d.messages ?? []);
-        if (d.peer?.username) setPeerName(d.peer.username);
+        const list: DMMessage[] = (d.messages ?? []).filter(isValid);
+        cacheRef.current.set(w, list);
+        setMessages(list);
+        if (d.peer?.username)   setPeerName(d.peer.username);
         if (d.peer?.avatar_url) setPeerAvatar(d.peer.avatar_url);
       }
-      await fetch(`${API_BASE}/api/dm/${me}/${p.toLowerCase()}/read`, { method: "POST" });
+      await fetch(`${API_BASE}/api/dm/${me}/${w}/read`, { method: "POST" });
       refreshThreads();
     } catch {
       toast.error("Couldn't load the conversation.");
@@ -128,21 +138,29 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
       ws.onmessage = (e) => {
         let d: any;
         try { d = JSON.parse(e.data); } catch { return; }
+
+        // Peer opened the thread — flip our sent messages to read.
         if (d.type === "dm_read") {
           const reader = String(d.reader ?? "").toLowerCase();
           if (peerRef.current === reader) {
             setMessages((prev) => prev.map((m) =>
-              m.from.toLowerCase() === me && !m.isRead ? { ...m, isRead: true } : m
+              isValid(m) && m.from.toLowerCase() === me && !m.isRead ? { ...m, isRead: true } : m
             ));
           }
           return;
         }
+
         if (d.type !== "dm_message") return;
 
         const msg: DMMessage = d.message;
+        if (!isValid(msg)) return;
 
         if (peerRef.current && peerRef.current === msg.from) {
-          setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
+          setMessages((prev) => {
+            const next = prev.some((m) => m.id === msg.id) ? prev : [...prev, msg];
+            cacheRef.current.set(msg.from, next);
+            return next;
+          });
           fetch(`${API_BASE}/api/dm/${me}/${msg.from}/read`, { method: "POST" }).catch(() => {});
         } else {
           setUnreadTotal((n) => n + 1);
@@ -182,18 +200,18 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
     setPeer(w);
     setPeerName(username || `User${w.slice(-4).toUpperCase()}`);
     setPeerAvatar(avatar || "");
-    setMessages([]);
+    setMessages(cacheRef.current.get(w) ?? []);   // paint cached history immediately
     setView("chat");
     setOpen(true);
-    loadChat(w);
+    loadChat(w);                                  // then refresh in the background
   }, [loadChat]);
 
   const backToInbox = useCallback(() => {
-    setView("inbox"); setPeer(null); setMessages([]); refreshThreads();
+    setView("inbox"); setPeer(null); refreshThreads();
   }, [refreshThreads]);
 
   const closePanel = useCallback(() => {
-    setOpen(false); setPeer(null); setMessages([]);
+    setOpen(false); setPeer(null);
   }, []);
 
   const sendMessage = useCallback(async (text: string) => {
@@ -215,10 +233,17 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ frm: me, to: peer, body }),
       });
       const d = await r.json();
-      if (!d.success) throw new Error(d.detail || "send failed");
-      setMessages((p) => p.map((m) => (m.id === optimistic.id ? d.message : m)));
+      // A success with no message body would put a null in the list — refuse it.
+      if (!d.success || !isValid(d.message)) throw new Error(d.detail || "send failed");
+
+      setMessages((p) => {
+        const next = p.map((m) => (m.id === optimistic.id ? d.message : m));
+        cacheRef.current.set(peer, next);
+        return next;
+      });
       refreshThreads();
     } catch (e: any) {
+      // Keep it visible and marked failed — a vanishing message is worse.
       setMessages((p) => p.map((m) => (m.id === optimistic.id ? { ...m, failed: true } : m)));
       toast.error(e?.message ?? "Message failed to send.");
     } finally {

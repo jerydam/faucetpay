@@ -241,18 +241,23 @@ export function NotificationBell() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Fetch notifications when panel opens
+  // Load history. Always set it — gating on unread hid every already-read item.
   useEffect(() => {
     if (!address) return;
+    setLoading(true);
     fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}`)
       .then((r) => r.json())
       .then((d) => {
-        const unread = (d.notifications ?? []).filter((n: Notification) => !n.isRead);
-        if (unread.length > 0) {
-          setNotifications(d.notifications ?? []);
-        }
+        const list: Notification[] = (d.notifications ?? []).filter((n: any) => n && n.id);
+        setNotifications((prev) => {
+          // Keep session-only DM entries, which the server doesn't store.
+          const dmOnly = prev.filter((n) => n.id.startsWith("dm-"));
+          const seen = new Set(list.map((n) => n.id));
+          return [...dmOnly.filter((n) => !seen.has(n.id)), ...list];
+        });
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [address]);
 
   // Clear popup timer on unmount
@@ -418,14 +423,18 @@ export function NotificationBell() {
     const ws = new WebSocket(`${getWsNotifyUrl()}/${address.toLowerCase()}`);
 
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data) as Notification & { type: string };
+      let data: any;
+      try { data = JSON.parse(event.data); } catch { return; }
+      if (!data?.type) return;
       if (data.type === "unread_count") return;
+      if (data.type === "dm_read") return;   // handled by DMProvider
 
       // Direct message → inbox entry. DMProvider already showed the sender toast.
       if (data.type === "dm_message") {
-        const m: any = (data as any).message ?? {};
-        const peer   = String((data as any).peer ?? m.from ?? "").toLowerCase();
-        const name   = (data as any).peerName || `User${peer.slice(-4).toUpperCase()}`;
+        const m: any = data.message ?? {};
+        const peer   = String(data.peer ?? m.from ?? "").toLowerCase();
+        if (!peer) return;
+        const name = data.peerName || `User${peer.slice(-4).toUpperCase()}`;
         const dmNotif: Notification = {
           id:    `dm-${m.id ?? Date.now()}`,
           type:  "dm_message",
@@ -434,7 +443,7 @@ export function NotificationBell() {
           data:  {
             peer,
             peerName:   name,
-            peerAvatar: (data as any).peerAvatar || "",
+            peerAvatar: data.peerAvatar || "",
             code:       m.meta?.code,
           },
           isRead:    false,
@@ -476,8 +485,8 @@ export function NotificationBell() {
 
   const markAllRead = async () => {
     if (!address) return;
-    await fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}/read-all`, { method: "POST" });
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    await fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}/read-all`, { method: "POST" }).catch(() => {});
   };
 
   const markOneRead = async (id: string) => {
@@ -537,7 +546,7 @@ export function NotificationBell() {
             </div>
 
             <div className="overflow-y-auto max-h-[60vh] sm:max-h-96">
-              {loading ? (
+              {loading && notifications.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 </div>

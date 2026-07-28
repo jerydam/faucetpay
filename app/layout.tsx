@@ -8,6 +8,7 @@ import { MiniPayGate } from "@/components/minipay-gate"
 import { PresenceProvider } from "@/components/presence-provider"
 import { DMProvider } from "@/components/dm-provider"
 import { DMPanel } from "@/components/dm-panel"
+import { ThemedToaster } from "@/components/themed-toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -26,25 +27,25 @@ export default function RootLayout({
         <meta name="description" content="Automated onchain reward and engagement platform 💧. Distribute tokens effortlessly across multiple chains." />
         <meta name="talentapp:project_verification" content="98f7ce94c39130cef543fae892959918754270dff34594b8d7a129a75b6e2b6f052016215082a0071b59805b26c86d58ae8dec2460ee57a9652ab98f089e8461" />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://app.faucetdrops.io/" />
+        <meta property="og:url" content="https://minipay.faucetdrops.io/" />
         <meta property="og:site_name" content="app.faucetdrops" />
         <meta property="og:title" content="app.faucetdrops - Automated Onchain Reward and Engagement Platform" />
         <meta property="og:description" content="Automated onchain reward and engagement platform 💧. Distribute tokens effortlessly across multiple chains." />
-        <meta property="og:image" content="https://app.faucetdrops.io/opengraph-image" />
+        <meta property="og:image" content="https://minipay.faucetdrops.io/opengraph-image" />
         <meta property="og:image:secure_url" content="https://app.faucetdrops.io/opengraph-image" />
         <meta property="og:image:type" content="image/jpeg" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
-        <meta property="og:image:alt" content="app.faucetdrops - Automated onchain reward and engagement platform" />
+        <meta property="og:image:alt" content="faucetdrops - Automated onchain reward and engagement platform" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:url" content="https://app.faucetdrops.io/" />
+        <meta name="twitter:url" content="https://minipay.faucetdrops.io/" />
         <meta name="twitter:title" content="app.faucetdrops - Automated Onchain Reward and Engagement Platform" />
         <meta name="twitter:description" content="Automated onchain reward and engagement platform 💧. Distribute tokens effortlessly across multiple chains." />
-        <meta name="twitter:image" content="https://app.faucetdrops.io/opengraph-image" />
-        <meta name="twitter:image:alt" content="app.faucetdrops - Automated onchain reward and engagement platform" />
+        <meta name="twitter:image" content="https://minipay.faucetdrops.io/opengraph-image" />
+        <meta name="twitter:image:alt" content="faucetdrops - Automated onchain reward and engagement platform" />
         <meta name="keywords" content="token drops, crypto faucet, onchain rewards, web3 engagement, token distribution, blockchain rewards" />
         <meta name="author" content="FaucetDrops" />
-        <link rel="canonical" href="https://app.faucetdrops.io/" />
+        <link rel="canonical" href="https://minipay.faucetdrops.io/" />
         <meta name="theme-color" content="#020817" />
       </head>
       <body className={inter.className}>
@@ -52,8 +53,10 @@ export default function RootLayout({
           <MiniPayGate>
             <PresenceProvider>
               <DMProvider>
+                
                 {children}
                 <DMPanel />
+               <ThemedToaster />
               </DMProvider>
             </PresenceProvider>
           </MiniPayGate>

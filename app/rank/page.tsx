@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/use-wallet";
-import { ArrowLeft, Swords, Search, ChevronUp, ChevronDown, Minus } from "lucide-react";
+import { ArrowLeft, Swords, Search, ChevronUp, ChevronDown, Minus, MessageCircle } from "lucide-react";
+import { useDM } from "@/components/dm-provider";
 import { usePresence } from "@/components/presence-provider"; // ← Global presence hook
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app";
@@ -88,10 +89,10 @@ interface Player {
 // ─── Podium Card ──────────────────────────────────────────────────────────────
 
 function PodiumCard({
-  player, place, myWallet, onDuel, online,
+  player, place, myWallet, onMessage, online,
 }: {
   player: Player; place: number; myWallet: string;
-  onDuel: (w: string, username: string) => void; online: boolean;
+  onMessage: (w: string, username: string, avatar?: string) => void; online: boolean;
 }) {
   const tier    = getTier(player.total_wins);
   const isMe    = player.wallet_address.toLowerCase() === myWallet.toLowerCase();
@@ -139,10 +140,9 @@ function PodiumCard({
       {!isMe && (
         <button
           className="podium-duel-btn"
-          onClick={() => onDuel(player.wallet_address, player.username)}
-          disabled={!online}
+          onClick={() => onMessage(player.wallet_address, player.username, player.avatar_url)}
         >
-          {online ? "Duel ↗" : "Offline"}
+          Message
         </button>
       )}
     </div>
@@ -174,12 +174,11 @@ export default function RanksPage() {
   const isOnline = (wallet: string) => onlineSet.has(wallet.toLowerCase());
 
   // ── Duel routing — always private invite ──
-  const handleDuel = (targetWallet: string, targetUsername: string) => {
-    const params = new URLSearchParams({
-      inviteUsername: targetUsername,
-      inviteWallet:   targetWallet,
-    });
-    router.push(`/challenge/create-challenge?${params.toString()}`);
+    const { openChat } = useDM();
+
+  // Duels are now negotiated in the private chat, so the row action opens the DM.
+  const handleMessage = (wallet: string, username: string, avatar?: string) => {
+    openChat(wallet, username, avatar);
   };
 
   const filtered = useMemo(() => {
@@ -424,7 +423,7 @@ export default function RanksPage() {
                 player={players[playerIdx]}
                 place={place}
                 myWallet={myWallet ?? ""}
-                onDuel={handleDuel}
+                onMessage={handleMessage}
                 online={isOnline(players[playerIdx].wallet_address)}
               />
             ))}
@@ -561,11 +560,10 @@ export default function RanksPage() {
                         className="duel-btn"
                         onClick={e => {
                           e.stopPropagation();
-                          handleDuel(player.wallet_address, player.username);
+                          handleMessage(player.wallet_address, player.username, player.avatar_url);
                         }}
-                        disabled={!online}
                       >
-                        <Swords size={11} /> {online ? "Duel ↗" : "Offline"}
+                        <MessageCircle size={11} /> Message
                       </button>
                     )}
                   </div>

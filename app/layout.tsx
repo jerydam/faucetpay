@@ -5,6 +5,9 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { MiniPayGate } from "@/components/minipay-gate"
+import { PresenceProvider } from "@/components/presence-provider"
+import { DMProvider } from "@/components/dm-provider"
+import { DMPanel } from "@/components/dm-panel"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -45,9 +48,16 @@ export default function RootLayout({
         <meta name="theme-color" content="#020817" />
       </head>
       <body className={inter.className}>
-       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-  <MiniPayGate>{children}</MiniPayGate>
-</ThemeProvider>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+          <MiniPayGate>
+            <PresenceProvider>
+              <DMProvider>
+                {children}
+                <DMPanel />
+              </DMProvider>
+            </PresenceProvider>
+          </MiniPayGate>
+        </ThemeProvider>
       </body>
     </html>
   )

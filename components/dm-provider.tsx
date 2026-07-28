@@ -135,11 +135,15 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
           fetch(`${API_BASE}/api/dm/${me}/${msg.from}/read`, { method: "POST" }).catch(() => {});
         } else {
           setUnreadTotal((n) => n + 1);
-          toast(`💬 ${d.peerName}`, {
-            description: msg.kind === "duel_invite" ? msg.body : msg.body.slice(0, 80),
+          // Content stays out of the popup — it lives in the notification inbox.
+          toast(`💬 New message from ${d.peerName}`, {
             action: {
-              label: "Reply",
-              onClick: () => { setOpen(true); setView("chat"); setPeer(msg.from); setPeerName(d.peerName); setPeerAvatar(d.peerAvatar || ""); loadChat(msg.from); },
+              label: "Open",
+              onClick: () => {
+                setOpen(true); setView("chat"); setPeer(msg.from);
+                setPeerName(d.peerName); setPeerAvatar(d.peerAvatar || "");
+                loadChat(msg.from);
+              },
             },
           });
         }

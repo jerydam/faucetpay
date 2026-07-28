@@ -6,14 +6,18 @@ import { Bell, X, Check, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
+import { useDM } from "@/components/dm-provider";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app";
 
 function getWsNotifyUrl() {
   if (typeof window === "undefined") return "wss://127.0.0.1:8000/ws/notify";
-  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-    ? "ws://127.0.0.1:8000/ws/notify"
-    : "wss://faucetpay-backend.koyeb.app/ws/notify";
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return "ws://127.0.0.1:8000/ws/notify";
+  }
+  const api = new URL(API_BASE_URL);
+  const proto = api.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${api.host}/ws/notify`;
 }
 
 const POPUP_DURATION = 30; // seconds
@@ -23,7 +27,10 @@ interface Notification {
   type: string;
   title: string;
   body: string;
-  data?: { code?: string; topic?: string; stake?: number; token?: string; creatorName?: string };
+  data?: {
+    code?: string; topic?: string; stake?: number; token?: string; creatorName?: string;
+    peer?: string; peerName?: string; peerAvatar?: string;
+  };
   isRead: boolean;
   createdAt: string;
 }
@@ -105,7 +112,6 @@ function ChallengePopupOverlay({ popup, onAccept, onDecline }: {
 
         <div className="relative px-5 pt-4 pb-6 sm:p-8 sm:text-center">
           {/* Avatar */}
-         {/* Avatar */}
           <div className="flex justify-center mb-4">
             <div className="relative">
               {avatarUrl ? (
@@ -201,6 +207,7 @@ function ChallengePopupOverlay({ popup, onAccept, onDecline }: {
     </div>
   );
 }
+
 function PopupPortal({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -213,6 +220,7 @@ function PopupPortal({ children }: { children: React.ReactNode }) {
 export function NotificationBell() {
   const { address } = useWallet();
   const router = useRouter();
+  const { openChat } = useDM();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
@@ -220,7 +228,7 @@ export function NotificationBell() {
   const [popupQueue, setPopupQueue] = useState<Notification[]>([]);
   const [activePopup, setActivePopup] = useState<ChallengePopup | null>(null);
   const popupTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-    const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   // Close panel on outside click
   useEffect(() => {
@@ -235,17 +243,17 @@ export function NotificationBell() {
 
   // Fetch notifications when panel opens
   useEffect(() => {
-  if (!address) return;
-  fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}`)
-    .then((r) => r.json())
-    .then((d) => {
-      const unread = (d.notifications ?? []).filter((n: Notification) => !n.isRead);
-      if (unread.length > 0) {
-        setNotifications(d.notifications ?? []);
-      }
-    })
-    .catch(() => {});
-}, [address]);
+    if (!address) return;
+    fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const unread = (d.notifications ?? []).filter((n: Notification) => !n.isRead);
+        if (unread.length > 0) {
+          setNotifications(d.notifications ?? []);
+        }
+      })
+      .catch(() => {});
+  }, [address]);
 
   // Clear popup timer on unmount
   useEffect(() => {
@@ -258,30 +266,30 @@ export function NotificationBell() {
     if (popupTimer.current) clearInterval(popupTimer.current);
     setActivePopup(null);
     setPopupQueue((prev) => prev.slice(1));   // advance queue
-}, []);
+  }, []);
 
-const handleAccept = () => {
-  if (!activePopup) return;
-  const code = activePopup.notification.data?.code;
-  const type = activePopup.notification.type;
-  if (popupTimer.current) clearInterval(popupTimer.current);
-  setNotifications((prev) =>
-    prev.map((n) => (n.id === activePopup.notification.id ? { ...n, isRead: true } : n))
-  );
-  setActivePopup(null);
-  setPopupQueue((prev) => prev.slice(1));
-  if (code) navigateToChallenge(code, type);
-};
+  const handleAccept = () => {
+    if (!activePopup) return;
+    const code = activePopup.notification.data?.code;
+    const type = activePopup.notification.type;
+    if (popupTimer.current) clearInterval(popupTimer.current);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === activePopup.notification.id ? { ...n, isRead: true } : n))
+    );
+    setActivePopup(null);
+    setPopupQueue((prev) => prev.slice(1));
+    if (code) navigateToChallenge(code, type);
+  };
 
-const handleDecline = () => {
+  const handleDecline = () => {
     if (!activePopup) return;
     setNotifications((ns) =>
-        ns.some((n) => n.id === activePopup.notification.id)
-            ? ns
-            : [activePopup.notification, ...ns]
+      ns.some((n) => n.id === activePopup.notification.id)
+        ? ns
+        : [activePopup.notification, ...ns]
     );
     dismissActivePopup();
-};
+  };
 
   const showChallengePopup = useCallback((notif: Notification) => {
     if (popupTimer.current) clearInterval(popupTimer.current);
@@ -309,100 +317,100 @@ const handleDecline = () => {
     setActivePopup({ notification: next, secondsLeft: POPUP_DURATION });
 
     popupTimer.current = setInterval(() => {
-        setActivePopup((prev) => {
-            if (!prev) return null;
-            if (prev.secondsLeft <= 1) {
-                clearInterval(popupTimer.current!);
-                setPopupQueue((q) => q.slice(1));   // remove head, triggers next
-                setNotifications((ns) =>
-                    ns.some((n) => n.id === prev.notification.id)
-                        ? ns
-                        : [prev.notification, ...ns]
-                );
-                return null;
-            }
-            return { ...prev, secondsLeft: prev.secondsLeft - 1 };
-        });
+      setActivePopup((prev) => {
+        if (!prev) return null;
+        if (prev.secondsLeft <= 1) {
+          clearInterval(popupTimer.current!);
+          setPopupQueue((q) => q.slice(1));   // remove head, triggers next
+          setNotifications((ns) =>
+            ns.some((n) => n.id === prev.notification.id)
+              ? ns
+              : [prev.notification, ...ns]
+          );
+          return null;
+        }
+        return { ...prev, secondsLeft: prev.secondsLeft - 1 };
+      });
     }, 1000);
-}, [popupQueue, activePopup]);
+  }, [popupQueue, activePopup]);
 
-const pendingToasts = useRef<Notification[]>([]);
-const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingToasts = useRef<Notification[]>([]);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-const queueToast = useCallback((notif: Notification) => {
+  const queueToast = useCallback((notif: Notification) => {
     pendingToasts.current.push(notif);
     if (toastTimer.current) return;
     toastTimer.current = setTimeout(() => {
-        const batch = pendingToasts.current;
-        if (batch.length === 1) {
-            toast(batch[0].title, { description: batch[0].body });
-        } else {
-            toast(`${batch.length} new notifications`, {
-                description: batch.map((n) => n.title).join(" · "),
-            });
-        }
-        pendingToasts.current = [];
-        toastTimer.current = null;
+      const batch = pendingToasts.current;
+      if (batch.length === 1) {
+        toast(batch[0].title, { description: batch[0].body });
+      } else {
+        toast(`${batch.length} new notifications`, {
+          description: batch.map((n) => n.title).join(" · "),
+        });
+      }
+      pendingToasts.current = [];
+      toastTimer.current = null;
     }, 1500);
-}, []);
+  }, []);
 
-// Enqueue instead of showChallengePopup
-const enqueueChallengePopup = useCallback((notif: Notification) => {
+  // Enqueue instead of showChallengePopup
+  const enqueueChallengePopup = useCallback((notif: Notification) => {
     setPopupQueue((prev) => {
-        if (prev.some((n) => n.id === notif.id)) return prev;  // dedup
-        if (prev.length >= 2) return prev;                      // cap at 2 queued
-        return [...prev, notif];
+      if (prev.some((n) => n.id === notif.id)) return prev;  // dedup
+      if (prev.length >= 2) return prev;                      // cap at 2 queued
+      return [...prev, notif];
     });
-}, []);
+  }, []);
 
-// Add this helper inside NotificationBell, before handleAccept
-const navigateToChallenge = useCallback(async (code: string, type: string) => {
-  // Rematch notifications go straight to game page — WS handles the flow
-  if (type === "rematch_request" || type === "game_over" || type === "reward_available" || type === "player_joined" || type === "game_starting") {
-    router.push(`/challenge/${code}`);
-    return;
-  }
+  // Add this helper inside NotificationBell, before handleAccept
+  const navigateToChallenge = useCallback(async (code: string, type: string) => {
+    // Rematch notifications go straight to game page — WS handles the flow
+    if (type === "rematch_request" || type === "game_over" || type === "reward_available" || type === "player_joined" || type === "game_starting") {
+      router.push(`/challenge/${code}`);
+      return;
+    }
 
-  // For challenge invites and public challenges, check current state first
-  try {
-    const res  = await fetch(`${API_BASE_URL}/api/challenge/${code}`);
-    const data = await res.json();
+    // For challenge invites and public challenges, check current state first
+    try {
+      const res  = await fetch(`${API_BASE_URL}/api/challenge/${code}`);
+      const data = await res.json();
 
-    if (data.success && data.challenge) {
-      const c          = data.challenge;
-      const w          = address?.toLowerCase() ?? "";
-      const playerKeys = Object.keys(c.players || {});
-      const isCreator  = c.creator?.toLowerCase() === w;
-      const isPlayer   = playerKeys.some((p: string) => p.toLowerCase() === w);
-      const isFull     = playerKeys.length >= 2;
+      if (data.success && data.challenge) {
+        const c          = data.challenge;
+        const w          = address?.toLowerCase() ?? "";
+        const playerKeys = Object.keys(c.players || {});
+        const isCreator  = c.creator?.toLowerCase() === w;
+        const isPlayer   = playerKeys.some((p: string) => p.toLowerCase() === w);
+        const isFull     = playerKeys.length >= 2;
 
-      // Already a participant — go straight to lobby/game
-      if (isCreator || isPlayer) {
-        router.push(`/challenge/${code}`);
-        return;
+        // Already a participant — go straight to lobby/game
+        if (isCreator || isPlayer) {
+          router.push(`/challenge/${code}`);
+          return;
+        }
+
+        // Challenge is full and this user has no slot
+        if (isFull) {
+          toast.error("This challenge is already full.");
+          return;
+        }
+
+        // No longer accepting
+        if (c.status === "active" || c.status === "finished") {
+          toast.error("This challenge is no longer open.");
+          return;
+        }
+
+        // Open slot — negotiate in pre-lobby
+        router.push(`/challenge/${code}/pre-lobby`);
+      } else {
+        router.push(`/challenge/${code}/pre-lobby`);
       }
-
-      // Challenge is full and this user has no slot
-      if (isFull) {
-        toast.error("This challenge is already full.");
-        return;
-      }
-
-      // No longer accepting
-      if (c.status === "active" || c.status === "finished") {
-        toast.error("This challenge is no longer open.");
-        return;
-      }
-
-      // Open slot — negotiate in pre-lobby
-      router.push(`/challenge/${code}/pre-lobby`);
-    } else {
+    } catch {
       router.push(`/challenge/${code}/pre-lobby`);
     }
-  } catch {
-    router.push(`/challenge/${code}/pre-lobby`);
-  }
-}, [address, router]);
+  }, [address, router]);
 
   // WebSocket push
   useEffect(() => {
@@ -410,38 +418,61 @@ const navigateToChallenge = useCallback(async (code: string, type: string) => {
     const ws = new WebSocket(`${getWsNotifyUrl()}/${address.toLowerCase()}`);
 
     ws.onmessage = (event) => {
-  const data = JSON.parse(event.data) as Notification & { type: string };
-  if (data.type === "unread_count") return;
+      const data = JSON.parse(event.data) as Notification & { type: string };
+      if (data.type === "unread_count") return;
 
-  const notif: Notification = {
-    id:        data.id ?? String(Date.now()),
-    type:      data.type,
-    title:     data.title,
-    body:      data.body,
-    data:      data.data,
-    isRead:    false,
-    createdAt: new Date().toISOString(),
-  };
+      // Direct message → inbox entry. DMProvider already showed the sender toast.
+      if (data.type === "dm_message") {
+        const m: any = (data as any).message ?? {};
+        const peer   = String((data as any).peer ?? m.from ?? "").toLowerCase();
+        const name   = (data as any).peerName || `User${peer.slice(-4).toUpperCase()}`;
+        const dmNotif: Notification = {
+          id:    `dm-${m.id ?? Date.now()}`,
+          type:  "dm_message",
+          title: `Message from ${name}`,
+          body:  m.body ?? "",
+          data:  {
+            peer,
+            peerName:   name,
+            peerAvatar: (data as any).peerAvatar || "",
+            code:       m.meta?.code,
+          },
+          isRead:    false,
+          createdAt: new Date().toISOString(),
+        };
+        setNotifications((prev) =>
+          prev.some((n) => n.id === dmNotif.id) ? prev : [dmNotif, ...prev]
+        );
+        return;
+      }
 
-  if (
-    data.type === "public_challenge" ||
-    data.type === "challenge_invite" ||   // ← ADD THIS
-    data.type === "friend_invite" 
-  ) {
-    setNotifications((prev) =>
-      prev.some((n) => n.id === notif.id) ? prev : [notif, ...prev]
-    );
-    enqueueChallengePopup(notif);
-  } else {
-    setNotifications((prev) => [notif, ...prev]);
-    queueToast(notif);
-  }
-};
+      const notif: Notification = {
+        id:        data.id ?? String(Date.now()),
+        type:      data.type,
+        title:     data.title,
+        body:      data.body,
+        data:      data.data,
+        isRead:    false,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (
+        data.type === "public_challenge" ||
+        data.type === "challenge_invite" ||
+        data.type === "friend_invite"
+      ) {
+        setNotifications((prev) =>
+          prev.some((n) => n.id === notif.id) ? prev : [notif, ...prev]
+        );
+        enqueueChallengePopup(notif);
+      } else {
+        setNotifications((prev) => [notif, ...prev]);
+        queueToast(notif);
+      }
+    };
 
     return () => ws.close();
   }, [address, showChallengePopup]);
-
- 
 
   const markAllRead = async () => {
     if (!address) return;
@@ -453,20 +484,21 @@ const navigateToChallenge = useCallback(async (code: string, type: string) => {
     if (!address) return;
     // Optimistic UI update
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    if (id.startsWith("dm-")) return;   // client-side entry, no server row to mark
     await fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}/read/${id}`, { method: "POST" }).catch(() => {});
   };
 
   return (
     <>
-    {activePopup && (
+      {activePopup && (
         <PopupPortal>
-            <ChallengePopupOverlay
-                popup={activePopup}
-                onAccept={handleAccept}
-                onDecline={handleDecline}
-            />
+          <ChallengePopupOverlay
+            popup={activePopup}
+            onAccept={handleAccept}
+            onDecline={handleDecline}
+          />
         </PopupPortal>
-    )}
+      )}
 
       <div className="relative" ref={panelRef}>
         <button
@@ -489,17 +521,25 @@ const navigateToChallenge = useCallback(async (code: string, type: string) => {
           )}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
               <span className="text-sm font-black text-foreground">Activity</span>
-              {unreadCount > 0 && (
-                <button onClick={markAllRead} className="text-xs font-bold text-blue-500 hover:text-blue-600 transition-colors">
-                  Clear All
+              <div className="flex items-center gap-3">
+                {unreadCount > 0 && (
+                  <button onClick={markAllRead} className="text-xs font-bold text-blue-500 hover:text-blue-600 transition-colors">
+                    Clear All
+                  </button>
+                )}
+                <button
+                  onClick={() => setOpen(false)}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
                 </button>
-              )}
+              </div>
             </div>
 
             <div className="overflow-y-auto max-h-[60vh] sm:max-h-96">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                   <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="py-12 px-6 text-center">
@@ -512,13 +552,19 @@ const navigateToChallenge = useCallback(async (code: string, type: string) => {
               ) : (
                 notifications.map((n) => {
                   const challengeCode = n.data?.code;
-                  const isInteractive = !!challengeCode;
+                  const isDM          = n.type === "dm_message";
+                  const isInteractive = isDM || !!challengeCode;
 
                   return (
                     <div
                       key={n.id}
                       onClick={() => {
                         if (!n.isRead) markOneRead(n.id);
+                        if (isDM && n.data?.peer) {
+                          setOpen(false);
+                          openChat(n.data.peer, n.data.peerName, n.data.peerAvatar);
+                          return;
+                        }
                         if (isInteractive && challengeCode) {
                           setOpen(false);
                           navigateToChallenge(challengeCode, n.type);
@@ -534,7 +580,7 @@ const navigateToChallenge = useCallback(async (code: string, type: string) => {
                         "mt-1.5 h-2 w-2 rounded-full shrink-0 transition-transform group-hover:scale-125",
                         n.isRead ? "bg-transparent" : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
                       )} />
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <p className="text-[13px] font-bold text-foreground truncate leading-none pt-0.5">
@@ -543,15 +589,15 @@ const navigateToChallenge = useCallback(async (code: string, type: string) => {
                           {/* Visual indicator that this notification is actionable */}
                           {isInteractive && (
                             <div className="shrink-0 text-[9px] bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded flex items-center font-black uppercase tracking-tighter">
-                              Join
+                              {isDM ? "Open" : "Join"}
                             </div>
                           )}
                         </div>
-                        
+
                         <p className="text-[12px] text-muted-foreground line-clamp-2 leading-relaxed">
                           {n.body}
                         </p>
-                        
+
                         <p className="text-[10px] font-medium text-muted-foreground/50 mt-2 uppercase tracking-tight">
                           {timeAgo(n.createdAt)}
                         </p>

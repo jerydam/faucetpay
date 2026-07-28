@@ -21,6 +21,8 @@ export interface DMMessage {
   meta?: { code?: string; topic?: string; stake?: number; token?: string } | null;
   isRead: boolean;
   createdAt: string;
+  delivered?: boolean;   // recipient had a live socket when we sent it
+  failed?: boolean;      // POST /api/dm/send never landed
 }
 
 export interface DMThread {
@@ -126,6 +128,15 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
       ws.onmessage = (e) => {
         let d: any;
         try { d = JSON.parse(e.data); } catch { return; }
+        if (d.type === "dm_read") {
+          const reader = String(d.reader ?? "").toLowerCase();
+          if (peerRef.current === reader) {
+            setMessages((prev) => prev.map((m) =>
+              m.from.toLowerCase() === me && !m.isRead ? { ...m, isRead: true } : m
+            ));
+          }
+          return;
+        }
         if (d.type !== "dm_message") return;
 
         const msg: DMMessage = d.message;
@@ -192,6 +203,7 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
     const optimistic: DMMessage = {
       id: `tmp-${Date.now()}`, from: me, to: peer, body,
       kind: "text", isRead: false, createdAt: new Date().toISOString(),
+      delivered: false,
     };
     setMessages((p) => [...p, optimistic]);
     setSending(true);
@@ -207,7 +219,7 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
       setMessages((p) => p.map((m) => (m.id === optimistic.id ? d.message : m)));
       refreshThreads();
     } catch (e: any) {
-      setMessages((p) => p.filter((m) => m.id !== optimistic.id));
+      setMessages((p) => p.map((m) => (m.id === optimistic.id ? { ...m, failed: true } : m)));
       toast.error(e?.message ?? "Message failed to send.");
     } finally {
       setSending(false);

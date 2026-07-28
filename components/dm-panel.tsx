@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, MessageCircle, Send, Swords, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, MessageCircle, Send, Swords, X } from "lucide-react";
 import { useDM, type DMMessage } from "@/components/dm-provider";
 import { usePresence } from "@/components/presence-provider";
 import { useWallet } from "@/hooks/use-wallet";
@@ -40,7 +40,33 @@ function Dot({ online }: { online: boolean }) {
     )} />
   );
 }
+type MsgStatus = "sending" | "failed" | "sent" | "delivered" | "read";
 
+function statusOf(m: DMMessage): MsgStatus {
+  if (m.failed) return "failed";
+  if (m.id.startsWith("tmp-")) return "sending";
+  if (m.isRead) return "read";
+  // Stored server-side but the recipient wasn't connected — they'll get it on next open.
+  if (m.delivered === false) return "sent";
+  return "delivered";
+}
+
+function StatusIcon({ status }: { status: MsgStatus }) {
+  const label = {
+    sending: "Sending", failed: "Not delivered", sent: "Sent",
+    delivered: "Delivered", read: "Read",
+  }[status];
+
+  const icon = {
+    sending:   <Clock className="h-3 w-3 text-white/50" />,
+    failed:    <AlertCircle className="h-3 w-3 text-red-300" />,
+    sent:      <Check className="h-3 w-3 text-white/50" />,
+    delivered: <CheckCheck className="h-3 w-3 text-white/60" />,
+    read:      <CheckCheck className="h-3 w-3 text-sky-300" />,
+  }[status];
+
+  return <span title={label} aria-label={label} className="inline-flex items-center">{icon}</span>;
+}
 export function DMPanel() {
   const router = useRouter();
   const { address } = useWallet();
@@ -104,8 +130,12 @@ export function DMPanel() {
                : "rounded-bl-md bg-muted text-foreground",
         )}>
           <p className="whitespace-pre-wrap break-words">{m.body}</p>
-          <span className={cn("mt-0.5 block text-[10px]", mine ? "text-white/60" : "text-muted-foreground")}>
+          <span className={cn(
+            "mt-0.5 flex items-center justify-end gap-1 text-[10px]",
+            mine ? "text-white/60" : "text-muted-foreground",
+          )}>
             {shortTime(m.createdAt)}
+            {mine && <StatusIcon status={statusOf(m)} />}
           </span>
         </div>
       </div>

@@ -6,11 +6,19 @@ import { useWallet } from "@/hooks/use-wallet";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app";
 const WS_BASE  = API_BASE.replace(/^http/, "ws");
 
-const PresenceContext = createContext<Set<string>>(new Set());
+export interface PresenceInfo {
+  wallet: string;
+  username: string;
+  avatar_url: string;
+}
+
+const PresenceContext     = createContext<Set<string>>(new Set());
+const PresenceInfoContext = createContext<Map<string, PresenceInfo>>(new Map());
 
 export function PresenceProvider({ children }: { children: React.ReactNode }) {
   const { address } = useWallet();
   const [onlineSet, setOnlineSet] = useState<Set<string>>(new Set());
+  const [infoMap,   setInfoMap]   = useState<Map<string, PresenceInfo>>(new Map());
 
   const wsRef   = useRef<WebSocket | null>(null);
   const addrRef = useRef<string | null>(null);
@@ -45,9 +53,20 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
         if (msg.type !== "presence" || !Array.isArray(msg.online)) return;
 
         // Server sends [{ wallet, username, avatar_url }] — tolerate plain strings too.
-        setOnlineSet(new Set(
-          msg.online.map((p: any) => String(p?.wallet ?? p).toLowerCase())
-        ));
+        const set = new Set<string>();
+        const map = new Map<string, PresenceInfo>();
+        for (const p of msg.online) {
+          const w = String(p?.wallet ?? p).toLowerCase();
+          if (!w || w === "undefined" || w === "null") continue;
+          set.add(w);
+          map.set(w, {
+            wallet:     w,
+            username:   p?.username   || `User${w.slice(-4).toUpperCase()}`,
+            avatar_url: p?.avatar_url || "",
+          });
+        }
+        setOnlineSet(set);
+        setInfoMap(map);
       };
 
       ws.onclose = () => {
@@ -77,9 +96,21 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <PresenceContext.Provider value={onlineSet}>
-      {children}
+      <PresenceInfoContext.Provider value={infoMap}>
+        {children}
+      </PresenceInfoContext.Provider>
     </PresenceContext.Provider>
   );
 }
 
+/** Set of lower-cased wallets currently online. */
 export const usePresence = () => useContext(PresenceContext);
+
+/** Username + avatar for each online wallet, keyed by lower-cased address. */
+export const usePresenceInfo = () => useContext(PresenceInfoContext);
+
+/** Convenience: is this one wallet online? */
+export function useIsOnline(wallet?: string | null) {
+  const set = useContext(PresenceContext);
+  return !!wallet && set.has(wallet.toLowerCase());
+}

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useWallet } from "@/hooks/use-wallet";
-import { ArrowLeft, Swords, Search, ChevronUp, ChevronDown, Minus, MessageCircle } from "lucide-react";
+import { ArrowLeft, Search, ChevronUp, ChevronDown, Minus, MessageCircle } from "lucide-react";
+import { usePresence, usePresenceInfo } from "@/components/presence-provider";
 import { useDM } from "@/components/dm-provider";
-import { usePresence } from "@/components/presence-provider"; // ← Global presence hook
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app";
 
@@ -120,14 +121,16 @@ function PodiumCard({
             />
           ) : initial}
         </div>
-        {/* Visible online dot for Podium */}
-        <span style={{
-          position: "absolute", bottom: -2, right: -2,
-          width: 14, height: 14, borderRadius: "50%",
-          background: online ? "#22c55e" : "#6b7280",
-          border: "3px solid var(--dd-bg)",
-          zIndex: 10,
-        }} />
+        <span
+          title={online ? "Online" : "Offline"}
+          style={{
+            position: "absolute", bottom: -2, right: -2,
+            width: 14, height: 14, borderRadius: "50%",
+            background: online ? "#22c55e" : "#6b7280",
+            border: "3px solid var(--dd-bg)",
+            zIndex: 10,
+          }}
+        />
       </div>
 
       <span className="podium-name">{player.username}</span>
@@ -136,7 +139,6 @@ function PodiumCard({
       <RankDelta delta={player.rank_delta} />
       <span style={{ fontSize: 18 }}>{medals[place - 1]}</span>
 
-      {/* Only show Duel if NOT me */}
       {!isMe && (
         <button
           className="podium-duel-btn"
@@ -154,14 +156,18 @@ function PodiumCard({
 export default function RanksPage() {
   const router = useRouter();
   const { address: myWallet } = useWallet();
+  const { openChat } = useDM();
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState("");
-  const [filter, setFilter] = useState<"top10" | "myrank" | "online">("top10");
+  const [filter, setFilter]   = useState<"top100" | "online">("top100");
 
-  // 👇 Grab the global online set from your new provider
-  const onlineSet = usePresence();
+  const onlineSet  = usePresence();
+  const onlineInfo = usePresenceInfo();
+
+  const myRowRef = useRef<HTMLDivElement | null>(null);
+  const [flashMe, setFlashMe] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/ranks`)
@@ -173,33 +179,14 @@ export default function RanksPage() {
 
   const isOnline = (wallet: string) => onlineSet.has(wallet.toLowerCase());
 
-  // ── Duel routing — always private invite ──
-    const { openChat } = useDM();
-
-  // Duels are now negotiated in the private chat, so the row action opens the DM.
   const handleMessage = (wallet: string, username: string, avatar?: string) => {
     openChat(wallet, username, avatar);
   };
 
-  const filtered = useMemo(() => {
-    let list = [...players];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(p =>
-        p.username.toLowerCase().includes(q) ||
-        p.wallet_address.toLowerCase().includes(q),
-      );
-    }
-    if (filter === "top10") list = list.slice(0, 10);
-    if (filter === "myrank" && myWallet) {
-      const myIdx = list.findIndex(p => p.wallet_address.toLowerCase() === myWallet.toLowerCase());
-      if (myIdx !== -1) {
-        const start = Math.max(0, myIdx - 4);
-        list = list.slice(start, start + 10);
-      }
-    }
-    return list;
-  }, [players, search, filter, myWallet]);
+  const goBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/");
+  };
 
   const myEntry = players.find(p => p.wallet_address.toLowerCase() === (myWallet?.toLowerCase() ?? ""));
   const myRank  = myEntry ? players.indexOf(myEntry) + 1 : null;
@@ -207,6 +194,50 @@ export default function RanksPage() {
   const tierProgress = myEntry && myTier.maxWins !== Infinity
     ? Math.min(100, Math.round(((myEntry.total_wins - myTier.minWins) / (myTier.maxWins - myTier.minWins)) * 100))
     : 100;
+
+  // Everyone currently connected — ranked or not. Players outside the leaderboard
+  // get a row built from what the presence socket already told us about them.
+  const onlinePlayers = useMemo(() => {
+    const byWallet = new Map(players.map(p => [p.wallet_address.toLowerCase(), p]));
+    const out: Player[] = [];
+    onlineSet.forEach(w => {
+      const ranked = byWallet.get(w);
+      if (ranked) { out.push(ranked); return; }
+      const info = onlineInfo.get(w);
+      out.push({
+        wallet_address: w,
+        username:   info?.username   || `User${w.slice(-4).toUpperCase()}`,
+        avatar_url: info?.avatar_url || "",
+        total_wins: 0, total_duels: 0, total_earned: 0, rank_delta: 0,
+      });
+    });
+    return out.sort((a, b) => b.total_wins - a.total_wins);
+  }, [players, onlineSet, onlineInfo]);
+
+  const filtered = useMemo(() => {
+    let list = filter === "online" ? onlinePlayers : players.slice(0, 100);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p =>
+        p.username.toLowerCase().includes(q) ||
+        p.wallet_address.toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [players, onlinePlayers, search, filter]);
+
+  const scrollToMe = () => {
+    if (!myWallet) { toast("Connect your wallet to find your rank."); return; }
+    if (!myEntry)  { toast("You're not in the top 100 yet — win a few duels."); return; }
+
+    setSearch("");
+    setFilter("top100");
+    setTimeout(() => {
+      myRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlashMe(true);
+      setTimeout(() => setFlashMe(false), 1600);
+    }, 60);
+  };
 
   return (
     <>
@@ -219,8 +250,25 @@ export default function RanksPage() {
         }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes shimmer { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+        @keyframes flashRow {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+          30%, 70% { box-shadow: 0 0 0 3px rgba(37,99,235,0.5); }
+        }
         .fade-up { animation: fadeUp 0.4s ease forwards; }
         .skeleton { background: var(--dd-line); border-radius: 10px; animation: shimmer 1.4s ease infinite; }
+
+        /* Press feedback on every button in the page */
+        .ranks-page button {
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+          transition: transform 0.12s ease, filter 0.12s ease, background 0.15s, border-color 0.2s, color 0.15s;
+        }
+        .ranks-page button:active:not(:disabled) { transform: scale(0.93); filter: brightness(0.9); }
+        .player-row:active { transform: scale(0.99); }
+        @media (prefers-reduced-motion: reduce) {
+          .ranks-page button:active:not(:disabled), .player-row:active { transform: none; }
+        }
+
         .ranks-header { display: flex; align-items: center; gap: 12px; padding: 20px 16px 14px; }
         .back-btn {
           width: 36px; height: 36px; border-radius: 10px;
@@ -238,28 +286,28 @@ export default function RanksPage() {
           background: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.3);
         }
         .my-banner-top { display: flex; align-items: flex-start; justify-content: space-between; }
-        .my-banner-left { display: flex; flex-direction: column; gap: 4; }
+        .my-banner-left { display: flex; flex-direction: column; gap: 4px; }
         .my-banner-label { font-size: 11px; color: var(--dd-text-muted); font-weight: 500; }
         .my-banner-rank { font-family: 'Big Shoulders Display', sans-serif; font-size: 32px; font-weight: 900; color: var(--dd-blue); line-height: 1; }
         .my-banner-tier { font-size: 12px; color: var(--dd-text-muted); margin-top: 4px; }
         .my-banner-right { text-align: right; }
         .my-banner-username { font-size: 13px; font-weight: 700; color: var(--dd-text); }
         .my-banner-record { font-size: 13px; font-weight: 700; color: #34d399; margin-top: 2px; }
-        .my-banner-delta { display: flex; justify-content: flex-end; margin-top: 4px; }
+        .my-banner-note { font-size: 12px; color: var(--dd-text-muted); }
         .tier-progress-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; margin-bottom: 4px; }
         .tier-progress-label { font-size: 10px; color: var(--dd-text-muted); }
         .tier-progress-pct   { font-size: 10px; font-weight: 700; }
-        .tier-progress-track { height: 4px; background: var(--dd-line); border-radius: 9999; overflow: hidden; }
-        .tier-progress-fill  { height: 100%; border-radius: 9999; transition: width 0.6s ease; }
+        .tier-progress-track { height: 4px; background: var(--dd-line); border-radius: 9999px; overflow: hidden; }
+        .tier-progress-fill  { height: 100%; border-radius: 9999px; transition: width 0.6s ease; }
         .podium-wrap { display: flex; align-items: flex-end; justify-content: center; gap: 8px; padding: 0 16px 20px; }
         .podium-card {
           flex: 1; display: flex; flex-direction: column; align-items: center;
           gap: 6px; padding: 14px 6px 12px; border-radius: 16px;
           background: var(--dd-card); border: 1px solid var(--dd-line);
-          cursor: pointer; transition: border-color 0.2s, transform 0.2s;
+          transition: border-color 0.2s, transform 0.2s;
         }
         .podium-card:hover { border-color: rgba(37,99,235,0.4); }
-        .podium-first { border-color: rgba(37,99,235,0.4); background:  rgba(37,99,235,0.06); transform: translateY(-10px); }
+        .podium-first { border-color: rgba(37,99,235,0.4); background: rgba(37,99,235,0.06); transform: translateY(-10px); }
         .podium-avatar {
           border-radius: 12px; display: flex; align-items: center; justify-content: center;
           font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; flex-shrink: 0;
@@ -271,12 +319,9 @@ export default function RanksPage() {
         }
         .podium-duel-btn {
           font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 8px;
-          background: var(--dd-blue); border: none; color: #fff; cursor: pointer; transition: background 0.15s;
+          background: var(--dd-blue); border: none; color: #fff; cursor: pointer;
         }
-        .podium-duel-btn:hover:not(:disabled) { background: var(--dd-blue2, #1d4ed8); }
-        .podium-duel-btn:disabled {
-          background: var(--dd-line); color: var(--dd-dim); cursor: not-allowed;
-        }
+        .podium-duel-btn:hover { background: var(--dd-blue2, #1d4ed8); }
         .crown-emoji { font-size: 20px; animation: shimmer 2s ease infinite; }
         .search-wrap { position: relative; margin: 0 16px 12px; }
         .search-input {
@@ -293,7 +338,7 @@ export default function RanksPage() {
           padding: 7px 16px; border-radius: 99px; border: 1.5px solid var(--dd-line);
           background: transparent; color: var(--dd-dim);
           font-family: 'Figtree', sans-serif; font-size: 12px; font-weight: 700;
-          cursor: pointer; transition: all 0.15s; flex-shrink: 0; white-space: nowrap;
+          cursor: pointer; flex-shrink: 0; white-space: nowrap;
         }
         .filter-pill.active { background: var(--dd-blue); border-color: var(--dd-blue); color: #fff; }
         .filter-pill:hover:not(.active) { border-color: rgba(37,99,235,0.4); color: var(--dd-text); }
@@ -305,65 +350,43 @@ export default function RanksPage() {
           display: flex; align-items: center; gap: 10px;
           padding: 12px 14px; border-radius: 14px;
           background: var(--dd-card); border: 1px solid var(--dd-line);
-          cursor: pointer; transition: border-color 0.2s, background 0.2s;
+          transition: border-color 0.2s, background 0.2s, transform 0.12s ease;
           margin-bottom: 8px;
-          align-items: center;
           animation: fadeUp 0.35s ease forwards; opacity: 0;
         }
-        .player-name {
-          font-weight: 700;
-          font-size: 13px;
-          color: var(--dd-text);
-          word-break: break-word;
-        }
-
-        .player-name-row {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          flex-wrap: wrap; 
-        }
-
-        .player-info {
-          flex: 1;
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          overflow: visible; 
-        }  
         .player-row:hover { border-color: rgba(37,99,235,0.4); background: rgba(37,99,235,0.04); }
         .player-row.me    { border-color: rgba(37,99,235,0.5); background: rgba(37,99,235,0.08); }
+        /* opacity:1 is required — the row starts at 0 and relies on fadeUp to reveal it */
+        .player-row.flash { opacity: 1; animation: flashRow 1.4s ease; }
+        .player-name { font-weight: 700; font-size: 13px; color: var(--dd-text); word-break: break-word; }
+        .player-name-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+        .player-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; overflow: visible; }
         .rank-num { font-family: 'Big Shoulders Display', sans-serif; font-size: 16px; font-weight: 900; min-width: 28px; text-align: center; flex-shrink: 0; }
         .avatar { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-family: 'Big Shoulders Display', sans-serif; font-size: 14px; font-weight: 900; flex-shrink: 0; position: relative; }
         .you-badge { font-size: 8px; font-weight: 800; background: var(--dd-blue); color: #fff; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
-        .online-label { font-size: 9px; color: #22c55e; font-weight: 600; flex-shrink: 0; }
-        .offline-label { font-size: 9px; color: var(--dd-text-muted); font-weight: 500; flex-shrink: 0; }
         .player-meta { display: flex; gap: 8px; margin-top: 1px; }
         .player-meta-item { font-size: 11px; color: var(--dd-text-muted); }
         .player-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; min-width: 64px; }
         .player-wins { font-family: 'Big Shoulders Display', sans-serif; font-size: 15px; font-weight: 900; color: var(--dd-text); line-height: 1; }
         .win-bar-row { display: flex; align-items: center; gap: 5px; }
-        .win-bar-track { width: 52px; height: 4px; background: var(--dd-line); border-radius: 9999; overflow: hidden; }
-        .win-bar-fill { height: 100%; border-radius: 9999; transition: width 0.6s ease; }
+        .win-bar-track { width: 52px; height: 4px; background: var(--dd-line); border-radius: 9999px; overflow: hidden; }
+        .win-bar-fill { height: 100%; border-radius: 9999px; transition: width 0.6s ease; }
         .win-pct { font-size: 10px; font-weight: 700; min-width: 28px; text-align: right; }
         .duel-btn {
           padding: 6px 12px; border-radius: 9px;
           background: var(--dd-blue); border: none; color: #fff;
           font-family: 'Figtree', sans-serif; font-size: 11px; font-weight: 700;
           cursor: pointer; display: flex; align-items: center; gap: 4px;
-          white-space: nowrap; transition: background 0.15s, transform 0.12s; flex-shrink: 0;
+          white-space: nowrap; flex-shrink: 0;
         }
-        .duel-btn:hover:not(:disabled)  { background: var(--dd-blue2, #1d4ed8); }
-        .duel-btn:active:not(:disabled) { transform: scale(0.95); }
-        .duel-btn:disabled { background: var(--dd-line); color: var(--dd-dim); cursor: not-allowed; }
+        .duel-btn:hover { background: var(--dd-blue2, #1d4ed8); }
       `}</style>
 
       <div className="ranks-page">
 
         {/* Header */}
         <div className="ranks-header">
-          <button className="back-btn" onClick={() => router.back()}>
+          <button className="back-btn" onClick={goBack} aria-label="Go back">
             <ArrowLeft size={16} color="var(--dd-text)" />
           </button>
           <div>
@@ -375,7 +398,7 @@ export default function RanksPage() {
         </div>
 
         {/* My Position Banner */}
-        {myEntry && (
+        {myEntry ? (
           <div className="my-banner fade-up">
             <div className="my-banner-top">
               <div className="my-banner-left">
@@ -389,9 +412,6 @@ export default function RanksPage() {
               <div className="my-banner-right">
                 <div className="my-banner-username">{myEntry.username}</div>
                 <div className="my-banner-record">{myEntry.total_wins}W / {myEntry.total_duels}D</div>
-                <div className="my-banner-delta">
-                  
-                </div>
               </div>
             </div>
             {myTier.maxWins !== Infinity && (
@@ -408,15 +428,22 @@ export default function RanksPage() {
               </>
             )}
           </div>
-        )}
+        ) : myWallet && !loading ? (
+          <div className="my-banner fade-up">
+            <span className="my-banner-label">Your position</span>
+            <div className="my-banner-note" style={{ marginTop: 4 }}>
+              Not in the top 100 yet — win duels to appear here.
+            </div>
+          </div>
+        ) : null}
 
         {/* Podium Top 3 */}
         {!loading && players.length >= 3 && (
           <div className="podium-wrap fade-up">
             {[
-              { playerIdx: 1, place: 2 },  // 3rd — left
-              { playerIdx: 0, place: 1 },  // 1st — center (elevated)
-              { playerIdx: 2, place: 3 },  // 2nd — right
+              { playerIdx: 1, place: 2 },
+              { playerIdx: 0, place: 1 },
+              { playerIdx: 2, place: 3 },
             ].map(({ playerIdx, place }) => (
               <PodiumCard
                 key={players[playerIdx].wallet_address}
@@ -427,7 +454,6 @@ export default function RanksPage() {
                 online={isOnline(players[playerIdx].wallet_address)}
               />
             ))}
-
           </div>
         )}
 
@@ -444,15 +470,19 @@ export default function RanksPage() {
 
         {/* Filter Pills */}
         <div className="filter-row">
-          {(["top10", "all", "myrank", "online"] as const).map(f => (
-            <button
-              key={f}
-              className={`filter-pill${filter === f ? " active" : ""}`}
-              onClick={() => setFilter(f as any)}
-            >
-              {f === "top10" ? "Top 10" : f === "myrank" ? "Near me" : "🟢 Online"}
-            </button>
-          ))}
+          <button
+            className={`filter-pill${filter === "top100" ? " active" : ""}`}
+            onClick={() => setFilter("top100")}
+          >
+            Top 100
+          </button>
+          <button className="filter-pill" onClick={scrollToMe}>Me</button>
+          <button
+            className={`filter-pill${filter === "online" ? " active" : ""}`}
+            onClick={() => setFilter("online")}
+          >
+            🟢 Online{onlineSet.size > 0 ? ` (${onlineSet.size})` : ""}
+          </button>
         </div>
 
         {/* Tier Legend */}
@@ -476,99 +506,105 @@ export default function RanksPage() {
             ))
           ) : filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "48px 0", color: "var(--dd-text-muted)", fontSize: 14 }}>
-              No players found
+              {filter === "online" ? "Nobody's online right now" : "No players found"}
             </div>
           ) : (
-            filtered
-              // Apply online filter
-              .filter(p => (filter as string) === "online" ? isOnline(p.wallet_address) : true)
-              .map((player, idx) => {
-                const globalRank = players.indexOf(player) + 1;
-                const tier       = getTier(player.total_wins);
-                const isMe       = player.wallet_address.toLowerCase() === (myWallet?.toLowerCase() ?? "");
-                const online     = isOnline(player.wallet_address);
-                const initial    = player.username?.slice(0, 2).toUpperCase() || "??";
-                const pct        = player.total_duels === 0 ? 0 : Math.round((player.total_wins / player.total_duels) * 100);
-                const barColor   = pct >= 60 ? "#34d399" : pct >= 40 ? "#fbbf24" : "#f87171";
+            filtered.map((player, idx) => {
+              const listIdx    = players.indexOf(player);
+              const globalRank = listIdx >= 0 ? listIdx + 1 : null;
+              const tier       = getTier(player.total_wins);
+              const isMe       = player.wallet_address.toLowerCase() === (myWallet?.toLowerCase() ?? "");
+              const online     = isOnline(player.wallet_address);
+              const initial    = player.username?.slice(0, 2).toUpperCase() || "??";
+              const pct        = player.total_duels === 0 ? 0 : Math.round((player.total_wins / player.total_duels) * 100);
+              const barColor   = pct >= 60 ? "#34d399" : pct >= 40 ? "#fbbf24" : "#f87171";
 
-                return (
-                  <div
-                    key={player.wallet_address}
-                    className={`player-row${isMe ? " me" : ""}`}
-                    style={{ animationDelay: `${idx * 0.04}s` }}
-                  >
-                    {/* Rank */}
-                    <span className="rank-num" style={{
-                      color: globalRank === 1 ? "var(--dd-blue)" : globalRank === 2 ? "#9ca3af" : globalRank === 3 ? "#60a5fa" : "var(--dd-dim)",
-                    }}>
-                      {globalRank <= 3 ? ["🥇", "🥈", "🥉"][globalRank - 1] : `#${globalRank}`}
-                    </span>
+              return (
+                <div
+                  key={player.wallet_address}
+                  ref={isMe ? myRowRef : undefined}
+                  className={`player-row${isMe ? " me" : ""}${isMe && flashMe ? " flash" : ""}`}
+                  style={{ animationDelay: `${idx * 0.04}s` }}
+                >
+                  {/* Rank */}
+                  <span className="rank-num" style={{
+                    color: globalRank === 1 ? "var(--dd-blue)"
+                         : globalRank === 2 ? "#9ca3af"
+                         : globalRank === 3 ? "#60a5fa"
+                         : "var(--dd-dim)",
+                  }}>
+                    {globalRank === null ? "—"
+                      : globalRank <= 3 ? ["🥇", "🥈", "🥉"][globalRank - 1]
+                      : `#${globalRank}`}
+                  </span>
 
-                    {/* Wrapper for avatar to allow absolute positioning without clipping */}
-                    <div style={{ position: "relative", flexShrink: 0 }}>
-                      <div className="avatar" style={{ background: `${tier.color}22`, color: tier.color, overflow: "hidden", padding: 0 }}>
-                        {player.avatar_url ? (
-                          <img src={player.avatar_url} alt={player.username}
-                            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
-                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                          />
-                        ) : initial}
-                      </div>
-                      {/* Visible online dot for list items */}
-                      <span style={{
+                  {/* Avatar + online dot */}
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <div className="avatar" style={{ background: `${tier.color}22`, color: tier.color, overflow: "hidden", padding: 0 }}>
+                      {player.avatar_url ? (
+                        <img src={player.avatar_url} alt={player.username}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      ) : initial}
+                    </div>
+                    <span
+                      title={online ? "Online" : "Offline"}
+                      style={{
                         position: "absolute", bottom: -2, right: -2,
                         width: 12, height: 12, borderRadius: "50%",
                         background: online ? "#22c55e" : "#6b7280",
                         border: "2px solid var(--dd-card)",
-                        zIndex: 10
-                      }} />
-                    </div>
-
-                    {/* Info */}
-                    <div className="player-info">
-                      <div className="player-name-row">
-                        <span className="player-name">{player.username}</span>
-                        {isMe && <span className="you-badge">you</span>}
-                      </div>
-                      <StarDisplay count={tier.stars} color={tier.color} size={11} />
-                      <div className="player-meta">
-                        <span className="player-meta-item">
-                          <span style={{ color: "#34d399", fontWeight: 700 }}>{player.total_wins}</span>W
-                          {" / "}
-                          <span style={{ fontWeight: 600, color: "var(--dd-text)" }}>{player.total_duels}</span>D
-                        </span>
-                        {player.total_earned > 0 && (
-                          <span className="player-meta-item">· {player.total_earned.toFixed(1)} earned</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Right: wins + winrate bar */}
-                    <div className="player-right">
-                      <span className="player-wins" style={{ color: "#34d399" }}>{player.total_wins}W</span>
-                      <div className="win-bar-row">
-                        <div className="win-bar-track">
-                          <div className="win-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
-                        </div>
-                        <span className="win-pct" style={{ color: barColor }}>{pct}%</span>
-                      </div>
-                    </div>
-
-                    {/* Duel button — hidden for own wallet, disabled for offline players */}
-                    {!isMe && (
-                      <button
-                        className="duel-btn"
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleMessage(player.wallet_address, player.username, player.avatar_url);
-                        }}
-                      >
-                        <MessageCircle size={11} /> Message
-                      </button>
-                    )}
+                        zIndex: 10,
+                      }}
+                    />
                   </div>
-                );
-              })
+
+                  {/* Info */}
+                  <div className="player-info">
+                    <div className="player-name-row">
+                      <span className="player-name">{player.username}</span>
+                      {isMe && <span className="you-badge">you</span>}
+                    </div>
+                    <StarDisplay count={tier.stars} color={tier.color} size={11} />
+                    <div className="player-meta">
+                      <span className="player-meta-item">
+                        <span style={{ color: "#34d399", fontWeight: 700 }}>{player.total_wins}</span>W
+                        {" / "}
+                        <span style={{ fontWeight: 600, color: "var(--dd-text)" }}>{player.total_duels}</span>D
+                      </span>
+                      {player.total_earned > 0 && (
+                        <span className="player-meta-item">· {player.total_earned.toFixed(1)} earned</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: wins + winrate bar */}
+                  <div className="player-right">
+                    <span className="player-wins" style={{ color: "#34d399" }}>{player.total_wins}W</span>
+                    <div className="win-bar-row">
+                      <div className="win-bar-track">
+                        <div className="win-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
+                      </div>
+                      <span className="win-pct" style={{ color: barColor }}>{pct}%</span>
+                    </div>
+                  </div>
+
+                  {/* Message — hidden for own row */}
+                  {!isMe && (
+                    <button
+                      className="duel-btn"
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleMessage(player.wallet_address, player.username, player.avatar_url);
+                      }}
+                    >
+                      <MessageCircle size={11} /> Message
+                    </button>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
       </div>

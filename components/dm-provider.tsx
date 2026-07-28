@@ -165,16 +165,7 @@ export function DMProvider({ children }: { children: React.ReactNode }) {
         } else {
           setUnreadTotal((n) => n + 1);
           // Content stays out of the popup — it lives in the notification inbox.
-          toast(`💬 New message from ${d.peerName}`, {
-            action: {
-              label: "Open",
-              onClick: () => {
-                setOpen(true); setView("chat"); setPeer(msg.from);
-                setPeerName(d.peerName); setPeerAvatar(d.peerAvatar || "");
-                loadChat(msg.from);
-              },
-            },
-          });
+          toast(`💬 New message from ${d.peerName}`);
         }
         refreshThreads();
       };

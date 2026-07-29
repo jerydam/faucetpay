@@ -283,18 +283,24 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // ── Fetch challenge history ───────────────────────────────────────────────
+ // ── Fetch challenge history ───────────────────────────────────────────────
+  // limit stays ≤50: the deployed endpoint caps there and 422s above it.
   const fetchHistory = useCallback(async (wallet: string) => {
     setHistoryLoading(true)
     try {
       const res = await fetch(
-        `${BACKEND_URL}/api/challenge/${wallet.toLowerCase()}/history` +
-        `?chain_id=${RANKS_CHAIN_ID}&limit=100&t=${Date.now()}`
+        `${BACKEND_URL}/api/challenge/${wallet.toLowerCase()}/history?limit=25&t=${Date.now()}`
       )
+      if (!res.ok) {
+        console.warn("[profile] history HTTP", res.status, await res.text())
+        setRawHistory([])
+        return
+      }
       const data = await res.json()
-      if (data.success) setRawHistory(data.history ?? [])
+      setRawHistory(Array.isArray(data?.history) ? data.history : [])
     } catch (e) {
       console.warn("[profile] history fetch failed", e)
+      setRawHistory([])
     } finally {
       setHistoryLoading(false)
     }
@@ -341,9 +347,9 @@ export default function DashboardPage() {
 
   // Tab filtering — both tabs only ever show finished games
   const filteredHistory = useMemo(() => {
-    const list = activeTab === "won" ? won : played
-    return list.slice(0, MAX_HISTORY_ROWS)
-  }, [activeTab, played, won])
+  const list = activeTab === "won" ? won : played
+  return list.slice(0, MAX_HISTORY_ROWS)
+}, [activeTab, played, won])
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)

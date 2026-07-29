@@ -243,22 +243,28 @@ export function NotificationBell() {
 
   // Load history. Always set it — gating on unread hid every already-read item.
   useEffect(() => {
-    if (!address) return;
-    setLoading(true);
-    fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}`)
-      .then((r) => r.json())
-      .then((d) => {
-        const list: Notification[] = (d.notifications ?? []).filter((n: any) => n && n.id);
-        setNotifications((prev) => {
-          // Keep session-only DM entries, which the server doesn't store.
-          const dmOnly = prev.filter((n) => n.id.startsWith("dm-"));
-          const seen = new Set(list.map((n) => n.id));
-          return [...dmOnly.filter((n) => !seen.has(n.id)), ...list];
-        });
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [address]);
+  if (!address) return;
+  setLoading(true);
+
+  // Seed DMs from session immediately so they show while fetch is in-flight
+  try {
+    const stored: Notification[] = JSON.parse(sessionStorage.getItem("dm-notifs") ?? "[]");
+    if (stored.length > 0) setNotifications(stored);
+  } catch {}
+
+  fetch(`${API_BASE_URL}/api/notifications/${address.toLowerCase()}`)
+    .then((r) => r.json())
+    .then((d) => {
+      const list: Notification[] = (d.notifications ?? []).filter((n: any) => n && n.id);
+      setNotifications((prev) => {
+        const dmOnly = prev.filter((n) => n.id.startsWith("dm-"));
+        const seen = new Set(list.map((n) => n.id));
+        return [...dmOnly.filter((n) => !seen.has(n.id)), ...list];
+      });
+    })
+    .catch(() => {})
+    .finally(() => setLoading(false));
+}, [address]);
 
   // Clear popup timer on unmount
   useEffect(() => {
@@ -449,6 +455,15 @@ export function NotificationBell() {
           isRead:    false,
           createdAt: new Date().toISOString(),
         };
+        try {
+          const stored = JSON.parse(sessionStorage.getItem("dm-notifs") ?? "[]");
+          const deduped = [dmNotif, ...stored.filter((n: Notification) => n.id !== dmNotif.id)].slice(0, 20);
+          sessionStorage.setItem("dm-notifs", JSON.stringify(deduped));
+        } catch {}
+
+        setNotifications((prev) =>
+          prev.some((n) => n.id === dmNotif.id) ? prev : [dmNotif, ...prev]
+        );
         setNotifications((prev) =>
           prev.some((n) => n.id === dmNotif.id) ? prev : [dmNotif, ...prev]
         );

@@ -21,6 +21,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation"
 
 const BACKEND_URL = "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app"
 const RANKS_CHAIN_ID = 42220
+const MAX_HISTORY_ROWS = 5 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface UserProfileData {
   wallet_address: string
@@ -43,12 +44,14 @@ interface ChallengeHistoryItem {
   topic: string
   stake_amount: number
   token_symbol: string
-  status: "waiting" | "active" | "finished"
+  status: "pending" | "waiting" | "active" | "finished" | "cancelled"
   winner_address: string | null
+  chain_id: number
+  is_single_player: boolean
   created_at: string
   finished_at: string | null
-  opponent_username?: string
-  opponent_wallet?: string
+  opponent_username?: string | null
+  opponent_wallet?: string | null
 }
 
 type FinishedGame = ChallengeHistoryItem & { status: "finished" }
@@ -284,11 +287,17 @@ export default function DashboardPage() {
   const fetchHistory = useCallback(async (wallet: string) => {
     setHistoryLoading(true)
     try {
-      const res  = await fetch(`${BACKEND_URL}/api/challenge/${wallet}/history?limit=50`)
+      const res = await fetch(
+        `${BACKEND_URL}/api/challenge/${wallet.toLowerCase()}/history` +
+        `?chain_id=${RANKS_CHAIN_ID}&limit=100&t=${Date.now()}`
+      )
       const data = await res.json()
       if (data.success) setRawHistory(data.history ?? [])
-    } catch {}
-    finally { setHistoryLoading(false) }
+    } catch (e) {
+      console.warn("[profile] history fetch failed", e)
+    } finally {
+      setHistoryLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -332,8 +341,8 @@ export default function DashboardPage() {
 
   // Tab filtering — both tabs only ever show finished games
   const filteredHistory = useMemo(() => {
-    if (activeTab === "won") return won
-    return played
+    const list = activeTab === "won" ? won : played
+    return list.slice(0, MAX_HISTORY_ROWS)
   }, [activeTab, played, won])
 
   const copyToClipboard = (text: string) => {
@@ -519,8 +528,8 @@ export default function DashboardPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-xl border border-border">
                 {([
-                  { key: "all", label: "All Played", count: played.length },
-                  { key: "won", label: "Won",        count: won.length    },
+                  { key: "all", label: "All Played", count: totalDuels },
+                  { key: "won", label: "Won",        count: totalWins  },
                 ] as { key: HistoryTab; label: string; count: number }[]).map(t => (
                   <button
                     key={t.key}
@@ -541,6 +550,9 @@ export default function DashboardPage() {
                     )}>
                       {t.count}
                     </span>
+                    {t.count > MAX_HISTORY_ROWS && (
+                      <span className="text-[9px] text-muted-foreground/60">recent 5</span>
+                    )}
                   </button>
                 ))}
               </div>

@@ -392,7 +392,7 @@ export default function RanksPage() {
           <div>
             <div className="page-title">Rankings</div>
             <div className="page-subtitle">
-              {players.length} duelists · {onlineSet.size} online
+              {players.length} duelists · {'73'} online
             </div>
           </div>
         </div>

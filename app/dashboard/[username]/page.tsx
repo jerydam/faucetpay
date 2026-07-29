@@ -563,7 +563,16 @@ export default function DashboardPage() {
                 </div>
               ) : filteredHistory.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3 border-2 border-dashed border-border rounded-3xl">
-                  {activeTab === "won" ? (
+                  {(activeTab === "won" ? totalWins : totalDuels) > 0 ? (
+                    <>
+                      <Clock className="h-10 w-10 text-muted-foreground/20" />
+                      <p className="font-bold text-muted-foreground">No recent games to show</p>
+                      <p className="text-xs text-muted-foreground/60 text-center max-w-[220px]">
+                        {activeTab === "won" ? totalWins : totalDuels} recorded on-chain, but none with
+                        match details saved.
+                      </p>
+                    </>
+                  ) : activeTab === "won" ? (
                     <>
                       <Trophy className="h-10 w-10 text-muted-foreground/20" />
                       <p className="font-bold text-muted-foreground">No wins yet</p>

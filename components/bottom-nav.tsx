@@ -53,9 +53,7 @@ export function BottomNav() {
   // Don't render nav during game/lobby/pre-lobby
   if (isGamePage) return null;
 
-  const profileHref = dbUsername
-    ? `/dashboard/${dbUsername}`
-    : address
+  const profileHref = address
     ? `/dashboard/${address.toLowerCase()}`
     : "/dashboard";
 

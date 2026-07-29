@@ -184,6 +184,7 @@ export default function DashboardPage() {
   const [initialLoadComplete, setInitialLoadComplete] = useState(false)
   const [activeTab, setActiveTab]           = useState<HistoryTab>("all")
   const [editOpen, setEditOpen]             = useState(false)
+  const [loadError, setLoadError] = useState(false)
 
   const isOwner = useMemo(() => {
     if (!connectedAddress || !profile?.wallet_address) return false
@@ -221,23 +222,34 @@ export default function DashboardPage() {
   const shownEmail    = profile?.email || ""
   const shownPhone    = profile?.phone || ""
 
-  // ── Fetch profile ─────────────────────────────────────────────────────────
+
   const fetchProfile = useCallback(async () => {
     if (!targetUsernameOrAddress) return
     setLoading(true)
+    setLoadError(false)
+
+    const raw       = decodeURIComponent(targetUsernameOrAddress)
+    const isAddress = raw.startsWith("0x") && raw.length === 42
+    const url = isAddress
+      ? `${BACKEND_URL}/api/profile/${raw.toLowerCase()}`
+      : `${BACKEND_URL}/api/profile/user/${encodeURIComponent(raw)}`
+
     try {
-      const isAddress =
-        targetUsernameOrAddress.startsWith("0x") &&
-        targetUsernameOrAddress.length === 42
-      const url = isAddress
-        ? `${BACKEND_URL}/api/profile/${targetUsernameOrAddress.toLowerCase()}`
-        : `${BACKEND_URL}/api/profile/user/${targetUsernameOrAddress}`
-      const res  = await fetch(url)
+      const res = await fetch(url)
+
+      // 4xx/5xx → backend problem, not a missing user
+      if (!res.ok) {
+        setLoadError(true)
+        return
+      }
+
       const data = await res.json()
-      const p    = isAddress ? data.profile : (data.success ? data.profile : null)
+      const p    = data?.profile ?? null
+
       if (!p && !isAddress) { setProfile(null); return }
+
       setProfile({
-        wallet_address: p?.wallet_address || targetUsernameOrAddress.toLowerCase(),
+        wallet_address: p?.wallet_address || raw.toLowerCase(),
         username:       p?.username || "Dropee",
         email:          p?.email,
         phone:          p?.phone,
@@ -245,7 +257,7 @@ export default function DashboardPage() {
         avatar_url:     p?.avatar_url,
       })
     } catch {
-      toast.error("Failed to load profile")
+      setLoadError(true)
     } finally {
       setLoading(false)
       setInitialLoadComplete(true)
@@ -332,12 +344,12 @@ export default function DashboardPage() {
     )
   }
 
-  if (!profile && initialLoadComplete) {
+  if (loadError && initialLoadComplete) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-2">
-        <p className="text-xl font-semibold">User not found</p>
-        <p className="text-muted-foreground text-sm">This profile doesn't exist.</p>
-        <Button onClick={() => router.push("/")} className="mt-4">Go Home</Button>
+        <p className="text-xl font-semibold">Couldn't load profile</p>
+        <p className="text-muted-foreground text-sm">The server didn't respond correctly.</p>
+        <Button onClick={fetchProfile} className="mt-4">Retry</Button>
       </div>
     )
   }

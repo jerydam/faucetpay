@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 
 const BACKEND_URL = "https://conscious-adorne-faucetdrops-fc77a861.koyeb.app"
-
+const RANKS_CHAIN_ID = 42220
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface UserProfileData {
   wallet_address: string
@@ -32,10 +32,10 @@ interface UserProfileData {
 }
 
 interface PlayerBalances {
-  total_wins: number
-  total_duels: number
+  total_wins:   number
+  total_duels:  number
   total_earned: number
-  rank_delta: number
+  win_rate:     number
 }
 
 interface ChallengeHistoryItem {
@@ -268,11 +268,16 @@ export default function DashboardPage() {
   const fetchBalances = useCallback(async (wallet: string) => {
     setBalancesLoading(true)
     try {
-      const res  = await fetch(`${BACKEND_URL}/api/players/${wallet.toLowerCase()}/balances`)
+      const res  = await fetch(
+        `${BACKEND_URL}/api/players/${wallet.toLowerCase()}/balances?chain_id=${RANKS_CHAIN_ID}&t=${Date.now()}`
+      )
       const data = await res.json()
-      if (data.success && data.balances) setBalances(data.balances)
-    } catch {}
-    finally { setBalancesLoading(false) }
+      if (data.balances) setBalances(data.balances)
+    } catch (e) {
+      console.warn("[profile] balances fetch failed", e)
+    } finally {
+      setBalancesLoading(false)
+    }
   }, [])
 
   // ── Fetch challenge history ───────────────────────────────────────────────
@@ -319,9 +324,10 @@ export default function DashboardPage() {
   )
 
   // ── Headline stats — from challenge_player_balances (synced with rank page) ─
-  const totalWins  = balances?.total_wins  ?? won.length
-  const totalDuels = balances?.total_duels ?? played.length
-  const winRate    = totalDuels > 0 ? Math.round((totalWins / totalDuels) * 100) : 0
+  // ── Headline stats — challenge_player_balances, same source as /api/ranks ──
+  const totalWins  = balances?.total_wins  ?? 0
+  const totalDuels = balances?.total_duels ?? 0
+  const winRate    = balances?.win_rate    ?? 0
   const tier       = getTier(totalWins)
 
   // Tab filtering — both tabs only ever show finished games

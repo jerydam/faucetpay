@@ -481,7 +481,7 @@ export default function RanksPage() {
             className={`filter-pill${filter === "online" ? " active" : ""}`}
             onClick={() => setFilter("online")}
           >
-            🟢 Online{onlineSet.size > 0 ? ` (${onlineSet.size})` : ""}
+            🟢 Online
           </button>
         </div>
 

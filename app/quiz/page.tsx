@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import Loading from "../loading/page";
 
 const API_BASE_URL = "https://identical-vivi-faucetdrops-41e9c56b.koyeb.app";
-const DEFAULT_QUIZ_COVER = "/quiz.webp";
+const DEFAULT_QUIZ_COVER = "/quiz.jpeg";
 
 interface QuizCard {
   code: string;
@@ -229,7 +229,23 @@ export default function QuizListPage() {
     try {
       const r = await fetch(`${API_BASE_URL}/api/quiz/list?t=${Date.now()}`, { cache: "no-store" });
       const d = await r.json();
-      if (d.success) setQuizzes(d.quizzes || []);
+      if (d.success) {
+        const raw: QuizCard[] = d.quizzes || [];
+        const seen = new Set<string>();
+        const unique = raw.filter(q => {
+          if (seen.has(q.code)) return false;
+          seen.add(q.code);
+          return true;
+        });
+        if (unique.length !== raw.length) {
+          const dupes = raw.map(q => q.code).filter((c, i, a) => a.indexOf(c) !== i);
+          console.warn(
+            `[quiz/list] API returned ${raw.length} rows, ${unique.length} unique. Duplicated codes:`,
+            [...new Set(dupes)]
+          );
+        }
+        setQuizzes(unique);
+      }
     } catch { if (!silent) toast.error("Failed to load quizzes"); }
     finally { setIsLoading(false); setIsRefreshing(false); }
   };

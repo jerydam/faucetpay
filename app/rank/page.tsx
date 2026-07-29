@@ -178,6 +178,7 @@ export default function RanksPage() {
   }, []);
 
   const isOnline = (wallet: string) => onlineSet.has(wallet.toLowerCase());
+  const isFiller = (wallet: string) => !!onlineInfo.get(wallet.toLowerCase())?.filler;
 
   const handleMessage = (wallet: string, username: string, avatar?: string) => {
     openChat(wallet, username, avatar);
@@ -197,6 +198,8 @@ export default function RanksPage() {
 
   // Everyone currently connected — ranked or not. Players outside the leaderboard
   // get a row built from what the presence socket already told us about them.
+  // Genuinely-connected players sort first (they can actually reply); padded
+  // entries follow in a stable scatter so this tab doesn't mirror Top 100.
   const onlinePlayers = useMemo(() => {
     const byWallet = new Map(players.map(p => [p.wallet_address.toLowerCase(), p]));
     const out: Player[] = [];
@@ -211,7 +214,20 @@ export default function RanksPage() {
         total_wins: 0, total_duels: 0, total_earned: 0, rank_delta: 0,
       });
     });
-    return out.sort((a, b) => b.total_wins - a.total_wins);
+
+    // Stable per-wallet hash so the order doesn't churn between renders
+    const scatter = (s: string) => {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return h;
+    };
+
+    const real = out.filter(p => !isFiller(p.wallet_address))
+                    .sort((a, b) => b.total_wins - a.total_wins);
+    const pad  = out.filter(p =>  isFiller(p.wallet_address))
+                    .sort((a, b) => scatter(a.wallet_address) - scatter(b.wallet_address));
+
+    return [...real, ...pad];
   }, [players, onlineSet, onlineInfo]);
 
   const filtered = useMemo(() => {
@@ -392,7 +408,7 @@ export default function RanksPage() {
           <div>
             <div className="page-title">Rankings</div>
             <div className="page-subtitle">
-              {players.length} duelists · {'73'} online
+              {players.length} duelists · {onlineSet.size} online
             </div>
           </div>
         </div>
@@ -481,7 +497,7 @@ export default function RanksPage() {
             className={`filter-pill${filter === "online" ? " active" : ""}`}
             onClick={() => setFilter("online")}
           >
-            🟢 Online
+            🟢 Online{onlineSet.size > 0 ? ` (${onlineSet.size})` : ""}
           </button>
         </div>
 
@@ -590,7 +606,7 @@ export default function RanksPage() {
                     </div>
                   </div>
 
-                  {/* Message — hidden for own row */}
+                  {/* Message — hidden for own row only */}
                   {!isMe && (
                     <button
                       className="duel-btn"

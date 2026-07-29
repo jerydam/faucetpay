@@ -10,6 +10,8 @@ export interface PresenceInfo {
   wallet: string;
   username: string;
   avatar_url: string;
+  /** True when this entry is backend-generated padding, not a live socket. */
+  filler: boolean;
 }
 
 const PresenceContext     = createContext<Set<string>>(new Set());
@@ -52,7 +54,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
         try { msg = JSON.parse(e.data); } catch { return; }
         if (msg.type !== "presence" || !Array.isArray(msg.online)) return;
 
-        // Server sends [{ wallet, username, avatar_url }] — tolerate plain strings too.
+        // Server sends [{ wallet, username, avatar_url, filler? }] — tolerate plain strings too.
         const set = new Set<string>();
         const map = new Map<string, PresenceInfo>();
         for (const p of msg.online) {
@@ -63,6 +65,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
             wallet:     w,
             username:   p?.username   || `User${w.slice(-4).toUpperCase()}`,
             avatar_url: p?.avatar_url || "",
+            filler:     !!p?.filler,
           });
         }
         setOnlineSet(set);
@@ -113,4 +116,10 @@ export const usePresenceInfo = () => useContext(PresenceInfoContext);
 export function useIsOnline(wallet?: string | null) {
   const set = useContext(PresenceContext);
   return !!wallet && set.has(wallet.toLowerCase());
+}
+
+/** Is this wallet padding rather than a live connection? Use to gate DM/duel actions. */
+export function useIsFiller(wallet?: string | null) {
+  const map = useContext(PresenceInfoContext);
+  return !!wallet && !!map.get(wallet.toLowerCase())?.filler;
 }

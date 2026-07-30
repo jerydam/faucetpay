@@ -8,7 +8,8 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Zap, Trophy, Gavel, ArrowUpRight, ShieldCheck, Users, BarChart3 } from "lucide-react";
+import { Zap, Trophy, Gavel, ArrowUpRight, ShieldCheck, Users, BarChart3, Droplets } from "lucide-react";
+import DropPointsPanel from "@/components/DropPointsPanel";
 import { ThemeToggle } from "@/components/theme";
 import Image from "next/image";
 import { Footer } from "@/components/footer";
@@ -17,7 +18,7 @@ export default function LandingPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [isMiniPay, setIsMiniPay] = useState(false);
-
+  const [dropOpen, setDropOpen] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setReady(true), 60);
     setIsMiniPay(!!(window.ethereum as any)?.isMiniPay);
@@ -188,7 +189,11 @@ export default function LandingPage() {
         className={`dd-page b min-h-screen flex flex-col transition-opacity duration-500 ${ready ? "opacity-100" : "opacity-0"}`}
         style={{ maxWidth: 480, margin: "0 auto" }}
       >
-
+        <DropPointsPanel
+          open={dropOpen}
+          onOpenChange={setDropOpen}
+          showTrigger={false}
+        />
         {/* ── Nav ── */}
         <nav className="r r1 flex items-center justify-between px-6 pt-8 pb-6">
           <div className="flex items-center gap-2.5">
@@ -257,6 +262,14 @@ export default function LandingPage() {
             >
               <Trophy className="h-4 w-4" />
               Browse Tournaments
+            </button>
+            <button
+              onClick={() => setDropOpen(true)}
+              className="btn-ghost w-full h-14 font-bold text-sm tracking-wide flex items-center justify-center gap-2"
+              style={{ borderRadius: 12 }}
+            >
+              <Droplets className="h-4 w-4" />
+              Claim Daily Drop
             </button>
           </div>
         </section>

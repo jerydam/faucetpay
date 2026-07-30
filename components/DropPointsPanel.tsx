@@ -724,26 +724,6 @@ export default function DropPointsPanel({
                   <ChevronRight size={14} className="text-muted-foreground group-hover:text-foreground shrink-0" />
                 </button>
               </div>
-
-              {/* ── History ───────────────────────────────────────────────── */}
-              <button
-                onClick={() => setHistoryExpanded((v) => !v)}
-                className="flex items-center justify-between px-5 py-3 border-b border-border text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <span className="flex items-center gap-1.5">
-                  <History size={13} /> Claim History
-                  {history.length > 0 && (
-                    <span className="text-[10px] font-normal">({history.length})</span>
-                  )}
-                </span>
-                <motion.div
-                  animate={{ rotate: historyExpanded ? 0 : 180 }}
-                  transition={{ duration: 0.25, ease: "easeInOut" }}
-                >
-                  <ChevronDown size={14} />
-                </motion.div>
-              </button>
-
               <motion.div
                 animate={historyExpanded ? "open" : "closed"}
                 variants={{

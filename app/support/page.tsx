@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronDown, ChevronUp, Zap, Shield, Trophy, Coins, Wifi, HelpCircle, ExternalLink, MessageCircle, Bot } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, Zap, Shield, Trophy, Coins, Wifi, HelpCircle, ExternalLink, MessageCircle, Bot, Network, Swords } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -294,7 +295,8 @@ function FAQAccordion({ items }: { items: FAQItem[] }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function SupportPage() {
-  return (
+  const router = useRouter();
+    return (
     <div className="min-h-screen bg-background">
 
       {/* Header */}
@@ -340,7 +342,22 @@ export default function SupportPage() {
             <p className="text-xs text-muted-foreground">5 bot tiers · instant start · auto payout</p>
           </div>
         </div>
-
+        {/* Play CTA */}
+        <button
+          onClick={() => router.push("/challenge")}
+          className="w-full rounded-3xl border-2 border-primary/20 bg-primary/5 p-5 flex items-center gap-4 text-left hover:bg-primary/10 transition-all active:scale-[0.99]"
+        >
+          <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <Swords className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-foreground text-sm">Start a duel</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Stake DROPS, race AI-generated questions, win on-chain.
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+        </button>
         {/* FAQ Sections */}
         {FAQ_SECTIONS.map((section) => (
           <section key={section.title} className="space-y-3">

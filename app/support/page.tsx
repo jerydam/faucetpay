@@ -336,7 +336,7 @@ export default function SupportPage() {
             <p className="font-black text-foreground text-sm">Multiplayer</p>
             <p className="text-xs text-muted-foreground">1v1 human duels · stake DROPS · claim on-chain</p>
           </div>
-          <div className="rounded-2xl border border-[#839ce9] bg-[#01071a] p-4 space-y-1">
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-1">
             <div className="text-2xl">🤖</div>
             <p className="font-black text-foreground text-sm">Single-Player</p>
             <p className="text-xs text-muted-foreground">5 bot tiers · instant start · auto payout</p>

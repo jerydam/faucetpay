@@ -193,6 +193,7 @@ export default function LandingPage() {
           open={dropOpen}
           onOpenChange={setDropOpen}
           showTrigger={false}
+          autoOpen={false}
         />
         {/* ── Nav ── */}
         <nav className="r r1 flex items-center justify-between px-6 pt-8 pb-6">

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Contract, JsonRpcProvider, formatUnits } from "ethers";
 import {
   History,
-  Clock,
+  CheckCircle2,
   Zap,
   Loader2,
   ExternalLink,
@@ -57,14 +57,6 @@ interface ClaimEntry {
 }
 
 // ─── Module-level helpers ─────────────────────────────────────────────────────
-
-function formatCountdown(ms: number): string {
-  const totalSec = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
-}
 
 let _provider: JsonRpcProvider | null = null;
 function getProvider(): JsonRpcProvider {
@@ -175,7 +167,7 @@ interface DropPointsPanelProps {
   onOpenChange?: (open: boolean) => void;
   /** Show the built-in floating pill. Turn off when the parent supplies its own trigger. */
   showTrigger?: boolean;
-  /** Auto-open once per page load when the user is eligible to claim. */
+  /** Auto-open once per page load when the user is eligible to claim. Off by default. */
   autoOpen?: boolean;
 }
 
@@ -183,7 +175,7 @@ export default function DropPointsPanel({
   open: controlledOpen,
   onOpenChange,
   showTrigger = true,
-  autoOpen = true,
+  autoOpen = false,
 }: DropPointsPanelProps = {}) {
   const { address, isConnected, chainId, getActiveSigner } = useWallet();
   const router = useRouter();
@@ -205,7 +197,6 @@ export default function DropPointsPanel({
   const [claimBurst, setClaimBurst]   = useState(false);
   const [lastClaimAt, setLastClaimAt] = useState<string | null>(null);
   const [canClaim, setCanClaim]       = useState(true);
-  const [remainingMs, setRemainingMs] = useState(0);
 
   const [balance, setBalance]               = useState(0);
   const [balanceLoading, setBalanceLoading] = useState(true);
@@ -229,12 +220,11 @@ export default function DropPointsPanel({
       const eligible: boolean = await contract.canClaim(addr);
       if (eligible) {
         setCanClaim(true);
-        setRemainingMs(0);
         setLastClaimAt(null);
         return;
       }
 
-      // Not eligible — find the last mint to work out when the cooldown ends
+      // Not eligible — find the last mint so we know when the cooldown lapses
       let lastClaimMs = Date.now() - 23 * 60 * 60 * 1000; // fallback: assume recent
       try {
         const filter = contract.filters.Transfer(
@@ -251,14 +241,11 @@ export default function DropPointsPanel({
         }
       } catch {}
 
-      const rem = COOLDOWN_MS - (Date.now() - lastClaimMs);
-      if (rem > 0) {
+      if (Date.now() - lastClaimMs < COOLDOWN_MS) {
         setCanClaim(false);
-        setRemainingMs(rem);
         setLastClaimAt(new Date(lastClaimMs).toISOString());
       } else {
         setCanClaim(true);
-        setRemainingMs(0);
         setLastClaimAt(null);
       }
     } catch (e) {
@@ -382,28 +369,27 @@ export default function DropPointsPanel({
     return () => clearTimeout(timer);
   }, [address, fetchHistory]);
 
+  // Re-enable the claim button the moment the 24h cooldown lapses.
+  // One timeout instead of a per-second tick — nothing on screen counts down.
   useEffect(() => {
     if (!lastClaimAt) {
       setCanClaim(true);
-      setRemainingMs(0);
       return;
     }
-    const tick = () => {
-      const rem = COOLDOWN_MS - (Date.now() - new Date(lastClaimAt).getTime());
-      if (rem > 0) {
-        setCanClaim(false);
-        setRemainingMs(rem);
-      } else {
-        setCanClaim(true);
-        setRemainingMs(0);
-      }
-    };
-    tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
+    const remaining = COOLDOWN_MS - (Date.now() - new Date(lastClaimAt).getTime());
+    if (remaining <= 0) {
+      setCanClaim(true);
+      return;
+    }
+    setCanClaim(false);
+    const t = setTimeout(() => {
+      setCanClaim(true);
+      setLastClaimAt(null);
+    }, remaining);
+    return () => clearTimeout(t);
   }, [lastClaimAt]);
 
-  // ── Auto-popup (once per page load, skipped if already claimed) ───────────
+  // ── Optional auto-open (off by default) ──────────────────────────────────
 
   useEffect(() => {
     if (!autoOpen || autoOpenedRef.current) return;
@@ -436,7 +422,7 @@ export default function DropPointsPanel({
   // ── Claim ─────────────────────────────────────────────────────────────────
 
   const handleClaim = async () => {
-    if (!canClaim)    { toast.error(`Come back in ${formatCountdown(remainingMs)}`); return; }
+    if (!canClaim)    { toast.error("Already claimed — come back tomorrow."); return; }
     if (!isConnected) { toast.warning("Connect your wallet first."); return; }
     if (!address)     { toast.warning("Wallet not ready."); return; }
     if (!onCelo) {
@@ -527,6 +513,7 @@ export default function DropPointsPanel({
       } else if (msg.toLowerCase().includes("cooldown") || msg.toLowerCase().includes("already used")) {
         toast.error("Already claimed today.", { id: "claim-tx" });
         setCanClaim(false);
+        if (!lastClaimAt) setLastClaimAt(new Date().toISOString());
       } else {
         toast.error(msg, { id: "claim-tx" });
         console.error("[DropPoints] Claim error:", error);
@@ -543,7 +530,7 @@ export default function DropPointsPanel({
     if (isClaiming)   return <><Loader2 size={14} className="animate-spin" /> Processing</>;
     if (!isConnected) return <><Zap size={14} /> Connect Wallet to Claim</>;
     if (!onCelo)      return <><AlertCircle size={14} /> Switch to Celo</>;
-    if (!canClaim)    return <><Clock size={14} /> {formatCountdown(remainingMs)}</>;
+    if (!canClaim)    return <><CheckCircle2 size={14} /> Claimed</>;
     return <><Zap size={14} /> Claim Daily Drop Points</>;
   };
 
@@ -574,8 +561,8 @@ export default function DropPointsPanel({
             <span className="relative w-7 h-7 shrink-0">
               <Image src="/drop-token.png" alt="Drop" fill className="object-contain" />
             </span>
-            <span className="text-xs font-bold tabular-nums">
-              {!isConnected || canClaim ? "Claim Drop" : formatCountdown(remainingMs)}
+            <span className="text-xs font-bold">
+              {!isConnected || canClaim ? "Claim Drop" : "Claimed"}
             </span>
             {canClaim && (
               <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-background" />
@@ -663,7 +650,7 @@ export default function DropPointsPanel({
                       </div>
                     ) : balanceError ? (
                       <span className="flex items-center gap-1 text-xs text-red-400 mt-1">
-                        <AlertCircle size={11} /> Couldn't reach Celo
+                        <AlertCircle size={11} /> Couldn&apos;t reach Celo
                       </span>
                     ) : (
                       <motion.p
@@ -697,6 +684,11 @@ export default function DropPointsPanel({
                   >
                     {claimLabel()}
                   </motion.button>
+                  {!canClaim && isConnected && onCelo && !isClaiming && (
+                    <p className="text-[10px] text-muted-foreground text-center mt-2">
+                      Next claim available tomorrow
+                    </p>
+                  )}
                 </div>
 
                 {/* Redeem Drop */}

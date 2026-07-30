@@ -597,16 +597,6 @@ export default function DropPointsPanel({
                     Drop Points
                   </span>
                   <div className="flex items-center gap-2">
-                    <span
-                      className="text-[9px] font-bold px-2 py-0.5 rounded-full border"
-                      style={{
-                        color: CELO.color,
-                        borderColor: `${CELO.color}55`,
-                        background: `${CELO.color}15`,
-                      }}
-                    >
-                      {CELO.name}
-                    </span>
                     {address && (
                       <button
                         onClick={() => {

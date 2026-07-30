@@ -724,64 +724,6 @@ export default function DropPointsPanel({
                   <ChevronRight size={14} className="text-muted-foreground group-hover:text-foreground shrink-0" />
                 </button>
               </div>
-              <motion.div
-                animate={historyExpanded ? "open" : "closed"}
-                variants={{
-                  open:   { height: "auto", opacity: 1 },
-                  closed: { height: 0,      opacity: 0 },
-                }}
-                transition={{ duration: 0.25, ease: "easeInOut" }}
-                style={{ overflow: "hidden" }}
-              >
-                <div className="p-4 space-y-2 overflow-y-auto max-h-[300px]">
-                  {historyLoading ? (
-                    Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="h-14 rounded-xl bg-accent animate-pulse" />
-                    ))
-                  ) : history.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-                      <History size={28} strokeWidth={1.5} />
-                      <p className="text-xs">No claims yet</p>
-                    </div>
-                  ) : (
-                    history.map((entry, i) => {
-                      const date = new Date(entry.timestamp);
-                      return (
-                        <div
-                          key={i}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-accent/30 dark:bg-accent/10 border border-border/50 group"
-                        >
-                          <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ background: CELO.color }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold">
-                              +{entry.amount.toLocaleString()} pts
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">
-                              {date.toLocaleDateString()} · {date.toLocaleTimeString()}
-                            </p>
-                          </div>
-                          {entry.tx_hash && (
-                            <a
-                              href={`${CELO.explorer}${entry.tx_hash}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <ExternalLink
-                                size={12}
-                                className="text-muted-foreground hover:text-foreground"
-                              />
-                            </a>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </motion.div>
             </motion.div>
           </motion.div>
         )}

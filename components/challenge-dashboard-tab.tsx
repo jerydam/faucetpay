@@ -58,9 +58,6 @@ const ERC20_ABI = [
 /** ─── Swap config (Celo) ─────────────────────────────────────────────────── */
 const SWAP_QUOTER_V2 = "0x82825d0554fA07f7FC52Ab63c961F330fdEFa8E8";
 
-const QUOTER_ABI = [
-  "function quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)",
-];
 
 const DROPS_SWAP_ABI = [
   "function swap(bytes path, uint256 amountIn, uint256 amountOutMin, address tokenOut) returns (uint256)",
@@ -79,8 +76,7 @@ const SWAP_OUT_TOKENS = [
 
 type SwapOutToken = (typeof SWAP_OUT_TOKENS)[number];
 
-const G_FEE_TIERS   = [10000, 3000, 500];
-const MID_FEE_TIERS = [100, 500];
+const CELO_ADDRESS = "0x471EcE3750Da237f93B8E339c536989b8978a438";
 
 function encodeV3Path(tokens: string[], fees: number[]): string {
   let path = "0x";
@@ -90,21 +86,51 @@ function encodeV3Path(tokens: string[], fees: number[]): string {
   return (path + tokens[tokens.length - 1].slice(2)).toLowerCase();
 }
 
-/** Direct G$→out pools, plus G$→USDm→out hops. Best quote wins. */
-function candidateSwapPaths(gToken: string, outAddr: string) {
-  const out: { path: string; label: string }[] = [];
-  for (const f of G_FEE_TIERS) {
-    out.push({ path: encodeV3Path([gToken, outAddr], [f]), label: `Direct · ${f / 10000}%` });
-  }
-  if (outAddr.toLowerCase() !== USDM_ADDRESS.toLowerCase()) {
-    for (const f1 of G_FEE_TIERS) for (const f2 of MID_FEE_TIERS) {
-      out.push({
-        path:  encodeV3Path([gToken, USDM_ADDRESS, outAddr], [f1, f2]),
-        label: `via USDm · ${f1 / 10000}% → ${f2 / 10000}%`,
-      });
-    }
-  }
-  return out;
+/** Verified against the Celo factory — these are the only pools with real depth.
+ *  G$ has liquidity ONLY against USDm (1%) and CELO (1%). */
+const SWAP_ROUTES: Record<string, { mids: string[]; fees: number[]; label: string }[]> = {
+  USDm: [
+    { mids: [],             fees: [10000],      label: "G$→USDm 1%" },
+  ],
+  USDC: [
+    { mids: [USDM_ADDRESS], fees: [10000, 100], label: "via USDm" },
+    { mids: [CELO_ADDRESS], fees: [10000, 500], label: "via CELO" },
+  ],
+  USDT: [
+    { mids: [USDM_ADDRESS], fees: [10000, 100], label: "via USDm" },
+    { mids: [CELO_ADDRESS], fees: [10000, 500], label: "via CELO" },
+  ],
+};
+
+function candidateSwapPaths(gToken: string, out: { symbol: string; address: string }) {
+  return (SWAP_ROUTES[out.symbol] ?? []).map(r => ({
+    path:  encodeV3Path([gToken, ...r.mids, out.address], r.fees),
+    label: r.label,
+  }));
+}
+
+/** Raw eth_call to QuoterV2 — no ethers batching, no staticCall semantics. */
+async function quoteExactInputRaw(rpcUrl: string, path: string, amountIn: bigint): Promise<bigint> {
+  const p = path.replace(/^0x/, "");
+  const data =
+    "0xcdca1753" +                                            // quoteExactInput(bytes,uint256)
+    (64).toString(16).padStart(64, "0") +                     // offset to bytes
+    amountIn.toString(16).padStart(64, "0") +
+    (p.length / 2).toString(16).padStart(64, "0") +           // bytes length
+    p + "0".repeat((64 - (p.length % 64)) % 64);              // right-padded path
+
+  const res = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0", id: 1, method: "eth_call",
+      params: [{ to: SWAP_QUOTER_V2, data }, "latest"],
+    }),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message ?? "quoter reverted");
+  if (!json.result || json.result === "0x") throw new Error("empty quoter result");
+  return BigInt("0x" + json.result.slice(2, 66));
 }
 /** ─── Admin address ──────────────────────────────────────────────────────── */
 const ADMIN_ADDRESS = ["0xB4AC6CC4B18B0F09d24FAF947af3c47C86718fA2","0xB591842B0F3976373FdC06d3fA745C836c942cC3"];
@@ -548,31 +574,33 @@ const adminMode = isOwner && isAdmin(connectedAddress);
     if (!amt || amt <= 0 || !G_TOKEN) { setSwapQuote(null); return; }
     setSwapQuoting(true);
     try {
-      const provider  = new ethers.JsonRpcProvider(chainCfg.rpcUrl);
-      const quoter    = new ethers.Contract(SWAP_QUOTER_V2, QUOTER_ABI, provider);
-      const amountIn  = ethers.parseUnits(amt.toString(), gDecimals);
-      const cands     = candidateSwapPaths(G_TOKEN, swapOut.address);
-
-      const results = await Promise.allSettled(
-        cands.map(c => quoter.quoteExactInput.staticCall(c.path, amountIn)),
-      );
+      const amountIn = ethers.parseUnits(amt.toString(), gDecimals);
+      const cands    = candidateSwapPaths(G_TOKEN, swapOut);
+      console.log("[swap] quoting", cands.length, "routes for", swapOut.symbol, "amountIn", amountIn.toString());
 
       let best: { amountOut: bigint; path: string; label: string } | null = null;
-      results.forEach((r, i) => {
-        if (r.status !== "fulfilled") return;
-        const out = BigInt(r.value[0]);
-        if (out > 0n && (!best || out > best.amountOut)) {
-          best = { amountOut: out, path: cands[i].path, label: cands[i].label };
+
+      for (const c of cands) {
+        try {
+          const out = await quoteExactInputRaw(chainCfg.rpcUrl, c.path, amountIn);
+          console.log(`[swap] ${c.label} → ${out.toString()}`);
+          if (out > 0n && (best === null || out > best.amountOut)) {
+            best = { amountOut: out, path: c.path, label: c.label };
+          }
+        } catch (e: any) {
+          console.warn(`[swap] ${c.label} failed:`, e?.message);
         }
-      });
+      }
+
+      if (!best) console.warn("[swap] no route produced a quote");
       setSwapQuote(best);
-    } catch {
+    } catch (err) {
+      console.error("[swap] quote error:", err);
       setSwapQuote(null);
     } finally {
       setSwapQuoting(false);
     }
   }, [swapAmount, swapOut, G_TOKEN, gDecimals, chainCfg.rpcUrl]);
-
   useEffect(() => {
     if (innerTab !== "swap") return;
     const t = setTimeout(fetchSwapQuote, 400);

@@ -26,6 +26,8 @@ export const CELO_CONFIG = {
     dropsRedeemPool: (process.env.NEXT_PUBLIC_DROPS_REDEEM_POOL_CELO ||
       "0x636685bCFeEf6Baeb05872f01e69405077eAF633") as `0x${string}`,
     gToken: "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A" as `0x${string}`,
+    dropsSwap: "0x2FB3B5f7075f17D4a97889e81dacEFA26dCf7171" as `0x${string}`,
+
   },
 } as const;
 

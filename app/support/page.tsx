@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp, ChevronRight, Zap, Shield, Trophy, Coins, Wifi, HelpCircle, ExternalLink, MessageCircle, Bot, Network, Swords } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -248,6 +248,8 @@ const FAQ_SECTIONS: FAQSection[] = [
     ],
   },
 ];
+const slugify = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 // ── FAQ Accordion Item ────────────────────────────────────────────────────────
 
@@ -296,6 +298,15 @@ function FAQAccordion({ items }: { items: FAQItem[] }) {
 
 export default function SupportPage() {
   const router = useRouter();
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    // wait a tick for the sections to mount
+    const t = setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+    return () => clearTimeout(t);
+  }, []);
     return (
     <div className="min-h-screen bg-background">
 
@@ -360,7 +371,11 @@ export default function SupportPage() {
         </button>
         {/* FAQ Sections */}
         {FAQ_SECTIONS.map((section) => (
-          <section key={section.title} className="space-y-3">
+          <section
+            key={section.title}
+            id={slugify(section.title)}
+            className="space-y-3 scroll-mt-20"
+          >
             <div className="flex items-center gap-2">
               <span className={cn("flex items-center justify-center w-7 h-7 rounded-xl border text-xs font-black", section.color)}>
                 {section.icon}

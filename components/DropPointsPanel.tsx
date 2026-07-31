@@ -685,7 +685,7 @@ export default function DropPointsPanel({
                 <button
                   onClick={() => {
                     setIsOpen(false);
-                    router.push("/support");
+                    router.push("/support#drops-staking");
                   }}
                   className="mt-3 w-full group flex items-center gap-3 px-4 py-3
                     rounded-xl border border-border/40 bg-accent/20 text-left

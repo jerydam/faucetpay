@@ -176,15 +176,6 @@ export function Header({
           <div className="hidden lg:flex items-center gap-4">
             <ThemeToggle />
             <NotificationBell />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/support")}
-              aria-label="Support"
-              title="Support"
-            >
-              <LifeBuoy className="h-4 w-4" />
-            </Button>
 
             {isConnected && !hideAction && (
               <Button

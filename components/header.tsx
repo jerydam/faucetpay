@@ -202,15 +202,6 @@ export function Header({
           <div className="lg:hidden flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
             <NotificationBell />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/support")}
-              aria-label="Support"
-              title="Support"
-            >
-              <LifeBuoy className="h-4 w-4" />
-            </Button>
 
             {/* MiniPay: profile avatar replaces wallet connect */}
             {isMiniPay ? (

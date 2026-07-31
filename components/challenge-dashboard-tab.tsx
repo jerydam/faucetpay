@@ -568,7 +568,17 @@ const adminMode = isOwner && isAdmin(connectedAddress);
   const [swapQuoting, setSwapQuoting] = useState(false);
   const [swapLoading, setSwapLoading] = useState(false);
   const [swapTxHash, setSwapTxHash]   = useState<string | null>(null);
-
+  const [swapResult, setSwapResult] = useState<{
+    ok: boolean;
+    step: string;
+    amountIn: string;
+    outSymbol: string;
+    amountOut?: string;
+    route?: string;
+    approveTxHash?: string;
+    swapTxHash?: string;
+    error?: string;
+  } | null>(null);
   const fetchSwapQuote = useCallback(async () => {
     const amt = parseFloat(swapAmount);
     if (!amt || amt <= 0 || !G_TOKEN) { setSwapQuote(null); return; }
@@ -607,6 +617,23 @@ const adminMode = isOwner && isAdmin(connectedAddress);
     return () => clearTimeout(t);
   }, [innerTab, fetchSwapQuote]);
 
+
+  /** MiniPay's injected provider is unreliable for receipt polling —
+   *  watch the public RPC by hash instead of using tx.wait(). */
+  const waitForReceipt = useCallback(async (hash: string, timeoutMs = 120_000) => {
+    const provider = new ethers.JsonRpcProvider(chainCfg.rpcUrl);
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const rc = await provider.getTransactionReceipt(hash);
+        if (rc) return rc;
+      } catch { /* transient RPC hiccup — keep polling */ }
+      await new Promise(r => setTimeout(r, 2500));
+    }
+    throw new Error(`Timed out waiting for ${shortAddr(hash)} — it may still confirm. Check the explorer.`);
+  }, [chainCfg.rpcUrl]);
+
+
   const handleSwap = async () => {
     const amt = parseFloat(swapAmount);
     if (!amt || !swapQuote || !G_TOKEN) return;
@@ -615,9 +642,22 @@ const adminMode = isOwner && isAdmin(connectedAddress);
       return;
     }
 
+    // Snapshot for the modal — state is cleared on success
+    const shownIn    = amt.toString();
+    const shownOut   = fmt(parseFloat(ethers.formatUnits(swapQuote.amountOut, swapOut.decimals)), 4);
+    const shownRoute = swapQuote.label;
+    const outSymbol  = swapOut.symbol;
+
+    let step = "starting";
+    let approveHash: string | undefined;
+    let swapHash: string | undefined;
+
     setSwapLoading(true);
     setSwapTxHash(null);
+    setSwapResult(null);
+
     try {
+      step = "connecting wallet";
       const switched = await ensureCorrectNetwork();
       if (!switched) throw new Error("Please connect your wallet first.");
 
@@ -628,21 +668,30 @@ const adminMode = isOwner && isAdmin(connectedAddress);
         throw new Error(`Connect as ${walletAddress} to proceed`);
       }
 
+      step = "checking balance";
       const amountIn = ethers.parseUnits(amt.toString(), gDecimals);
       const gToken   = new ethers.Contract(G_TOKEN, ERC20_ABI, signer);
-
       const bal: bigint = await gToken.balanceOf(signerAddr);
       if (bal < amountIn) throw new Error(`Insufficient ${tokenSymbol} balance`);
 
+      step = "checking allowance";
       const allowance: bigint = await gToken.allowance(signerAddr, DROPS_SWAP_ADDRESS);
+
       if (allowance < amountIn) {
-        toast({ title: `⏳ Approve ${tokenSymbol} spend…` });
+        step = "awaiting approval signature (1 of 2)";
+        toast({ title: `⏳ Step 1 of 2 — approve ${tokenSymbol} spend…` });
         const ap = await sendTagged(gToken, "approve", [DROPS_SWAP_ADDRESS, amountIn]);
-        await ap.wait();
-        toast({ title: "✅ Approved" });
+        approveHash = ap.hash;
+
+        step = "approval pending on-chain";
+        const apRc = await waitForReceipt(ap.hash);
+        if (!apRc || Number(apRc.status) !== 1) throw new Error("Approval reverted on-chain");
+        toast({ title: "✅ Approved — now confirm the swap" });
       }
 
+      step = "awaiting swap signature (2 of 2)";
       const swapContract = new ethers.Contract(DROPS_SWAP_ADDRESS, DROPS_SWAP_ABI, signer);
+
       let feeBps = 0n;
       try { feeBps = BigInt(await swapContract.feeBps()); } catch { /* fee optional */ }
 
@@ -650,22 +699,38 @@ const adminMode = isOwner && isAdmin(connectedAddress);
       const slipBps  = BigInt(Math.round(swapSlippage * 100));
       const minOut   = (netQuote * (10000n - slipBps)) / 10000n;
 
-      toast({ title: "⏳ Confirm swap in your wallet…" });
+      toast({ title: "⏳ Step 2 of 2 — confirm the swap in your wallet…" });
       const tx = await sendTagged(swapContract, "swap", [
         swapQuote.path, amountIn, minOut, swapOut.address,
       ]);
+      swapHash = tx.hash;
+
+      step = "swap pending on-chain";
       toast({ title: "📡 Swap sent, waiting for confirmation…" });
-
-      const rc = await tx.wait();
-      if (!rc || rc.status !== 1) throw new Error("Swap reverted on-chain");
-
+      const rc = await waitForReceipt(tx.hash);
+      if (!rc || Number(rc.status) !== 1) throw new Error("Swap reverted on-chain");
+      step = "confirmed";
       setSwapTxHash(tx.hash);
-      toast({ title: `✅ Swapped to ${swapOut.symbol}!` });
+      setSwapResult({
+        ok: true, step,
+        amountIn: shownIn, outSymbol,
+        amountOut: shownOut, route: shownRoute,
+        approveTxHash: approveHash, swapTxHash: tx.hash,
+      });
       setSwapAmount("");
       setSwapQuote(null);
       fetchGBalance();
+
     } catch (err: any) {
       const msg = err?.reason ?? err?.shortMessage ?? err?.message ?? "Unknown error";
+      setSwapResult({
+        ok: false, step,
+        amountIn: shownIn, outSymbol,
+        route: shownRoute,
+        approveTxHash: approveHash,
+        swapTxHash: swapHash,
+        error: `${msg}${err?.code ? ` (code: ${err.code})` : ""}`,
+      });
       toast({
         title: "Swap failed",
         description: msg,
@@ -2126,6 +2191,130 @@ const adminMode = isOwner && isAdmin(connectedAddress);
               </p>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* ── Swap Result Modal ────────────────────────────────────────────── */}
+      {swapResult && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setSwapResult(null)}
+        >
+          <div
+            className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-sm p-6 space-y-5 max-h-[85vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="text-center space-y-2">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto ${
+                swapResult.ok ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"
+              }`}>
+                {swapResult.ok
+                  ? <CheckCircle2 className="h-8 w-8 text-green-500" />
+                  : <AlertCircle className="h-8 w-8 text-red-500" />}
+              </div>
+              <h2 className="text-lg font-black text-foreground">
+                {swapResult.ok ? "Swap Complete!" : "Swap Failed"}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {swapResult.ok
+                  ? `Your ${tokenSymbol} has been converted to ${swapResult.outSymbol}`
+                  : `Stopped at: ${swapResult.step}`}
+              </p>
+            </div>
+
+            {swapResult.ok ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border">
+                  <span className="text-sm text-muted-foreground font-medium">You swapped</span>
+                  <span className="text-sm font-black text-foreground">
+                    {swapResult.amountIn} {tokenSymbol}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/50">
+                  <span className="text-sm text-muted-foreground font-medium">Received</span>
+                  <span className="text-sm font-black text-green-600 dark:text-green-400">
+                    ≈ {swapResult.amountOut} {swapResult.outSymbol}
+                  </span>
+                </div>
+                {swapResult.route && (
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border">
+                    <span className="text-sm text-muted-foreground font-medium">Route</span>
+                    <span className="text-xs font-mono text-foreground">{swapResult.route}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50">
+                <p className="text-xs text-red-600 dark:text-red-400 break-words whitespace-pre-wrap">
+                  {swapResult.error}
+                </p>
+              </div>
+            )}
+
+            {/* Transaction trail — this is what tells you where it actually went */}
+            {(swapResult.approveTxHash || swapResult.swapTxHash) && (
+              <div className="space-y-1.5 pt-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                  Transactions
+                </p>
+                {swapResult.approveTxHash && (
+                  <a
+                    href={celoScanTx(swapResult.approveTxHash)}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between text-[11px] py-1 border-b border-border/50"
+                  >
+                    <span className="text-muted-foreground">Approve</span>
+                    <span className="font-mono text-foreground flex items-center gap-1">
+                      {shortAddr(swapResult.approveTxHash)} <ExternalLink className="h-2.5 w-2.5" />
+                    </span>
+                  </a>
+                )}
+                <a
+                  href={swapResult.swapTxHash ? celoScanTx(swapResult.swapTxHash) : undefined}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-between text-[11px] py-1"
+                >
+                  <span className="text-muted-foreground">Swap</span>
+                  <span className={`font-mono flex items-center gap-1 ${
+                    swapResult.swapTxHash ? "text-foreground" : "text-red-500"
+                  }`}>
+                    {swapResult.swapTxHash
+                      ? <>{shortAddr(swapResult.swapTxHash)} <ExternalLink className="h-2.5 w-2.5" /></>
+                      : "never submitted"}
+                  </span>
+                </a>
+              </div>
+            )}
+
+            {!swapResult.ok && (
+              <button
+                onClick={() => navigator.clipboard?.writeText(
+                  `step: ${swapResult.step}\nerror: ${swapResult.error}\n` +
+                  `approve: ${swapResult.approveTxHash ?? "-"}\nswap: ${swapResult.swapTxHash ?? "-"}\n` +
+                  `route: ${swapResult.route} | in: ${swapResult.amountIn} ${tokenSymbol} → ${swapResult.outSymbol}`
+                )}
+                className="w-full text-[10px] text-muted-foreground underline"
+              >
+                Copy details
+              </button>
+            )}
+
+            <div className="flex gap-2">
+              {swapResult.ok ? (
+                <Button className="w-full" onClick={() => setSwapResult(null)}>Done</Button>
+              ) : (
+                <>
+                  <Button variant="outline" className="flex-1" onClick={() => setSwapResult(null)}>
+                    Close
+                  </Button>
+                  <Button className="flex-1" onClick={() => { setSwapResult(null); fetchSwapQuote(); }}>
+                    <RefreshCw className="h-4 w-4 mr-2" /> Try Again
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
       {/* ════════════════════════════════════════════════════════════════════
